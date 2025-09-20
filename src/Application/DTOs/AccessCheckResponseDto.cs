@@ -1,0 +1,1 @@
+// DTO para resposta de verificação de acesso
