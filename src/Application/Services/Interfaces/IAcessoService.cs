@@ -1,0 +1,1 @@
+// Interface do serviço de acesso
