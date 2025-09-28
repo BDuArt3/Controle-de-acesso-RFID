@@ -216,3 +216,5 @@ nunit-*.xml
 
 # CodeCoverage
 CodeCoverage/
+
+appsettings.json
