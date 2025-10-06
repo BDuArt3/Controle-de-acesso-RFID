@@ -19,6 +19,7 @@ public class Worker : BackgroundService
     // Controle de gravações pendentes
     private readonly Dictionary<string, string> _gravacoesEntreAndamento = new(); // GUID -> UsuarioId
     private string? _guidSendoGravado = null;
+    private bool _gravacaoRecenteRealizada = false;
 
     public Worker(
         ILogger<Worker> logger,
@@ -152,11 +153,22 @@ public class Worker : BackgroundService
                 {
                     _logger.LogInformation(">>> Gravação bem-sucedida confirmada pelo Arduino: {resposta} <<<", data);
                     
+                    // Marcar que uma gravação recente foi realizada
+                    _gravacaoRecenteRealizada = true;
+                    
                     // Se há um GUID sendo gravado, confirmar a gravação
                     if (!string.IsNullOrEmpty(_guidSendoGravado))
                     {
-                        _ = Task.Run(() => ConfirmarGravacaoCartao(_guidSendoGravado));
+                        var guidParaConfirmar = _guidSendoGravado;
                         _guidSendoGravado = null;
+                        _ = Task.Run(async () => 
+                        {
+                            await ConfirmarGravacaoCartao(guidParaConfirmar);
+                            // Aguardar um pouco para garantir que a gravação foi processada na API
+                            await Task.Delay(1000);
+                            _gravacaoRecenteRealizada = false;
+                            _logger.LogInformation(">>> Gravação confirmada na API - pronto para verificação de acesso <<<");
+                        });
                     }
                 }
                 else if (data.StartsWith("ERROR:"))
@@ -177,8 +189,22 @@ public class Worker : BackgroundService
                     // Se já temos tanto UID quanto GUID, verificar acesso
                     if (!string.IsNullOrEmpty(_ultimoGuidLido))
                     {
-                        _ = Task.Run(() => VerificarAcesso(_ultimoUidLido, _ultimoGuidLido));
+                        var uidParaVerificar = _ultimoUidLido;
+                        var guidParaVerificar = _ultimoGuidLido;
                         LimparVariaveisTemporarias();
+                        _ = Task.Run(async () => 
+                        {
+                            // Se uma gravação recente foi realizada, aguardar a confirmação
+                            if (_gravacaoRecenteRealizada)
+                            {
+                                _logger.LogInformation(">>> Aguardando confirmação de gravação antes de verificar acesso <<<");
+                                while (_gravacaoRecenteRealizada)
+                                {
+                                    await Task.Delay(500);
+                                }
+                            }
+                            await VerificarAcesso(uidParaVerificar, guidParaVerificar);
+                        });
                     }
                 }
                 else if (data.StartsWith("GUID:"))
@@ -191,8 +217,22 @@ public class Worker : BackgroundService
                     // Se já temos tanto UID quanto GUID, verificar acesso
                     if (!string.IsNullOrEmpty(_ultimoUidLido))
                     {
-                        _ = Task.Run(() => VerificarAcesso(_ultimoUidLido, _ultimoGuidLido));
+                        var uidParaVerificar = _ultimoUidLido;
+                        var guidParaVerificar = _ultimoGuidLido;
                         LimparVariaveisTemporarias();
+                        _ = Task.Run(async () => 
+                        {
+                            // Se uma gravação recente foi realizada, aguardar a confirmação
+                            if (_gravacaoRecenteRealizada)
+                            {
+                                _logger.LogInformation(">>> Aguardando confirmação de gravação antes de verificar acesso <<<");
+                                while (_gravacaoRecenteRealizada)
+                                {
+                                    await Task.Delay(500);
+                                }
+                            }
+                            await VerificarAcesso(uidParaVerificar, guidParaVerificar);
+                        });
                     }
                 }
                 else
@@ -236,6 +276,13 @@ public class Worker : BackgroundService
     {
         try
         {
+            // Validar se o GUID não é nulo ou vazio
+            if (string.IsNullOrEmpty(guidGravado))
+            {
+                _logger.LogWarning(">>> Tentativa de confirmação de gravação com GUID inválido: {guid} <<<", guidGravado ?? "(null)");
+                return;
+            }
+
             _logger.LogInformation(">>> Confirmando gravação de cartão para GUID: {guid} <<<", guidGravado);
             
             // Fazer chamada para API para confirmar a gravação
@@ -276,6 +323,13 @@ public class Worker : BackgroundService
     {
         try
         {
+            // Validar se os parâmetros não são nulos ou vazios
+            if (string.IsNullOrEmpty(uid) || string.IsNullOrEmpty(guid))
+            {
+                _logger.LogWarning(">>> Tentativa de verificação de acesso com parâmetros inválidos - UID: {uid}, GUID: {guid} <<<", uid ?? "(null)", guid ?? "(null)");
+                return;
+            }
+
             _logger.LogInformation(">>> Verificando acesso para UID: {uid}, GUID: {guid} <<<", uid, guid);
             
             // Usar o GUID gravado no cartão para verificação de acesso, não o UID físico

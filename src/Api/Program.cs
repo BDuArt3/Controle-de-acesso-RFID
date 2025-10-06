@@ -55,7 +55,8 @@ namespace ControleDeAcesso.Api
             app.UseSwagger();
             app.UseSwaggerUI();
 
-            app.UseHttpsRedirection();
+            // Comentado para evitar problemas com certificados em desenvolvimento
+            // app.UseHttpsRedirection();
 
             app.UseAuthorization();
 
@@ -63,7 +64,7 @@ namespace ControleDeAcesso.Api
 
 
             // Mapear o Hub SignalR para gravação de cartões RFID
-            app.MapHub<GravacaoHub>("/gravacaoHub").RequireCors("SignalRPolicy");
+            app.MapHub<GravacaoHub>("/gravacaoHub");
 
             app.Run();
 
