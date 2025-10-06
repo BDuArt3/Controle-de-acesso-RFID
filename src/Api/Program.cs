@@ -6,10 +6,13 @@ using ControleDeAcesso.Application.Repositories.Interfaces;
 using ControleDeAcesso.Infrastructure.Data.Repositories;
 using ControleDeAcesso.Application.Services.Interfaces;
 using ControleDeAcesso.Application.Services;
+using ControleDeAcesso.Api.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(connectionString, sqlOptions =>
@@ -35,13 +38,12 @@ builder.Services.AddScoped<IAcessoService, AcessoService>();
     
 // Add services to the container.
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+
+// Adicionar SignalR para comunicação em tempo real
+builder.Services.AddSignalR();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 // Swagger habilitado para todos os ambientes (desenvolvimento e produção)
 app.UseSwagger();
 app.UseSwaggerUI();
@@ -51,5 +53,9 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 
 app.MapControllers();
+
+
+// Mapear o Hub SignalR para gravação de cartões RFID
+app.MapHub<GravacaoHub>("/gravacaoHub").RequireCors("SignalRPolicy");
 
 app.Run();

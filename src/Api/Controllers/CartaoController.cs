@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using ControleDeAcesso.Application.Services.Interfaces;
 using ControleDeAcesso.Application.DTOs;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.SignalR;
+using ControleDeAcesso.Api.Hubs;
 
 namespace ControleDeAcesso.Api.Controllers
 {
@@ -11,28 +13,60 @@ namespace ControleDeAcesso.Api.Controllers
     {
         private readonly ICartaoService _cartaoService;
         private readonly ILogger<CartaoController> _logger;
+        private readonly IHubContext<GravacaoHub> _hubContext;
 
-        public CartaoController(ICartaoService cartaoService, ILogger<CartaoController> logger)
+        public CartaoController(
+            ICartaoService cartaoService, 
+            ILogger<CartaoController> logger,
+            IHubContext<GravacaoHub> hubContext)
         {
             _cartaoService = cartaoService;
             _logger = logger;
+            _hubContext = hubContext;
         }
 
         /// <summary>
-        /// Cria um novo cartão
+        /// Cria e grava um novo cartão RFID
+        /// O GUID é gerado automaticamente pelo sistema para garantir segurança
         /// </summary>
-        /// <param name="createCartaoDto">Dados do cartão a ser criado</param>
-        /// <returns>Cartão criado</returns>
+        /// <param name="gravarCartaoDto">Dados da solicitação de gravação</param>
+        /// <returns>Status da solicitação de gravação</returns>
         [HttpPost]
-        public async Task<ActionResult<CartaoDto>> Create([FromBody] CreateCartaoDto createCartaoDto)
+        public async Task<ActionResult<GravacaoCartaoResponseDto>> SolicitarGravacao([FromBody] GravarCartaoDto gravarCartaoDto)
         {
-            _logger.LogInformation("Requisição para criar cartão. UID: {Uid}, UsuarioId: {UsuarioId}", 
-                createCartaoDto.Uid, createCartaoDto.UsuarioId);
+            _logger.LogInformation("Solicitação de gravação de cartão para usuário: {UsuarioId}", gravarCartaoDto.UsuarioId);
 
             try
             {
+                // Gerar GUID único e seguro
+                string guidGerado = Guid.NewGuid().ToString();
+                
+                // Criar cartão com GUID gerado automaticamente
+                var createCartaoDto = new CreateCartaoDto
+                {
+                    Uid = guidGerado,
+                    UsuarioId = gravarCartaoDto.UsuarioId
+                };
+                
                 var cartao = await _cartaoService.CreateAsync(createCartaoDto);
-                return CreatedAtAction(nameof(GetById), new { id = cartao.Id }, cartao);
+                
+                // Enviar comando de gravação para todos os Worker Services conectados
+                await _hubContext.Clients.All.SendAsync("ReceberComandoGravacao", guidGerado);
+                
+                _logger.LogInformation("Comando de gravação enviado para GUID: {guid}", guidGerado);
+                
+                // Retornar resposta sem expor o GUID completo
+                var response = new GravacaoCartaoResponseDto
+                {
+                    CartaoRef = guidGerado.Substring(0, 8) + "...", // Apenas primeiros 8 caracteres
+                    Status = "Solicitado",
+                    Mensagem = "Comando de gravação enviado. Aproxime o cartão do leitor.",
+                    UsuarioId = cartao.UsuarioId,
+                    NomeUsuario = cartao.NomeUsuario,
+                    DataSolicitacao = DateTime.UtcNow
+                };
+                
+                return Ok(response);
             }
             catch (ArgumentException ex)
             {
@@ -44,7 +78,7 @@ namespace ControleDeAcesso.Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao criar cartão");
+                _logger.LogError(ex, "Erro ao solicitar gravação de cartão");
                 return StatusCode(500, new { message = "Erro interno do servidor", details = ex.Message });
             }
         }
