@@ -15,6 +15,10 @@ public class Worker : BackgroundService
     // Variáveis para controle de leitura de acesso
     private string? _ultimoUidLido = null;
     private string? _ultimoGuidLido = null;
+    
+    // Controle de gravações pendentes
+    private readonly Dictionary<string, string> _gravacoesEntreAndamento = new(); // GUID -> UsuarioId
+    private string? _guidSendoGravado = null;
 
     public Worker(
         ILogger<Worker> logger,
@@ -103,12 +107,23 @@ public class Worker : BackgroundService
                 // Enviar apenas os primeiros 16 caracteres do GUID para o Arduino
                 string guidReduzido = guid.Replace("-", "").Substring(0, 16);
                 string comandoGravacao = $"WRITE:{guidReduzido}";
+                
+                // Armazenar o GUID sendo gravado para controle
+                _guidSendoGravado = guidReduzido;
+                
                 _serialPort.WriteLine(comandoGravacao);
                 
                 _logger.LogInformation("Comando enviado para Arduino: {comando} (GUID original: {guidOriginal})", comandoGravacao, guid);
                 
                 // Aguardar processamento do Arduino (15s timeout + margem)
                 await Task.Delay(17000);
+                
+                // Limpar GUID sendo gravado se não houve resposta
+                if (_guidSendoGravado == guidReduzido)
+                {
+                    _guidSendoGravado = null;
+                    _logger.LogWarning("Timeout na gravação - limpando GUID sendo gravado: {guid}", guidReduzido);
+                }
             }
             else
             {
@@ -118,6 +133,7 @@ public class Worker : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Erro ao processar comando de gravação para GUID: {guid}", guid);
+            _guidSendoGravado = null;
         }
     }
 
@@ -135,6 +151,13 @@ public class Worker : BackgroundService
                 if (data.StartsWith("SUCCESS:"))
                 {
                     _logger.LogInformation(">>> Gravação bem-sucedida confirmada pelo Arduino: {resposta} <<<", data);
+                    
+                    // Se há um GUID sendo gravado, confirmar a gravação
+                    if (!string.IsNullOrEmpty(_guidSendoGravado))
+                    {
+                        _ = Task.Run(() => ConfirmarGravacaoCartao(_guidSendoGravado));
+                        _guidSendoGravado = null;
+                    }
                 }
                 else if (data.StartsWith("ERROR:"))
                 {
@@ -209,6 +232,40 @@ public class Worker : BackgroundService
         }
     }
 
+    private async Task ConfirmarGravacaoCartao(string guidGravado)
+    {
+        try
+        {
+            _logger.LogInformation(">>> Confirmando gravação de cartão para GUID: {guid} <<<", guidGravado);
+            
+            // Fazer chamada para API para confirmar a gravação
+            var requestBody = new
+            {
+                guidGravado = guidGravado
+            };
+            
+            var json = System.Text.Json.JsonSerializer.Serialize(requestBody);
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            
+            var response = await _httpClient.PostAsync($"{_apiBaseUrl}/api/cartao/confirmar-gravacao", content);
+            var responseContent = await response.Content.ReadAsStringAsync();
+            
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation(">>> Gravação de cartão confirmada com sucesso - GUID: {guid} - Resposta: {response} <<<", guidGravado, responseContent);
+            }
+            else
+            {
+                _logger.LogError(">>> Erro ao confirmar gravação de cartão - GUID: {guid} - Status: {status} - Resposta: {response} <<<", 
+                    guidGravado, response.StatusCode, responseContent);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, ">>> Erro inesperado ao confirmar gravação de cartão para GUID: {guid} <<<", guidGravado);
+        }
+    }
+
     private void LimparVariaveisTemporarias()
     {
         _ultimoUidLido = null;
@@ -221,10 +278,10 @@ public class Worker : BackgroundService
         {
             _logger.LogInformation(">>> Verificando acesso para UID: {uid}, GUID: {guid} <<<", uid, guid);
             
-            // Fazer chamada para API de verificação de acesso
+            // Usar o GUID gravado no cartão para verificação de acesso, não o UID físico
             var requestBody = new
             {
-                uid = uid,
+                uid = guid, // Usar o GUID como identificador principal
                 guid = guid
             };
             
@@ -236,11 +293,11 @@ public class Worker : BackgroundService
             
             if (response.IsSuccessStatusCode)
             {
-                _logger.LogInformation(">>> ACESSO AUTORIZADO para UID: {uid} - Resposta: {response} <<<", uid, responseContent);
+                _logger.LogInformation(">>> ACESSO AUTORIZADO para GUID: {guid} (UID físico: {uid}) - Resposta: {response} <<<", guid, uid, responseContent);
             }
             else
             {
-                _logger.LogWarning(">>> ACESSO NEGADO para UID: {uid} - Resposta: {response} <<<", uid, responseContent);
+                _logger.LogWarning(">>> ACESSO NEGADO para GUID: {guid} (UID físico: {uid}) - Resposta: {response} <<<", guid, uid, responseContent);
             }
         }
         catch (Exception ex)
