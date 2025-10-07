@@ -11,7 +11,16 @@ import { LogsView } from './components/views/LogsView';
 import { PerfilView } from './components/views/PerfilView';
 
 function AppContent() {
-  const { isAuthenticated, currentView } = useAuth();
+  const { isAuthenticated, currentView, isLoading } = useAuth();
+
+  // Mostrar loading durante a inicialização
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <LoginView />;

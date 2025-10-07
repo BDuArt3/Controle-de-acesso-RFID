@@ -11,24 +11,15 @@ export function LoginView() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const { login } = useAuth();
+  const { login, isLoading, error } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    setError('');
 
-    try {
-      const success = await login(username, password);
-      if (!success) {
-        setError('Usuário ou senha incorretos');
-      }
-    } catch (err) {
-      setError('Erro ao tentar fazer login');
-    } finally {
-      setIsLoading(false);
+    const success = await login(username, password);
+    if (!success && !error) {
+      // Se não houve sucesso e não há erro do serviço, mostrar erro genérico
+      console.log('Login falhou sem erro específico');
     }
   };
 

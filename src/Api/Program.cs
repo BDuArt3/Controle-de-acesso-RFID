@@ -89,6 +89,18 @@ namespace ControleDeAcesso.Api
             // Add services to the container.
             builder.Services.AddControllers();
 
+            // Configurar CORS para permitir comunicação com frontend
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AllowFrontend", policy =>
+                {
+                    policy.WithOrigins("http://localhost:5173", "http://localhost:3000", "http://localhost:4173")
+                          .AllowAnyMethod()
+                          .AllowAnyHeader()
+                          .AllowCredentials();
+                });
+            });
+
             // Adicionar SignalR para comunicação em tempo real
             builder.Services.AddSignalR();
 
@@ -100,6 +112,9 @@ namespace ControleDeAcesso.Api
 
             // Comentado para evitar problemas com certificados em desenvolvimento
             // app.UseHttpsRedirection();
+
+            // Usar a política CORS configurada
+            app.UseCors("AllowFrontend");
 
             app.UseAuthentication();
             app.UseAuthorization();
