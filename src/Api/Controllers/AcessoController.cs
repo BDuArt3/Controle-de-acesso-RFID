@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Mvc;
 using ControleDeAcesso.Application.Services.Interfaces;
 using ControleDeAcesso.Application.DTOs;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Authorization;
 
 namespace ControleDeAcesso.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize] // Requer autenticação para todos os endpoints
     public class AcessoController : ControllerBase
     {
         private readonly IAcessoService _acessoService;

@@ -7,6 +7,9 @@ using ControleDeAcesso.Infrastructure.Data.Repositories;
 using ControleDeAcesso.Application.Services.Interfaces;
 using ControleDeAcesso.Application.Services;
 using ControleDeAcesso.Api.Hubs;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 namespace ControleDeAcesso.Api
 {
@@ -42,6 +45,46 @@ namespace ControleDeAcesso.Api
             builder.Services.AddScoped<ICartaoService, CartaoService>();
             builder.Services.AddScoped<ILogAcessoService, LogAcessoService>();
             builder.Services.AddScoped<IAcessoService, AcessoService>();
+            builder.Services.AddScoped<IAuthService, AuthService>();
+
+            // Configuração JWT
+            var jwtSettings = builder.Configuration.GetSection("Jwt");
+            var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey não configurada");
+            var key = Encoding.UTF8.GetBytes(secretKey);
+
+            builder.Services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+            .AddJwtBearer(options =>
+            {
+                options.RequireHttpsMetadata = false; // Para desenvolvimento
+                options.SaveToken = true;
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(key),
+                    ValidateIssuer = true,
+                    ValidIssuer = jwtSettings["Issuer"],
+                    ValidateAudience = true,
+                    ValidAudience = jwtSettings["Audience"],
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.Zero
+                };
+            });
+
+            builder.Services.AddAuthorization(options =>
+            {
+                // Política para Administradores - acesso total
+                options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
+                
+                // Política para Operadores e Administradores - pode cadastrar usuários e gravar cartões
+                options.AddPolicy("AdminOrOperador", policy => policy.RequireRole("Admin", "Operador"));
+                
+                // Política para todos os funcionários - pode pelo menos visualizar
+                options.AddPolicy("TodosFuncionarios", policy => policy.RequireRole("Admin", "Operador", "Visualizador"));
+            });
 
             // Add services to the container.
             builder.Services.AddControllers();
@@ -58,6 +101,7 @@ namespace ControleDeAcesso.Api
             // Comentado para evitar problemas com certificados em desenvolvimento
             // app.UseHttpsRedirection();
 
+            app.UseAuthentication();
             app.UseAuthorization();
 
             app.MapControllers();

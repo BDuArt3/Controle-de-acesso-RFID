@@ -1,11 +1,13 @@
 using ControleDeAcesso.Application.DTOs;
 using ControleDeAcesso.Application.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 namespace ControleDeAcesso.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize] // Todos os endpoints requerem autenticação
     public class FuncionarioController : ControllerBase
     {
         private readonly IFuncionarioService _funcionarioService;
@@ -21,6 +23,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="funcionarioDto">Dados do funcionário a ser criado</param>
         /// <returns>Funcionário criado</returns>
         [HttpPost]
+        [Authorize(Policy = "AdminOnly")] // Apenas admins podem criar funcionários
         public async Task<IActionResult> Create([FromBody] CreateFuncionarioDto funcionarioDto)
         {
             try
@@ -73,6 +76,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// </summary>
         /// <returns>Lista de funcionários</returns>
         [HttpGet]
+        [Authorize(Policy = "AdminOnly")] // Apenas admins podem listar funcionários
         public async Task<IActionResult> GetAll()
         {
             try
@@ -93,6 +97,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="funcionarioDto">Dados atualizados do funcionário</param>
         /// <returns>Funcionário atualizado</returns>
         [HttpPut("{id}")]
+        [Authorize(Policy = "AdminOnly")] // Apenas admins podem atualizar funcionários
         public async Task<IActionResult> Update(string id, [FromBody] CreateFuncionarioDto funcionarioDto)
         {
             try
@@ -121,6 +126,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="id">ID do funcionário</param>
         /// <returns>Confirmação da operação</returns>
         [HttpDelete("{id}")]
+        [Authorize(Policy = "AdminOnly")] // Apenas admins podem desativar funcionários
         public async Task<IActionResult> Delete(string id)
         {
             try
@@ -151,6 +157,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="id">ID do funcionário</param>
         /// <returns>Confirmação da operação</returns>
         [HttpPatch("{id}/ativar")]
+        [Authorize(Policy = "AdminOnly")] // Apenas admins podem ativar funcionários
         public async Task<IActionResult> Ativar(string id)
         {
             try

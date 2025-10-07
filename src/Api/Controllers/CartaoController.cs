@@ -4,11 +4,13 @@ using ControleDeAcesso.Application.DTOs;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.SignalR;
 using ControleDeAcesso.Api.Hubs;
+using Microsoft.AspNetCore.Authorization;
 
 namespace ControleDeAcesso.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize] // Requer autenticação para todos os endpoints
     public class CartaoController : ControllerBase
     {
         private readonly ICartaoService _cartaoService;
@@ -32,6 +34,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="gravarCartaoDto">Dados da solicitação de gravação</param>
         /// <returns>Status da solicitação de gravação</returns>
         [HttpPost]
+        [Authorize(Policy = "AdminOrOperador")] // Admins e Operadores podem gravar cartões
         public async Task<ActionResult<GravacaoCartaoResponseDto>> SolicitarGravacao([FromBody] GravarCartaoDto gravarCartaoDto)
         {
             _logger.LogInformation("Solicitação de gravação de cartão para usuário: {UsuarioId}", gravarCartaoDto.UsuarioId);
@@ -208,6 +211,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// </summary>
         /// <returns>Lista de cartões ativos</returns>
         [HttpGet]
+        [Authorize(Policy = "TodosFuncionarios")] // Todos os funcionários podem listar cartões
         public async Task<ActionResult<IEnumerable<CartaoDto>>> GetAll()
         {
             _logger.LogInformation("Requisição para listar todos os cartões ativos");

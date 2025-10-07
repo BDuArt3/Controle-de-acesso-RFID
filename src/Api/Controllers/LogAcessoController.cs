@@ -1,11 +1,13 @@
 using ControleDeAcesso.Application.DTOs;
 using ControleDeAcesso.Application.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 namespace ControleDeAcesso.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize] // Requer autenticação para todos os endpoints
     public class LogAcessoController : ControllerBase
     {
         private readonly ILogAcessoService _logAcessoService;
@@ -58,6 +60,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="id">ID do log de acesso</param>
         /// <returns>Log de acesso encontrado</returns>
         [HttpGet("{id}")]
+        [Authorize(Policy = "AdminOnly")] // Apenas admins podem visualizar logs específicos
         [ProducesResponseType(typeof(LogAcessoDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -92,6 +95,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// </summary>
         /// <returns>Lista de logs de acesso</returns>
         [HttpGet]
+        [Authorize(Policy = "TodosFuncionarios")] // Todos os funcionários podem visualizar logs
         [ProducesResponseType(typeof(IEnumerable<LogAcessoDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<ActionResult<IEnumerable<LogAcessoDto>>> GetAll()
@@ -114,6 +118,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="uid">UID do cartão</param>
         /// <returns>Lista de logs do cartão</returns>
         [HttpGet("cartao/{uid}")]
+        [Authorize(Policy = "AdminOnly")] // Apenas admins podem buscar logs por cartão
         [ProducesResponseType(typeof(IEnumerable<LogAcessoDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
@@ -143,6 +148,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="dataFim">Data de fim (yyyy-MM-dd)</param>
         /// <returns>Lista de logs do período</returns>
         [HttpGet("periodo")]
+        [Authorize(Policy = "AdminOnly")] // Apenas admins podem buscar logs por período
         [ProducesResponseType(typeof(IEnumerable<LogAcessoDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
