@@ -9,16 +9,29 @@ export interface LoginRequest {
 export interface LoginResponse {
   success: boolean;
   message?: string;
-  accessToken?: string;
-  refreshToken?: string;
-  expiresIn?: number;
-  funcionario?: {
+  token?: {
+    accessToken: string;
+    refreshToken: string;
+    expiresAt: string;
+    tokenType: string;
+  };
+  usuario?: {
     id: string;
     nomeFuncionario: string;
     usuarioAcesso: string;
-    tipo: string;
-    ativo: boolean;
+    tipo: number; // Enum: 0=Visualizador, 1=Operador, 2=Admin
+    isActive: boolean;
   };
+}
+
+// Função para mapear o tipo de funcionário
+function mapTipoFuncionario(tipo: number): 'admin' | 'operador' | 'visualizador' {
+  switch (tipo) {
+    case 2: return 'admin';
+    case 1: return 'operador';
+    case 0: return 'visualizador';
+    default: return 'visualizador';
+  }
 }
 
 export interface RefreshTokenRequest {
@@ -39,17 +52,17 @@ export class AuthService extends ApiService {
     const response = await this.post<LoginResponse>('/Auth/login', loginData);
     
     // Se login bem-sucedido, salvar tokens
-    if (response.success && response.accessToken && response.refreshToken) {
-      localStorage.setItem('access_token', response.accessToken);
-      localStorage.setItem('refresh_token', response.refreshToken);
+    if (response.success && response.token?.accessToken && response.token?.refreshToken) {
+      localStorage.setItem('access_token', response.token.accessToken);
+      localStorage.setItem('refresh_token', response.token.refreshToken);
       
       // Salvar dados do usuário
-      if (response.funcionario) {
+      if (response.usuario) {
         localStorage.setItem('rfid_user', JSON.stringify({
-          id: response.funcionario.id,
-          name: response.funcionario.nomeFuncionario,
-          username: response.funcionario.usuarioAcesso,
-          role: response.funcionario.tipo.toLowerCase() as 'admin' | 'operador' | 'visualizador'
+          id: response.usuario.id,
+          name: response.usuario.nomeFuncionario,
+          username: response.usuario.usuarioAcesso,
+          role: mapTipoFuncionario(response.usuario.tipo)
         }));
       }
     }
@@ -60,9 +73,9 @@ export class AuthService extends ApiService {
   async refreshToken(refreshToken: string): Promise<LoginResponse> {
     const response = await this.post<LoginResponse>('/Auth/refresh-token', { refreshToken });
     
-    if (response.success && response.accessToken && response.refreshToken) {
-      localStorage.setItem('access_token', response.accessToken);
-      localStorage.setItem('refresh_token', response.refreshToken);
+    if (response.success && response.token?.accessToken && response.token?.refreshToken) {
+      localStorage.setItem('access_token', response.token.accessToken);
+      localStorage.setItem('refresh_token', response.token.refreshToken);
     }
     
     return response;

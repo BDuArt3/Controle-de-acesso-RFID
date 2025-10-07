@@ -21,36 +21,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const mockUsers: { [key: string]: { password: string; user: User } } = {
-  'admin': {
-    password: 'admin123',
-    user: {
-      id: '1',
-      name: 'João Administrador',
-      username: 'admin',
-      role: 'admin'
-    }
-  },
-  'operador': {
-    password: 'op123',
-    user: {
-      id: '2',
-      name: 'Maria Operadora',
-      username: 'operador',
-      role: 'operador'
-    }
-  },
-  'visualizador': {
-    password: 'vis123',
-    user: {
-      id: '3',
-      name: 'Carlos Visualizador',
-      username: 'visualizador',
-      role: 'visualizador'
-    }
-  }
-};
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState('dashboard');
@@ -106,12 +76,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const response = await authService.login(loginData);
       
-      if (response.success && response.funcionario) {
+      if (response.success && response.usuario) {
+        // Função para mapear o tipo de funcionário
+        const mapTipoFuncionario = (tipo: number): 'admin' | 'operador' | 'visualizador' => {
+          switch (tipo) {
+            case 2: return 'admin';
+            case 1: return 'operador';
+            case 0: return 'visualizador';
+            default: return 'visualizador';
+          }
+        };
+
         const userData: User = {
-          id: response.funcionario.id,
-          name: response.funcionario.nomeFuncionario,
-          username: response.funcionario.usuarioAcesso,
-          role: response.funcionario.tipo.toLowerCase() as 'admin' | 'operador' | 'visualizador'
+          id: response.usuario.id,
+          name: response.usuario.nomeFuncionario,
+          username: response.usuario.usuarioAcesso,
+          role: mapTipoFuncionario(response.usuario.tipo)
         };
         
         setUser(userData);
@@ -125,22 +105,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error: any) {
       console.error('Erro no login com API:', error);
       
-      console.warn('API indisponível, usando autenticação mock como fallback');
-      setError('API indisponível, usando modo offline');
-      
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      if (mockUsers[username] && mockUsers[username].password === password) {
-        const userData = mockUsers[username].user;
-        setUser(userData);
-        localStorage.setItem('rfid_user', JSON.stringify(userData));
-        setCurrentView('dashboard');
-        setError(null);
-        return true;
+      // Definir mensagem de erro baseada no tipo de erro
+      if (error.statusCode === 0) {
+        setError('Não foi possível conectar ao servidor. Verifique sua conexão.');
+      } else if (error.statusCode === 401) {
+        setError('Usuário ou senha incorretos.');
       } else {
-        setError('Credenciais inválidas');
-        return false;
+        setError(error.message || 'Erro ao tentar fazer login. Tente novamente.');
       }
+      
+      return false;
       
     } finally {
       setIsLoading(false);

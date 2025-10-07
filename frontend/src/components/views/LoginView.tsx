@@ -100,12 +100,7 @@ export function LoginView() {
               </Button>
               
               <div className="text-center text-sm text-muted-foreground mt-6">
-                <p className="mb-2">Usuários de teste:</p>
-                <div className="text-xs space-y-1">
-                  <p><strong>admin</strong> / admin123 (Administrador)</p>
-                  <p><strong>operador</strong> / op123 (Operador)</p>
-                  <p><strong>visualizador</strong> / vis123 (Visualizador)</p>
-                </div>
+                <p>Use suas credenciais para acessar o sistema</p>
               </div>
             </form>
           </CardContent>
