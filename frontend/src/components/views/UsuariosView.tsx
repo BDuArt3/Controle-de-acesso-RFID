@@ -11,17 +11,16 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Switch } from '../ui/switch';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { useAuth } from '../providers/AuthProvider';
+import { services, TipoUsuario, type UsuarioDto, type CreateUsuarioDto } from '../../services';
 
 interface User {
   id: string;
-  name: string;
-  type: 'aluno' | 'professor' | 'funcionario' | 'visitante';
-  status: 'ativo' | 'inativo';
-  cardId?: string;
-  email: string;
-  registeredAt: string;
+  nome: string;
+  tipo: TipoUsuario;
+  isActive: boolean;
+  cartoes?: Array<{ id: string; uid: string; isActive: boolean }>;
 }
 
 export function UsuariosView() {
@@ -35,13 +34,33 @@ export function UsuariosView() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    type: 'aluno' as User['type'],
-    status: 'ativo' as User['status']
+    nome: '',
+    tipo: TipoUsuario.Aluno
   });
 
   const canEdit = currentUser?.role === 'admin' || currentUser?.role === 'operador';
+
+  // Função auxiliar para converter string para enum
+  const getTipoUsuarioFromString = (tipo: string): TipoUsuario => {
+    switch (tipo) {
+      case 'aluno': return TipoUsuario.Aluno;
+      case 'professor': return TipoUsuario.Professor;
+      case 'funcionario': return TipoUsuario.Funcionario;
+      case 'visitante': return TipoUsuario.Visitante;
+      default: return TipoUsuario.Aluno;
+    }
+  };
+
+  // Função auxiliar para converter enum para string
+  const getTipoUsuarioString = (tipo: TipoUsuario): string => {
+    switch (tipo) {
+      case TipoUsuario.Aluno: return 'aluno';
+      case TipoUsuario.Professor: return 'professor';
+      case TipoUsuario.Funcionario: return 'funcionario';
+      case TipoUsuario.Visitante: return 'visitante';
+      default: return 'aluno';
+    }
+  };
 
   useEffect(() => {
     loadUsers();
@@ -53,57 +72,27 @@ export function UsuariosView() {
 
   const loadUsers = async () => {
     setIsLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const mockUsers: User[] = [
-      {
-        id: '1',
-        name: 'João Silva',
-        type: 'funcionario',
-        status: 'ativo',
-        cardId: 'CARD001',
-        email: 'joao.silva@empresa.com',
-        registeredAt: '2024-01-15'
-      },
-      {
-        id: '2',
-        name: 'Maria Santos',
-        type: 'professor',
-        status: 'ativo',
-        cardId: 'CARD002',
-        email: 'maria.santos@escola.edu',
-        registeredAt: '2024-02-10'
-      },
-      {
-        id: '3',
-        name: 'Ana Costa',
-        type: 'aluno',
-        status: 'ativo',
-        email: 'ana.costa@escola.edu',
-        registeredAt: '2024-03-05'
-      },
-      {
-        id: '4',
-        name: 'Pedro Oliveira',
-        type: 'visitante',
-        status: 'inativo',
-        email: 'pedro.oliveira@gmail.com',
-        registeredAt: '2024-03-20'
-      },
-      {
-        id: '5',
-        name: 'Luisa Ferreira',
-        type: 'aluno',
-        status: 'ativo',
-        cardId: 'CARD005',
-        email: 'luisa.ferreira@escola.edu',
-        registeredAt: '2024-03-22'
-      }
-    ];
-    
-    setUsers(mockUsers);
-    setIsLoading(false);
+    try {
+      console.log('Carregando usuários da API...');
+      const usuariosData = await services.usuario.getAll();
+      
+      // Converter UsuarioDto para User interface
+      const usersConverted: User[] = usuariosData.map(usuario => ({
+        id: usuario.id,
+        nome: usuario.nome,
+        tipo: usuario.tipo,
+        isActive: usuario.isActive,
+        cartoes: usuario.cartoes
+      }));
+      
+      setUsers(usersConverted);
+      console.log('Usuários carregados:', usersConverted);
+    } catch (error) {
+      console.error('Erro ao carregar usuários:', error);
+      toast.error('Erro ao carregar usuários');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const filterUsers = () => {
@@ -111,17 +100,18 @@ export function UsuariosView() {
 
     if (searchTerm) {
       filtered = filtered.filter(user =>
-        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase())
+        user.nome.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
     if (filterType !== 'todos') {
-      filtered = filtered.filter(user => user.type === filterType);
+      const tipoFiltro = getTipoUsuarioFromString(filterType);
+      filtered = filtered.filter(user => user.tipo === tipoFiltro);
     }
 
     if (filterStatus !== 'todos') {
-      filtered = filtered.filter(user => user.status === filterStatus);
+      const isActive = filterStatus === 'ativo';
+      filtered = filtered.filter(user => user.isActive === isActive);
     }
 
     setFilteredUsers(filtered);
@@ -130,10 +120,8 @@ export function UsuariosView() {
   const handleCreateUser = () => {
     setEditingUser(null);
     setFormData({
-      name: '',
-      email: '',
-      type: 'aluno',
-      status: 'ativo'
+      nome: '',
+      tipo: TipoUsuario.Aluno
     });
     setIsModalOpen(true);
   };
@@ -141,83 +129,127 @@ export function UsuariosView() {
   const handleEditUser = (user: User) => {
     setEditingUser(user);
     setFormData({
-      name: user.name,
-      email: user.email,
-      type: user.type,
-      status: user.status
+      nome: user.nome,
+      tipo: user.tipo
     });
     setIsModalOpen(true);
   };
 
   const handleSaveUser = async () => {
-    if (!formData.name || !formData.email) {
-      toast.error('Nome e email são obrigatórios');
+    if (!formData.nome) {
+      toast.error('Nome é obrigatório');
       return;
     }
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      if (editingUser) {
+        // Atualizar usuário existente
+        const updateDto: CreateUsuarioDto = {
+          nome: formData.nome,
+          tipo: formData.tipo
+        };
+        
+        const usuarioAtualizado = await services.usuario.update(editingUser.id, updateDto);
+        
+        setUsers(prev => prev.map(user => 
+          user.id === editingUser.id 
+            ? { ...user, nome: usuarioAtualizado.nome, tipo: usuarioAtualizado.tipo }
+            : user
+        ));
+        
+        toast.success('Usuário atualizado com sucesso');
+      } else {
+        // Criar novo usuário
+        const createDto: CreateUsuarioDto = {
+          nome: formData.nome,
+          tipo: formData.tipo
+        };
+        
+        const novoUsuario = await services.usuario.create(createDto);
+        
+        const newUser: User = {
+          id: novoUsuario.id,
+          nome: novoUsuario.nome,
+          tipo: novoUsuario.tipo,
+          isActive: novoUsuario.isActive,
+          cartoes: novoUsuario.cartoes
+        };
+        
+        setUsers(prev => [...prev, newUser]);
+        toast.success('Usuário criado com sucesso');
+      }
 
-    if (editingUser) {
-      // Update existing user
-      setUsers(prev => prev.map(user => 
-        user.id === editingUser.id 
-          ? { ...user, ...formData }
-          : user
-      ));
-      toast.success('Usuário atualizado com sucesso');
-    } else {
-      // Create new user
-      const newUser: User = {
-        id: Date.now().toString(),
-        ...formData,
-        registeredAt: new Date().toISOString().split('T')[0]
-      };
-      setUsers(prev => [...prev, newUser]);
-      toast.success('Usuário criado com sucesso');
+      setIsModalOpen(false);
+    } catch (error: any) {
+      console.error('Erro ao salvar usuário:', error);
+      
+      // Tratamento de erros específicos
+      if (error.statusCode === 400) {
+        toast.error('Dados inválidos: ' + (error.message || 'Verifique os campos'));
+      } else if (error.statusCode === 401) {
+        toast.error('Você não tem permissão para esta operação');
+      } else {
+        toast.error('Erro ao salvar usuário');
+      }
     }
-
-    setIsModalOpen(false);
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!confirm('Tem certeza que deseja excluir este usuário?')) return;
+    if (!confirm('Tem certeza que deseja desativar este usuário?')) return;
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    setUsers(prev => prev.filter(user => user.id !== userId));
-    toast.success('Usuário removido com sucesso');
-  };
-
-  const handleToggleStatus = async (userId: string) => {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 300));
-
-    setUsers(prev => prev.map(user => 
-      user.id === userId 
-        ? { ...user, status: user.status === 'ativo' ? 'inativo' : 'ativo' }
-        : user
-    ));
-    toast.success('Status do usuário atualizado');
-  };
-
-  const getUserTypeLabel = (type: string) => {
-    switch (type) {
-      case 'aluno': return 'Aluno';
-      case 'professor': return 'Professor';
-      case 'funcionario': return 'Funcionário';
-      case 'visitante': return 'Visitante';
-      default: return type;
+    try {
+      await services.usuario.deleteUsuario(userId);
+      setUsers(prev => prev.map(user => 
+        user.id === userId 
+          ? { ...user, isActive: false }
+          : user
+      ));
+      toast.success('Usuário desativado com sucesso');
+    } catch (error) {
+      console.error('Erro ao desativar usuário:', error);
+      toast.error('Erro ao desativar usuário');
     }
   };
 
-  const getUserTypeColor = (type: string) => {
-    switch (type) {
-      case 'aluno': return 'bg-blue-100 text-blue-800';
-      case 'professor': return 'bg-green-100 text-green-800';
-      case 'funcionario': return 'bg-purple-100 text-purple-800';
-      case 'visitante': return 'bg-orange-100 text-orange-800';
+  const handleToggleStatus = async (userId: string, currentActive: boolean) => {
+    try {
+      if (currentActive) {
+        // Desativar
+        await services.usuario.deleteUsuario(userId);
+      } else {
+        // Ativar
+        await services.usuario.activate(userId);
+      }
+      
+      setUsers(prev => prev.map(user => 
+        user.id === userId 
+          ? { ...user, isActive: !currentActive }
+          : user
+      ));
+      
+      toast.success(currentActive ? 'Usuário desativado' : 'Usuário ativado');
+    } catch (error) {
+      console.error('Erro ao alterar status:', error);
+      toast.error('Erro ao alterar status do usuário');
+    }
+  };
+
+  const getUserTypeLabel = (tipo: TipoUsuario) => {
+    switch (tipo) {
+      case TipoUsuario.Aluno: return 'Aluno';
+      case TipoUsuario.Professor: return 'Professor';
+      case TipoUsuario.Funcionario: return 'Funcionário';
+      case TipoUsuario.Visitante: return 'Visitante';
+      default: return 'Aluno';
+    }
+  };
+
+  const getUserTypeColor = (tipo: TipoUsuario) => {
+    switch (tipo) {
+      case TipoUsuario.Aluno: return 'bg-blue-100 text-blue-800';
+      case TipoUsuario.Professor: return 'bg-green-100 text-green-800';
+      case TipoUsuario.Funcionario: return 'bg-purple-100 text-purple-800';
+      case TipoUsuario.Visitante: return 'bg-orange-100 text-orange-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -304,7 +336,6 @@ export function UsuariosView() {
                 <TableHead>Tipo</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Cartão</TableHead>
-                <TableHead>Cadastrado em</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -315,48 +346,44 @@ export function UsuariosView() {
                     <div className="flex items-center gap-3">
                       <Avatar className="h-8 w-8">
                         <AvatarFallback className="bg-blue-100 text-blue-800 text-xs">
-                          {user.name.split(' ').map(n => n[0]).join('')}
+                          {user.nome.split(' ').map((n: string) => n[0]).join('')}
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <p className="font-medium">{user.name}</p>
-                        <p className="text-sm text-muted-foreground">{user.email}</p>
+                        <p className="font-medium">{user.nome}</p>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={getUserTypeColor(user.type)}>
-                      {getUserTypeLabel(user.type)}
+                    <Badge variant="outline" className={getUserTypeColor(user.tipo)}>
+                      {getUserTypeLabel(user.tipo)}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       {canEdit ? (
                         <Switch
-                          checked={user.status === 'ativo'}
-                          onCheckedChange={() => handleToggleStatus(user.id)}
+                          checked={user.isActive}
+                          onCheckedChange={() => handleToggleStatus(user.id, user.isActive)}
                         />
                       ) : (
-                        <Badge variant={user.status === 'ativo' ? 'default' : 'secondary'}>
-                          {user.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                        <Badge variant={user.isActive ? 'default' : 'secondary'}>
+                          {user.isActive ? 'Ativo' : 'Inativo'}
                         </Badge>
                       )}
                     </div>
                   </TableCell>
                   <TableCell>
-                    {user.cardId ? (
+                    {user.cartoes && user.cartoes.length > 0 ? (
                       <Badge variant="outline" className="bg-green-100 text-green-800">
                         <CreditCard className="h-3 w-3 mr-1" />
-                        {user.cardId}
+                        {user.cartoes[0].uid}
                       </Badge>
                     ) : (
                       <Badge variant="outline" className="bg-gray-100 text-gray-600">
                         Sem cartão
                       </Badge>
                     )}
-                  </TableCell>
-                  <TableCell>
-                    {new Date(user.registeredAt).toLocaleDateString('pt-BR')}
                   </TableCell>
                   <TableCell className="text-right">
                     {canEdit && (
@@ -409,54 +436,31 @@ export function UsuariosView() {
           
           <div className="space-y-4">
             <div>
-              <Label htmlFor="name">Nome completo</Label>
+              <Label htmlFor="nome">Nome completo</Label>
               <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                id="nome"
+                value={formData.nome}
+                onChange={(e) => setFormData(prev => ({ ...prev, nome: e.target.value }))}
                 placeholder="Digite o nome completo"
               />
             </div>
             
             <div>
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                placeholder="Digite o email"
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="type">Tipo de usuário</Label>
+              <Label htmlFor="tipo">Tipo de usuário</Label>
               <Select 
-                value={formData.type} 
-                onValueChange={(value: User['type']) => setFormData(prev => ({ ...prev, type: value }))}
+                value={formData.tipo.toString()} 
+                onValueChange={(value: string) => setFormData(prev => ({ ...prev, tipo: parseInt(value) as TipoUsuario }))}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="aluno">Aluno</SelectItem>
-                  <SelectItem value="professor">Professor</SelectItem>
-                  <SelectItem value="funcionario">Funcionário</SelectItem>
-                  <SelectItem value="visitante">Visitante</SelectItem>
+                  <SelectItem value={TipoUsuario.Aluno.toString()}>Aluno</SelectItem>
+                  <SelectItem value={TipoUsuario.Professor.toString()}>Professor</SelectItem>
+                  <SelectItem value={TipoUsuario.Funcionario.toString()}>Funcionário</SelectItem>
+                  <SelectItem value={TipoUsuario.Visitante.toString()}>Visitante</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="status"
-                checked={formData.status === 'ativo'}
-                onCheckedChange={(checked) => setFormData(prev => ({ 
-                  ...prev, 
-                  status: checked ? 'ativo' : 'inativo' 
-                }))}
-              />
-              <Label htmlFor="status">Usuário ativo</Label>
             </div>
           </div>
 
