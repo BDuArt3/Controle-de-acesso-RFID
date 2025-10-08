@@ -1,21 +1,26 @@
 import { ApiService } from './apiClient';
 
-// Tipos para funcionários
+// Enum para tipos de funcionário (deve coincidir com o backend)
+export enum TipoFuncionario {
+  Visualizador = 0,
+  Operador = 1,
+  Admin = 2
+}
+
+// Tipos para funcionários - corrigido para corresponder ao DTO real do backend
 export interface Funcionario {
   id: string;
   nomeFuncionario: string;
   usuarioAcesso: string;
-  tipo: string;
-  ativo: boolean;
-  dataCriacao?: string;
-  dataUltimaAlteracao?: string;
+  tipo: TipoFuncionario; // Mudança: agora é enum em vez de string
+  isActive: boolean; // Mudança: era 'ativo', agora é 'isActive'
 }
 
 export interface CreateFuncionarioRequest {
   nomeFuncionario: string;
   usuarioAcesso: string;
   senha: string;
-  tipo: string;
+  tipo: TipoFuncionario; // Mudança: agora envia enum diretamente
 }
 
 export class FuncionarioService extends ApiService {

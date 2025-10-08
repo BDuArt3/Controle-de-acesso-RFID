@@ -14,34 +14,20 @@ import { Switch } from '../ui/switch';
 import { Alert, AlertDescription } from '../ui/alert';
 import { toast } from 'sonner';
 import { useAuth } from '../providers/AuthProvider';
-import { services, type Funcionario, type CreateFuncionarioRequest } from '../../services';
+import { services } from '../../services';
+import { TipoFuncionario, CreateFuncionarioRequest, type Funcionario } from '../../services/funcionarioService';
 
 // Enum para tipos de funcionário (deve coincidir com o backend)
-enum TipoFuncionario {
-  Visualizador = 0,
-  Operador = 1,
-  Admin = 2
-}
-
-// Interface adaptada para corresponder ao DTO da API
-interface Employee {
-  id: string;
-  nomeFuncionario: string;
-  usuarioAcesso: string;
-  tipo: TipoFuncionario;
-  isActive: boolean;
-}
-
 export function FuncionariosView() {
   const { user: currentUser } = useAuth();
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
+  const [employees, setEmployees] = useState<Funcionario[]>([]);
+  const [filteredEmployees, setFilteredEmployees] = useState<Funcionario[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<string>('todos');
   const [filterStatus, setFilterStatus] = useState<string>('todos');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [editingEmployee, setEditingEmployee] = useState<Funcionario | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     nomeFuncionario: '',
@@ -67,32 +53,15 @@ export function FuncionariosView() {
     );
   }
 
-  // Funções auxiliares para conversão de tipos
-  const getTipoFromString = (tipo: string): TipoFuncionario => {
-    switch (tipo.toLowerCase()) {
-      case 'admin':
-      case 'administrator':
-      case '2':
-        return TipoFuncionario.Admin;
-      case 'operador':
-      case '1':
-        return TipoFuncionario.Operador;
-      case 'visualizador':
-      case '0':
-      default:
-        return TipoFuncionario.Visualizador;
-    }
-  };
-
-  const getTipoToString = (tipo: TipoFuncionario): string => {
+  const getTipoDisplayName = (tipo: TipoFuncionario): string => {
     switch (tipo) {
       case TipoFuncionario.Admin:
-        return 'admin';
+        return 'Administrador';
       case TipoFuncionario.Operador:
-        return 'operador';
+        return 'Operador';
       case TipoFuncionario.Visualizador:
       default:
-        return 'visualizador';
+        return 'Visualizador';
     }
   };
 
@@ -104,26 +73,17 @@ export function FuncionariosView() {
     filterEmployees();
   }, [employees, searchTerm, filterRole, filterStatus]);
 
-  const loadEmployees = async () => {
-    setIsLoading(true);
+    const loadEmployees = async () => {
     try {
-      console.log('Carregando funcionários da API...');
+      setIsLoading(true);
       const funcionariosData = await services.funcionario.getAll();
       
-      // Converter Funcionario para Employee interface
-      const employeesConverted: Employee[] = funcionariosData.map(funcionario => ({
-        id: funcionario.id,
-        nomeFuncionario: funcionario.nomeFuncionario,
-        usuarioAcesso: funcionario.usuarioAcesso,
-        tipo: getTipoFromString(funcionario.tipo),
-        isActive: funcionario.ativo
-      }));
-      
-      setEmployees(employeesConverted);
-      console.log('Funcionários carregados:', employeesConverted);
+      // Os dados já vêm no formato correto do backend
+      setEmployees(funcionariosData);
+      setFilteredEmployees(funcionariosData);
     } catch (error) {
       console.error('Erro ao carregar funcionários:', error);
-      toast.error('Erro ao carregar funcionários');
+      toast.error("Não foi possível carregar os funcionários.");
     } finally {
       setIsLoading(false);
     }
@@ -140,7 +100,20 @@ export function FuncionariosView() {
     }
 
     if (filterRole !== 'todos') {
-      const tipoFiltro = getTipoFromString(filterRole);
+      let tipoFiltro: TipoFuncionario;
+      switch (filterRole) {
+        case 'admin':
+          tipoFiltro = TipoFuncionario.Admin;
+          break;
+        case 'operador':
+          tipoFiltro = TipoFuncionario.Operador;
+          break;
+        case 'visualizador':
+          tipoFiltro = TipoFuncionario.Visualizador;
+          break;
+        default:
+          tipoFiltro = TipoFuncionario.Visualizador;
+      }
       filtered = filtered.filter(employee => employee.tipo === tipoFiltro);
     }
 
@@ -163,7 +136,7 @@ export function FuncionariosView() {
     setIsModalOpen(true);
   };
 
-  const handleEditEmployee = (employee: Employee) => {
+  const handleEditEmployee = (employee: Funcionario) => {
     setEditingEmployee(employee);
     setFormData({
       nomeFuncionario: employee.nomeFuncionario,
@@ -203,19 +176,14 @@ export function FuncionariosView() {
           nomeFuncionario: formData.nomeFuncionario,
           usuarioAcesso: formData.usuarioAcesso,
           senha: formData.senha || '', // Senha vazia para não alterar
-          tipo: getTipoToString(formData.tipo)
+          tipo: formData.tipo
         };
         
         const funcionarioAtualizado = await services.funcionario.update(editingEmployee.id, updateDto);
         
         setEmployees(prev => prev.map(employee => 
           employee.id === editingEmployee.id 
-            ? { 
-                ...employee, 
-                nomeFuncionario: funcionarioAtualizado.nomeFuncionario,
-                usuarioAcesso: funcionarioAtualizado.usuarioAcesso,
-                tipo: getTipoFromString(funcionarioAtualizado.tipo)
-              }
+            ? funcionarioAtualizado
             : employee
         ));
         
@@ -226,20 +194,12 @@ export function FuncionariosView() {
           nomeFuncionario: formData.nomeFuncionario,
           usuarioAcesso: formData.usuarioAcesso,
           senha: formData.senha,
-          tipo: getTipoToString(formData.tipo)
+          tipo: formData.tipo
         };
         
         const novoFuncionario = await services.funcionario.create(createDto);
         
-        const newEmployee: Employee = {
-          id: novoFuncionario.id,
-          nomeFuncionario: novoFuncionario.nomeFuncionario,
-          usuarioAcesso: novoFuncionario.usuarioAcesso,
-          tipo: getTipoFromString(novoFuncionario.tipo),
-          isActive: novoFuncionario.ativo
-        };
-        
-        setEmployees(prev => [...prev, newEmployee]);
+        setEmployees(prev => [...prev, novoFuncionario]);
         toast.success('Funcionário criado com sucesso');
       }
 
