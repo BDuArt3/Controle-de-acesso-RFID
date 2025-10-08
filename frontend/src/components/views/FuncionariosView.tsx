@@ -14,16 +14,22 @@ import { Switch } from '../ui/switch';
 import { Alert, AlertDescription } from '../ui/alert';
 import { toast } from 'sonner';
 import { useAuth } from '../providers/AuthProvider';
+import { services, type Funcionario, type CreateFuncionarioRequest } from '../../services';
 
+// Enum para tipos de funcionário (deve coincidir com o backend)
+enum TipoFuncionario {
+  Visualizador = 0,
+  Operador = 1,
+  Admin = 2
+}
+
+// Interface adaptada para corresponder ao DTO da API
 interface Employee {
   id: string;
-  name: string;
-  username: string;
-  role: 'admin' | 'operador' | 'visualizador';
-  status: 'ativo' | 'inativo';
-  email: string;
-  lastAccess?: string;
-  createdAt: string;
+  nomeFuncionario: string;
+  usuarioAcesso: string;
+  tipo: TipoFuncionario;
+  isActive: boolean;
 }
 
 export function FuncionariosView() {
@@ -38,12 +44,10 @@ export function FuncionariosView() {
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
-    username: '',
-    email: '',
-    password: '',
-    role: 'visualizador' as Employee['role'],
-    status: 'ativo' as Employee['status']
+    nomeFuncionario: '',
+    usuarioAcesso: '',
+    senha: '',
+    tipo: TipoFuncionario.Visualizador
   });
 
   // Only admins can access this view
@@ -63,6 +67,35 @@ export function FuncionariosView() {
     );
   }
 
+  // Funções auxiliares para conversão de tipos
+  const getTipoFromString = (tipo: string): TipoFuncionario => {
+    switch (tipo.toLowerCase()) {
+      case 'admin':
+      case 'administrator':
+      case '2':
+        return TipoFuncionario.Admin;
+      case 'operador':
+      case '1':
+        return TipoFuncionario.Operador;
+      case 'visualizador':
+      case '0':
+      default:
+        return TipoFuncionario.Visualizador;
+    }
+  };
+
+  const getTipoToString = (tipo: TipoFuncionario): string => {
+    switch (tipo) {
+      case TipoFuncionario.Admin:
+        return 'admin';
+      case TipoFuncionario.Operador:
+        return 'operador';
+      case TipoFuncionario.Visualizador:
+      default:
+        return 'visualizador';
+    }
+  };
+
   useEffect(() => {
     loadEmployees();
   }, []);
@@ -73,53 +106,27 @@ export function FuncionariosView() {
 
   const loadEmployees = async () => {
     setIsLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const mockEmployees: Employee[] = [
-      {
-        id: '1',
-        name: 'João Administrador',
-        username: 'admin',
-        role: 'admin',
-        status: 'ativo',
-        email: 'admin@empresa.com',
-        lastAccess: '2024-03-25T14:30:00Z',
-        createdAt: '2024-01-01'
-      },
-      {
-        id: '2',
-        name: 'Maria Operadora',
-        username: 'operador',
-        role: 'operador',
-        status: 'ativo',
-        email: 'maria.operadora@empresa.com',
-        lastAccess: '2024-03-25T13:45:00Z',
-        createdAt: '2024-01-15'
-      },
-      {
-        id: '3',
-        name: 'Carlos Visualizador',
-        username: 'visualizador',
-        role: 'visualizador',
-        status: 'ativo',
-        email: 'carlos.visualizador@empresa.com',
-        lastAccess: '2024-03-24T16:20:00Z',
-        createdAt: '2024-02-10'
-      },
-      {
-        id: '4',
-        name: 'Ana Silva',
-        username: 'ana.silva',
-        role: 'operador',
-        status: 'inativo',
-        email: 'ana.silva@empresa.com',
-        createdAt: '2024-03-01'
-      }
-    ];
-    
-    setEmployees(mockEmployees);
-    setIsLoading(false);
+    try {
+      console.log('Carregando funcionários da API...');
+      const funcionariosData = await services.funcionario.getAll();
+      
+      // Converter Funcionario para Employee interface
+      const employeesConverted: Employee[] = funcionariosData.map(funcionario => ({
+        id: funcionario.id,
+        nomeFuncionario: funcionario.nomeFuncionario,
+        usuarioAcesso: funcionario.usuarioAcesso,
+        tipo: getTipoFromString(funcionario.tipo),
+        isActive: funcionario.ativo
+      }));
+      
+      setEmployees(employeesConverted);
+      console.log('Funcionários carregados:', employeesConverted);
+    } catch (error) {
+      console.error('Erro ao carregar funcionários:', error);
+      toast.error('Erro ao carregar funcionários');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const filterEmployees = () => {
@@ -127,18 +134,19 @@ export function FuncionariosView() {
 
     if (searchTerm) {
       filtered = filtered.filter(employee =>
-        employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        employee.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        employee.email.toLowerCase().includes(searchTerm.toLowerCase())
+        employee.nomeFuncionario.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        employee.usuarioAcesso.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
     if (filterRole !== 'todos') {
-      filtered = filtered.filter(employee => employee.role === filterRole);
+      const tipoFiltro = getTipoFromString(filterRole);
+      filtered = filtered.filter(employee => employee.tipo === tipoFiltro);
     }
 
     if (filterStatus !== 'todos') {
-      filtered = filtered.filter(employee => employee.status === filterStatus);
+      const isActive = filterStatus === 'ativo';
+      filtered = filtered.filter(employee => employee.isActive === isActive);
     }
 
     setFilteredEmployees(filtered);
@@ -147,12 +155,10 @@ export function FuncionariosView() {
   const handleCreateEmployee = () => {
     setEditingEmployee(null);
     setFormData({
-      name: '',
-      username: '',
-      email: '',
-      password: '',
-      role: 'visualizador',
-      status: 'ativo'
+      nomeFuncionario: '',
+      usuarioAcesso: '',
+      senha: '',
+      tipo: TipoFuncionario.Visualizador
     });
     setIsModalOpen(true);
   };
@@ -160,30 +166,28 @@ export function FuncionariosView() {
   const handleEditEmployee = (employee: Employee) => {
     setEditingEmployee(employee);
     setFormData({
-      name: employee.name,
-      username: employee.username,
-      email: employee.email,
-      password: '',
-      role: employee.role,
-      status: employee.status
+      nomeFuncionario: employee.nomeFuncionario,
+      usuarioAcesso: employee.usuarioAcesso,
+      senha: '',
+      tipo: employee.tipo
     });
     setIsModalOpen(true);
   };
 
   const handleSaveEmployee = async () => {
-    if (!formData.name || !formData.username || !formData.email) {
-      toast.error('Nome, usuário e email são obrigatórios');
+    if (!formData.nomeFuncionario || !formData.usuarioAcesso) {
+      toast.error('Nome e usuário de acesso são obrigatórios');
       return;
     }
 
-    if (!editingEmployee && !formData.password) {
+    if (!editingEmployee && !formData.senha) {
       toast.error('Senha é obrigatória para novos funcionários');
       return;
     }
 
     // Check if username already exists (when creating or changing username)
     const usernameExists = employees.some(emp => 
-      emp.username === formData.username && 
+      emp.usuarioAcesso === formData.usuarioAcesso && 
       emp.id !== editingEmployee?.id
     );
 
@@ -192,40 +196,66 @@ export function FuncionariosView() {
       return;
     }
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      if (editingEmployee) {
+        // Atualizar funcionário existente
+        const updateDto: CreateFuncionarioRequest = {
+          nomeFuncionario: formData.nomeFuncionario,
+          usuarioAcesso: formData.usuarioAcesso,
+          senha: formData.senha || '', // Senha vazia para não alterar
+          tipo: getTipoToString(formData.tipo)
+        };
+        
+        const funcionarioAtualizado = await services.funcionario.update(editingEmployee.id, updateDto);
+        
+        setEmployees(prev => prev.map(employee => 
+          employee.id === editingEmployee.id 
+            ? { 
+                ...employee, 
+                nomeFuncionario: funcionarioAtualizado.nomeFuncionario,
+                usuarioAcesso: funcionarioAtualizado.usuarioAcesso,
+                tipo: getTipoFromString(funcionarioAtualizado.tipo)
+              }
+            : employee
+        ));
+        
+        toast.success('Funcionário atualizado com sucesso');
+      } else {
+        // Criar novo funcionário
+        const createDto: CreateFuncionarioRequest = {
+          nomeFuncionario: formData.nomeFuncionario,
+          usuarioAcesso: formData.usuarioAcesso,
+          senha: formData.senha,
+          tipo: getTipoToString(formData.tipo)
+        };
+        
+        const novoFuncionario = await services.funcionario.create(createDto);
+        
+        const newEmployee: Employee = {
+          id: novoFuncionario.id,
+          nomeFuncionario: novoFuncionario.nomeFuncionario,
+          usuarioAcesso: novoFuncionario.usuarioAcesso,
+          tipo: getTipoFromString(novoFuncionario.tipo),
+          isActive: novoFuncionario.ativo
+        };
+        
+        setEmployees(prev => [...prev, newEmployee]);
+        toast.success('Funcionário criado com sucesso');
+      }
 
-    if (editingEmployee) {
-      // Update existing employee
-      setEmployees(prev => prev.map(employee => 
-        employee.id === editingEmployee.id 
-          ? { 
-              ...employee, 
-              name: formData.name,
-              username: formData.username,
-              email: formData.email,
-              role: formData.role,
-              status: formData.status
-            }
-          : employee
-      ));
-      toast.success('Funcionário atualizado com sucesso');
-    } else {
-      // Create new employee
-      const newEmployee: Employee = {
-        id: Date.now().toString(),
-        name: formData.name,
-        username: formData.username,
-        email: formData.email,
-        role: formData.role,
-        status: formData.status,
-        createdAt: new Date().toISOString().split('T')[0]
-      };
-      setEmployees(prev => [...prev, newEmployee]);
-      toast.success('Funcionário criado com sucesso');
+      setIsModalOpen(false);
+    } catch (error: any) {
+      console.error('Erro ao salvar funcionário:', error);
+      
+      // Tratamento de erros específicos
+      if (error.statusCode === 400 || error.statusCode === 409) {
+        toast.error('Dados inválidos: ' + (error.message || 'Verifique os campos'));
+      } else if (error.statusCode === 401) {
+        toast.error('Você não tem permissão para esta operação');
+      } else {
+        toast.error('Erro ao salvar funcionário');
+      }
     }
-
-    setIsModalOpen(false);
   };
 
   const handleDeleteEmployee = async (employeeId: string) => {
@@ -236,13 +266,20 @@ export function FuncionariosView() {
       return;
     }
 
-    if (!confirm('Tem certeza que deseja excluir este funcionário?')) return;
+    if (!confirm('Tem certeza que deseja desativar este funcionário?')) return;
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    setEmployees(prev => prev.filter(employee => employee.id !== employeeId));
-    toast.success('Funcionário removido com sucesso');
+    try {
+      await services.funcionario.deleteFuncionario(employeeId);
+      setEmployees(prev => prev.map(employee => 
+        employee.id === employeeId 
+          ? { ...employee, isActive: false }
+          : employee
+      ));
+      toast.success('Funcionário desativado com sucesso');
+    } catch (error) {
+      console.error('Erro ao desativar funcionário:', error);
+      toast.error('Erro ao desativar funcionário');
+    }
   };
 
   const handleToggleStatus = async (employeeId: string) => {
@@ -253,31 +290,42 @@ export function FuncionariosView() {
       return;
     }
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 300));
-
-    setEmployees(prev => prev.map(employee => 
-      employee.id === employeeId 
-        ? { ...employee, status: employee.status === 'ativo' ? 'inativo' : 'ativo' }
-        : employee
-    ));
-    toast.success('Status do funcionário atualizado');
-  };
-
-  const getRoleLabel = (role: string) => {
-    switch (role) {
-      case 'admin': return 'Administrador';
-      case 'operador': return 'Operador';
-      case 'visualizador': return 'Visualizador';
-      default: return role;
+    try {
+      if (employee?.isActive) {
+        // Desativar
+        await services.funcionario.deleteFuncionario(employeeId);
+      } else {
+        // Ativar
+        await services.funcionario.activate(employeeId);
+      }
+      
+      setEmployees(prev => prev.map(emp => 
+        emp.id === employeeId 
+          ? { ...emp, isActive: !emp.isActive }
+          : emp
+      ));
+      
+      toast.success(employee?.isActive ? 'Funcionário desativado' : 'Funcionário ativado');
+    } catch (error) {
+      console.error('Erro ao alterar status:', error);
+      toast.error('Erro ao alterar status do funcionário');
     }
   };
 
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case 'admin': return 'bg-red-100 text-red-800';
-      case 'operador': return 'bg-blue-100 text-blue-800';
-      case 'visualizador': return 'bg-green-100 text-green-800';
+  const getRoleLabel = (tipo: TipoFuncionario) => {
+    switch (tipo) {
+      case TipoFuncionario.Admin: return 'Administrador';
+      case TipoFuncionario.Operador: return 'Operador';
+      case TipoFuncionario.Visualizador: return 'Visualizador';
+      default: return 'Visualizador';
+    }
+  };
+
+  const getRoleColor = (tipo: TipoFuncionario) => {
+    switch (tipo) {
+      case TipoFuncionario.Admin: return 'bg-red-100 text-red-800';
+      case TipoFuncionario.Operador: return 'bg-blue-100 text-blue-800';
+      case TipoFuncionario.Visualizador: return 'bg-green-100 text-green-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -379,50 +427,35 @@ export function FuncionariosView() {
                     <div className="flex items-center gap-3">
                       <Avatar className="h-8 w-8">
                         <AvatarFallback className="bg-blue-100 text-blue-800 text-xs">
-                          {employee.name.split(' ').map(n => n[0]).join('')}
+                          {employee.nomeFuncionario.split(' ').map((n: string) => n[0]).join('')}
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <p className="font-medium">{employee.name}</p>
-                        <p className="text-sm text-muted-foreground">{employee.email}</p>
+                        <p className="font-medium">{employee.nomeFuncionario}</p>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell>
                     <code className="bg-muted px-2 py-1 rounded text-sm">
-                      {employee.username}
+                      {employee.usuarioAcesso}
                     </code>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={getRoleColor(employee.role)}>
-                      {getRoleLabel(employee.role)}
+                    <Badge variant="outline" className={getRoleColor(employee.tipo)}>
+                      {getRoleLabel(employee.tipo)}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Switch
-                        checked={employee.status === 'ativo'}
+                        checked={employee.isActive}
                         onCheckedChange={() => handleToggleStatus(employee.id)}
                         disabled={employee.id === currentUser?.id}
                       />
                     </div>
                   </TableCell>
                   <TableCell>
-                    {employee.lastAccess ? (
-                      <div>
-                        <p className="text-sm">
-                          {new Date(employee.lastAccess).toLocaleDateString('pt-BR')}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(employee.lastAccess).toLocaleTimeString('pt-BR', { 
-                            hour: '2-digit', 
-                            minute: '2-digit' 
-                          })}
-                        </p>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">Nunca</span>
-                    )}
+                    <span className="text-sm text-muted-foreground">-</span>
                   </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
@@ -474,46 +507,35 @@ export function FuncionariosView() {
           
           <div className="space-y-4">
             <div>
-              <Label htmlFor="name">Nome completo</Label>
+              <Label htmlFor="nomeFuncionario">Nome completo</Label>
               <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                id="nomeFuncionario"
+                value={formData.nomeFuncionario}
+                onChange={(e) => setFormData(prev => ({ ...prev, nomeFuncionario: e.target.value }))}
                 placeholder="Digite o nome completo"
               />
             </div>
             
             <div>
-              <Label htmlFor="username">Nome de usuário</Label>
+              <Label htmlFor="usuarioAcesso">Nome de usuário</Label>
               <Input
-                id="username"
-                value={formData.username}
-                onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
+                id="usuarioAcesso"
+                value={formData.usuarioAcesso}
+                onChange={(e) => setFormData(prev => ({ ...prev, usuarioAcesso: e.target.value }))}
                 placeholder="Digite o nome de usuário"
               />
             </div>
             
             <div>
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                placeholder="Digite o email"
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="password">
+              <Label htmlFor="senha">
                 {editingEmployee ? 'Nova senha (deixe vazio para manter)' : 'Senha'}
               </Label>
               <div className="relative">
                 <Input
-                  id="password"
+                  id="senha"
                   type={showPassword ? 'text' : 'password'}
-                  value={formData.password}
-                  onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                  value={formData.senha}
+                  onChange={(e) => setFormData(prev => ({ ...prev, senha: e.target.value }))}
                   placeholder={editingEmployee ? 'Nova senha' : 'Digite a senha'}
                 />
                 <Button
@@ -529,32 +551,20 @@ export function FuncionariosView() {
             </div>
             
             <div>
-              <Label htmlFor="role">Nível de acesso</Label>
+              <Label htmlFor="tipo">Nível de acesso</Label>
               <Select 
-                value={formData.role} 
-                onValueChange={(value: Employee['role']) => setFormData(prev => ({ ...prev, role: value }))}
+                value={formData.tipo.toString()} 
+                onValueChange={(value: string) => setFormData(prev => ({ ...prev, tipo: parseInt(value) as TipoFuncionario }))}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="admin">Administrador</SelectItem>
-                  <SelectItem value="operador">Operador</SelectItem>
-                  <SelectItem value="visualizador">Visualizador</SelectItem>
+                  <SelectItem value={TipoFuncionario.Admin.toString()}>Administrador</SelectItem>
+                  <SelectItem value={TipoFuncionario.Operador.toString()}>Operador</SelectItem>
+                  <SelectItem value={TipoFuncionario.Visualizador.toString()}>Visualizador</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="status"
-                checked={formData.status === 'ativo'}
-                onCheckedChange={(checked) => setFormData(prev => ({ 
-                  ...prev, 
-                  status: checked ? 'ativo' : 'inativo' 
-                }))}
-              />
-              <Label htmlFor="status">Funcionário ativo</Label>
             </div>
           </div>
 
