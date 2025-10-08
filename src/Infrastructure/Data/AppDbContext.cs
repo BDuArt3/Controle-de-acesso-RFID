@@ -71,6 +71,7 @@ namespace ControleDeAcesso.Infrastructure.Data
                 entity.Property(e => e.DataHora).IsRequired();
                 entity.Property(e => e.AcessoPermitido).IsRequired();
                 entity.Property(e => e.Motivo).HasMaxLength(200);
+                entity.Property(e => e.MotivoTipo).IsRequired();
             });
         }
     }
