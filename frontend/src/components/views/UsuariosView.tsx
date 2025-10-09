@@ -383,10 +383,24 @@ export function UsuariosView() {
                   </TableCell>
                   <TableCell>
                     {user.cartoes && user.cartoes.length > 0 ? (
-                      <Badge variant="outline" className="bg-green-100 text-green-800">
-                        <CreditCard className="h-3 w-3 mr-1" />
-                        {user.cartoes[0].uid}
-                      </Badge>
+                      <div className="space-y-1">
+                        {user.cartoes.filter(c => c.isActive).map(cartao => (
+                          <Badge key={cartao.id} variant="outline" className="bg-green-100 text-green-800">
+                            <CreditCard className="h-3 w-3 mr-1" />
+                            {cartao.uid}
+                          </Badge>
+                        ))}
+                        {user.cartoes.filter(c => !c.isActive).length > 0 && (
+                          <div className="text-xs text-muted-foreground">
+                            +{user.cartoes.filter(c => !c.isActive).length} inativo(s)
+                          </div>
+                        )}
+                        {user.cartoes.filter(c => c.isActive).length === 0 && (
+                          <Badge variant="outline" className="bg-gray-100 text-gray-600">
+                            Sem cartão ativo
+                          </Badge>
+                        )}
+                      </div>
                     ) : (
                       <Badge variant="outline" className="bg-gray-100 text-gray-600">
                         Sem cartão

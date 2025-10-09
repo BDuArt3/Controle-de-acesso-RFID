@@ -10,6 +10,7 @@ namespace ControleDeAcesso.Application.Repositories.Interfaces
         Task<Cartao?> GetByUidAsync(string uid);
         Task<IEnumerable<Cartao>> GetAllAsync();
         Task<IEnumerable<Cartao>> GetByUsuarioIdAsync(string usuarioId);
+        Task<IEnumerable<Cartao>> GetAllByUsuarioIdAsync(string usuarioId);
         Task<Cartao> UpdateAsync(Cartao cartao);
         Task<bool> DeleteAsync(string id);
         Task<bool> UidExistsAsync(string uid);

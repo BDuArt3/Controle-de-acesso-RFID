@@ -98,7 +98,8 @@ export function CartoesView() {
 
   const getUsuarioSemCartao = () => {
     return usuarios.filter(usuario => 
-      !cartoes.some(cartao => cartao.usuarioId === usuario.id)
+      usuario.isActive && // Apenas usuários ativos
+      (!usuario.cartoes || !usuario.cartoes.some(cartao => cartao.isActive)) // Sem cartão ativo
     );
   };
 
@@ -247,7 +248,7 @@ export function CartoesView() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Usuários sem Cartão</p>
+                <p className="text-sm font-medium text-muted-foreground">Portadores sem Cartão</p>
                 <p className="text-3xl font-bold text-orange-600">
                   {getUsuarioSemCartao().length}
                 </p>
@@ -267,7 +268,7 @@ export function CartoesView() {
           <div className="flex gap-4">
             <div className="flex-1">
               <Input
-                placeholder="Buscar por usuário ou UID do cartão..."
+                placeholder="Buscar por portador ou UID do cartão..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full"
@@ -299,7 +300,7 @@ export function CartoesView() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Usuário</TableHead>
+                <TableHead>Portador</TableHead>
                 <TableHead>UID do Cartão</TableHead>
                 <TableHead>Status</TableHead>
                 {canEditCards && <TableHead>Ações</TableHead>}
@@ -376,12 +377,12 @@ export function CartoesView() {
                 <div className="space-y-4">
                   <Select value={selectedUserId} onValueChange={setSelectedUserId}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione um usuário" />
+                      <SelectValue placeholder="Selecione um portador" />
                     </SelectTrigger>
                     <SelectContent>
                       {getUsuarioSemCartao().map((usuario) => (
                         <SelectItem key={usuario.id} value={usuario.id}>
-                          {usuario.nome}
+                          {usuario.nome} ({services.usuario.getTipoUsuarioString(usuario.tipo)})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -389,7 +390,7 @@ export function CartoesView() {
                   {getUsuarioSemCartao().length === 0 && (
                     <Alert>
                       <AlertDescription>
-                        Todos os usuários já possuem cartões associados.
+                        Todos os portadores ativos já possuem cartões ativos associados.
                       </AlertDescription>
                     </Alert>
                   )}
@@ -412,7 +413,7 @@ export function CartoesView() {
                       <CheckCircle className="h-12 w-12 mx-auto text-green-600" />
                       <p className="font-medium text-green-600">Cartão gravado com sucesso!</p>
                       <p className="text-sm text-muted-foreground">
-                        O cartão foi associado ao usuário
+                        O cartão foi associado ao portador
                       </p>
                     </div>
                   )}

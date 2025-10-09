@@ -144,6 +144,29 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             }
         }
 
+        public async Task<IEnumerable<Cartao>> GetAllByUsuarioIdAsync(string usuarioId)
+        {
+            _logger.LogInformation("Buscando todos os cartões (ativos e inativos) por UsuarioId: {UsuarioId}", usuarioId);
+
+            try
+            {
+                var cartoes = await _context.Cartoes
+                                     .Include(c => c.Usuario)
+                                     .Where(c => c.UsuarioId == usuarioId)
+                                     .ToListAsync();
+
+                _logger.LogInformation("Encontrados {Count} cartões (ativos e inativos) para o usuário {UsuarioId}", 
+                    cartoes.Count(), usuarioId);
+
+                return cartoes;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao buscar todos os cartões por UsuarioId: {UsuarioId}", usuarioId);
+                throw;
+            }
+        }
+
         public async Task<Cartao> UpdateAsync(Cartao cartao)
         {
             _logger.LogInformation("Atualizando cartão. ID: {Id}, UID: {Uid}", 
