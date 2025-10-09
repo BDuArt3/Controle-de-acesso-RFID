@@ -207,14 +207,14 @@ namespace ControleDeAcesso.Api.Controllers
         }
 
         /// <summary>
-        /// Lista todos os cartões ativos
+        /// Lista todos os cartões (incluindo inativos)
         /// </summary>
-        /// <returns>Lista de cartões ativos</returns>
+        /// <returns>Lista de todos os cartões</returns>
         [HttpGet]
         [Authorize(Policy = "TodosFuncionarios")] // Todos os funcionários podem listar cartões
         public async Task<ActionResult<IEnumerable<CartaoDto>>> GetAll()
         {
-            _logger.LogInformation("Requisição para listar todos os cartões ativos");
+            _logger.LogInformation("Requisição para listar todos os cartões (incluindo inativos)");
 
             try
             {

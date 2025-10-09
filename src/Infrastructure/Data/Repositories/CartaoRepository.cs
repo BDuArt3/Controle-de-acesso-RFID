@@ -102,16 +102,15 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
 
         public async Task<IEnumerable<Cartao>> GetAllAsync()
         {
-            _logger.LogInformation("Buscando todos os cartões ativos");
+            _logger.LogInformation("Buscando todos os cartões (incluindo inativos)");
 
             try
             {
                 var cartoes = await _context.Cartoes
                                      .Include(c => c.Usuario)
-                                     .Where(c => c.IsActive)
                                      .ToListAsync();
 
-                _logger.LogInformation("Encontrados {Count} cartões ativos", cartoes.Count());
+                _logger.LogInformation("Encontrados {Count} cartões", cartoes.Count());
 
                 return cartoes;
             }

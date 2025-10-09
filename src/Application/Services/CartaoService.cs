@@ -136,13 +136,13 @@ namespace ControleDeAcesso.Application.Services
 
         public async Task<IEnumerable<CartaoDto>> GetAllAsync()
         {
-            _logger.LogInformation("Buscando todos os cartões ativos");
+            _logger.LogInformation("Buscando todos os cartões (incluindo inativos)");
 
             try
             {
                 var cartoes = await _cartaoRepository.GetAllAsync();
 
-                _logger.LogInformation("Encontrados {Count} cartões ativos", cartoes.Count());
+                _logger.LogInformation("Encontrados {Count} cartões", cartoes.Count());
 
                 return cartoes.Select(MapToDto);
             }
@@ -310,7 +310,8 @@ namespace ControleDeAcesso.Application.Services
                 Id = cartao.Id,
                 Uid = cartao.Uid,
                 IsActive = cartao.IsActive,
-                UsuarioId = cartao.UsuarioId
+                UsuarioId = cartao.UsuarioId,
+                NomeUsuario = cartao.Usuario?.Nome ?? "Usuário não encontrado"
             };
         }
     }
