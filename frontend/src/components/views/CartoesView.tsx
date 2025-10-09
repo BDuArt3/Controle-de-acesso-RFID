@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Search, Zap, CheckCircle, XCircle, Clock, User, Trash2, Plus } from 'lucide-react';
+import { CreditCard, Search, Zap, CheckCircle, XCircle, Clock, User, Plus } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
@@ -160,21 +160,6 @@ export function CartoesView() {
     } catch (error) {
       console.error('Erro ao alterar status do cartão:', error);
       toast.error("Erro ao alterar status do cartão.");
-    }
-  };
-
-  const handleDeleteCartao = async (cartao: Cartao) => {
-    if (!confirm(`Tem certeza que deseja excluir o cartão de ${cartao.nomeUsuario}?`)) {
-      return;
-    }
-
-    try {
-      await services.cartao.deleteCartao(cartao.id);
-      toast.success("Cartão excluído com sucesso!");
-      await loadData();
-    } catch (error) {
-      console.error('Erro ao excluir cartão:', error);
-      toast.error("Erro ao excluir cartão.");
     }
   };
 
@@ -348,13 +333,6 @@ export function CartoesView() {
                           onClick={() => handleToggleStatus(cartao)}
                         >
                           {cartao.isActive ? 'Desativar' : 'Ativar'}
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDeleteCartao(cartao)}
-                        >
-                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
