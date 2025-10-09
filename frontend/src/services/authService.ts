@@ -85,13 +85,19 @@ export class AuthService extends ApiService {
     try {
       const refreshToken = localStorage.getItem('refresh_token');
       if (refreshToken) {
-        await this.post('/Auth/logout', { refreshToken });
+        // Tentar fazer logout no servidor, mas não falhar se der erro
+        try {
+          await this.post('/Auth/logout', { refreshToken });
+        } catch (serverError: any) {
+          // Log do erro, mas não propagar (pode ser token expirado, etc.)
+          console.warn('Erro ao fazer logout no servidor (ignorado):', serverError);
+        }
       }
     } catch (error) {
-      // Ignorar erro de logout, apenas limpar dados locais
-      console.warn('Erro ao fazer logout no servidor:', error);
+      // Capturar qualquer erro inesperado
+      console.warn('Erro inesperado durante logout:', error);
     } finally {
-      // Sempre limpar dados locais
+      // SEMPRE limpar dados locais, independente do que aconteça
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       localStorage.removeItem('rfid_user');

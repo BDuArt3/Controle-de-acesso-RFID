@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../providers/AuthProvider';
 import { usePermissions } from '../../hooks/usePermissions';
 import { AccessDeniedView } from '../ui/AccessDeniedView';
-import { services } from '../../services';
+import { services, utils } from '../../services';
 import { type Cartao, type GravarCartaoRequest, CartaoUtils } from '../../services/cartaoService';
 import { type UsuarioDto } from '../../services/usuarioService';
 
@@ -382,7 +382,7 @@ export function CartoesView() {
                     <SelectContent>
                       {getUsuarioSemCartao().map((usuario) => (
                         <SelectItem key={usuario.id} value={usuario.id}>
-                          {usuario.nome} ({services.usuario.getTipoUsuarioString(usuario.tipo)})
+                          {usuario.nome} ({utils.usuario.getTipoUsuarioString(usuario.tipo)})
                         </SelectItem>
                       ))}
                     </SelectContent>

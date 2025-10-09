@@ -24,7 +24,7 @@ export * from './acessoService';
 // Importações para criar instâncias
 import { authService } from './authService';
 import { funcionarioService } from './funcionarioService';
-import { usuarioService } from './usuarioService';
+import { usuarioService, UsuarioService } from './usuarioService';
 import { cartaoService, CartaoUtils } from './cartaoService';
 import { logAcessoService, LogAcessoUtils } from './logAcessoService';
 import { acessoService, AcessoUtils } from './acessoService';
@@ -42,6 +42,7 @@ export const services = {
 // Utilitários (para conveniência)
 export const utils = {
   cartao: CartaoUtils,
+  usuario: UsuarioService, // Adicionar utilitários de usuário
   logAcesso: LogAcessoUtils,
   acesso: AcessoUtils
 };
