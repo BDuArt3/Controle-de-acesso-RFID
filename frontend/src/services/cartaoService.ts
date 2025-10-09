@@ -97,14 +97,14 @@ export class CartaoService extends ApiService {
    * Ativa um cartão
    */
   async ativar(id: string): Promise<{ message: string }> {
-    return this.patch<{ message: string }>(`/Cartao/${id}/ativar`, {});
+    return this.put<{ message: string }>(`/Cartao/${id}/ativar`, {});
   }
 
   /**
-   * Desativa um cartão
+   * Desativa um cartão (exclusão lógica)
    */
   async desativar(id: string): Promise<{ message: string }> {
-    return this.patch<{ message: string }>(`/Cartao/${id}/desativar`, {});
+    return this.delete<{ message: string }>(`/Cartao/${id}`);
   }
 }
 

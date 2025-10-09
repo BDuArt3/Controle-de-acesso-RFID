@@ -15,7 +15,7 @@ import { useAuth } from '../providers/AuthProvider';
 import { services } from '../../services';
 import { type Cartao, type GravarCartaoRequest, CartaoUtils } from '../../services/cartaoService';
 import { type UsuarioDto } from '../../services/usuarioService';
-type GravingStatus = 'idle' | 'waiting' | 'graving' | 'success' | 'error';
+
 export function CartoesView() {
   const { user: currentUser } = useAuth();
   const [cartoes, setCartoes] = useState<Cartao[]>([]);
@@ -23,130 +23,161 @@ export function CartoesView() {
   const [usuarios, setUsuarios] = useState<UsuarioDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('todos');
+  const [filterStatus, setFilterStatus] = useState<'todos' | 'ativo' | 'inativo'>('todos');
+  
+  // Estados para modal de gravação
   const [isGravingModalOpen, setIsGravingModalOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
-  const [gravingStatus, setGravingStatus] = useState<GravingStatus>('idle');
+  const [gravingStatus, setGravingStatus] = useState<'idle' | 'waiting' | 'success' | 'error'>('idle');
   const [gravingProgress, setGravingProgress] = useState(0);
+
+  // Verificar permissões
   const canEdit = currentUser?.role === 'admin' || currentUser?.role === 'operador';
+
   useEffect(() => {
     loadData();
   }, []);
+
   useEffect(() => {
-    console.log('useEffect filterCartoes disparado. cartoes.length:', cartoes.length);
     filterCartoes();
   }, [cartoes, searchTerm, filterStatus]);
+
   const loadData = async () => {
     try {
       setIsLoading(true);
-      
-      console.log('Iniciando carregamento de dados...');
       
       const [cartoesData, usuariosData] = await Promise.all([
         services.cartao.getAll(),
         services.usuario.getAll()
       ]);
       
-      console.log('Cartões carregados:', cartoesData);
-      console.log('Usuários carregados:', usuariosData);
-      
       setCartoes(cartoesData);
       setUsuarios(usuariosData);
-      setFilteredCartoes(cartoesData); // Inicializar filteredCartoes com todos os cartões
-      console.log('Estado dos cartões atualizado:', cartoesData.length);
+      setFilteredCartoes(cartoesData);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       toast.error("Não foi possível carregar os dados.");
     } finally {
       setIsLoading(false);
-      console.log('Loading finalizado: isLoading agora é false');
     }
   };
+
   const filterCartoes = () => {
-    console.log('Filtrando cartões. Total:', cartoes.length);
     let filtered = cartoes;
+    
     if (searchTerm) {
       filtered = filtered.filter(cartao => 
         cartao.nomeUsuario.toLowerCase().includes(searchTerm.toLowerCase()) ||
         cartao.uid.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
+    
     if (filterStatus !== 'todos') {
       const isActive = filterStatus === 'ativo';
       filtered = filtered.filter(cartao => cartao.isActive === isActive);
     }
-    console.log('Cartões filtrados:', filtered.length);
+    
     setFilteredCartoes(filtered);
   };
-  const handleGravarCartao = async () => {
-    if (!selectedUserId) {
-      toast.error("Selecione um usuário para gravar o cartão.");
-      return;
-    }
-    try {
-      setGravingStatus('waiting');
-      setGravingProgress(0);
-      const request: GravarCartaoRequest = {
-        usuarioId: selectedUserId
-      };
-      const response = await services.cartao.solicitarGravacao(request);
-      setGravingStatus('graving');
-      setGravingProgress(50);
-      toast.success(`Solicitação de gravação enviada: ${response.guidGerado}`);
-      setTimeout(() => {
-        setGravingProgress(100);
-        setGravingStatus('success');
-        loadData();
-        setTimeout(() => {
-          setIsGravingModalOpen(false);
-          setGravingStatus('idle');
-          setGravingProgress(0);
-          setSelectedUserId('');
-        }, 2000);
-      }, 3000);
-    } catch (error: any) {
-      console.error('Erro ao gravar cartão:', error);
-      setGravingStatus('error');
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
   };
-  const handleToggleStatus = async (cartao: Cartao) => {
-    try {
-      if (cartao.isActive) {
-        await services.cartao.desativar(cartao.id);
-        toast.success("Cartão desativado com sucesso.");
-      } else {
-        await services.cartao.ativar(cartao.id);
-        toast.success("Cartão ativado com sucesso.");
-      }
-      await loadData();
-    } catch (error: any) {
-      console.error('Erro ao alterar status do cartão:', error);
-      toast.error(error.message || "Erro ao alterar status do cartão.");
-    }
-  };
-  const handleDeleteCartao = async (cartao: Cartao) => {
-    if (!confirm(`Tem certeza que deseja excluir o cartão ${cartao.uid}?`)) {
-      return;
-    }
-    try {
-      await services.cartao.deleteCartao(cartao.id);
-      toast.success("Cartão excluído com sucesso.");
-      await loadData();
-    } catch (error: any) {
-      console.error('Erro ao excluir cartão:', error);
-      toast.error(error.message || "Erro ao excluir cartão.");
-    }
-  };
+
   const getUsuarioSemCartao = () => {
     return usuarios.filter(usuario => 
       !cartoes.some(cartao => cartao.usuarioId === usuario.id)
     );
   };
-  const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase();
+
+  const handleGravarCartao = async () => {
+    if (!selectedUserId) {
+      toast.error("Selecione um usuário para gravar o cartão.");
+      return;
+    }
+
+    try {
+      setGravingStatus('waiting');
+      setGravingProgress(0);
+
+      // Simular progresso de gravação
+      const progressInterval = setInterval(() => {
+        setGravingProgress(prev => {
+          if (prev >= 100) {
+            clearInterval(progressInterval);
+            return 100;
+          }
+          return prev + 10;
+        });
+      }, 200);
+
+      // Solicitar gravação
+      await services.cartao.solicitarGravacao({ usuarioId: selectedUserId });
+      
+      // Aguardar alguns segundos simulando gravação
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      clearInterval(progressInterval);
+      setGravingProgress(100);
+      setGravingStatus('success');
+      
+      // Recarregar dados
+      await loadData();
+      
+      // Fechar modal após sucesso
+      setTimeout(() => {
+        setIsGravingModalOpen(false);
+        setGravingStatus('idle');
+        setGravingProgress(0);
+        setSelectedUserId('');
+      }, 2000);
+      
+      toast.success("Cartão gravado com sucesso!");
+      
+    } catch (error) {
+      console.error('Erro ao gravar cartão:', error);
+      setGravingStatus('error');
+      toast.error("Erro ao gravar cartão. Tente novamente.");
+    }
   };
-  
-  console.log('Renderizando CartoesView. isLoading:', isLoading, 'cartoes.length:', cartoes.length, 'filteredCartoes.length:', filteredCartoes.length);
-  
+
+  const handleToggleStatus = async (cartao: Cartao) => {
+    try {
+      if (cartao.isActive) {
+        await services.cartao.desativar(cartao.id);
+        toast.success("Cartão desativado com sucesso!");
+      } else {
+        await services.cartao.ativar(cartao.id);
+        toast.success("Cartão ativado com sucesso!");
+      }
+      
+      await loadData();
+    } catch (error) {
+      console.error('Erro ao alterar status do cartão:', error);
+      toast.error("Erro ao alterar status do cartão.");
+    }
+  };
+
+  const handleDeleteCartao = async (cartao: Cartao) => {
+    if (!confirm(`Tem certeza que deseja excluir o cartão de ${cartao.nomeUsuario}?`)) {
+      return;
+    }
+
+    try {
+      await services.cartao.deleteCartao(cartao.id);
+      toast.success("Cartão excluído com sucesso!");
+      await loadData();
+    } catch (error) {
+      console.error('Erro ao excluir cartão:', error);
+      toast.error("Erro ao excluir cartão.");
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -159,8 +190,10 @@ export function CartoesView() {
       </div>
     );
   }
+  
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Gestão de Cartões</h1>
@@ -175,6 +208,8 @@ export function CartoesView() {
           </Button>
         )}
       </div>
+
+      {/* Cards de estatísticas */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-6">
@@ -187,6 +222,7 @@ export function CartoesView() {
             </div>
           </CardContent>
         </Card>
+        
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -200,19 +236,21 @@ export function CartoesView() {
             </div>
           </CardContent>
         </Card>
+        
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Cartões Inativos</p>
-                <p className="text-3xl font-bold text-gray-600">
+                <p className="text-3xl font-bold text-red-600">
                   {cartoes.filter(c => !c.isActive).length}
                 </p>
               </div>
-              <XCircle className="h-8 w-8 text-gray-600" />
+              <XCircle className="h-8 w-8 text-red-600" />
             </div>
           </CardContent>
         </Card>
+        
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -227,26 +265,28 @@ export function CartoesView() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Filtros */}
       <Card>
-        <CardContent className="p-6">
+        <CardHeader>
+          <CardTitle>Filtros</CardTitle>
+        </CardHeader>
+        <CardContent>
           <div className="flex gap-4">
             <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por nome do usuário ou UID do cartão..."
-                  className="pl-10"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
+              <Input
+                placeholder="Buscar por usuário ou UID do cartão..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full"
+              />
             </div>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <Select value={filterStatus} onValueChange={(value: any) => setFilterStatus(value)}>
               <SelectTrigger className="w-48">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="todos">Todos os Status</SelectItem>
+                <SelectItem value="todos">Todos</SelectItem>
                 <SelectItem value="ativo">Ativos</SelectItem>
                 <SelectItem value="inativo">Inativos</SelectItem>
               </SelectContent>
@@ -254,11 +294,13 @@ export function CartoesView() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Tabela de cartões */}
       <Card>
         <CardHeader>
-          <CardTitle>Cartões Cadastrados</CardTitle>
+          <CardTitle>Cartões RFID ({filteredCartoes.length})</CardTitle>
           <CardDescription>
-            Lista de todos os cartões RFID cadastrados no sistema
+            Lista de todos os cartões RFID do sistema
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -305,23 +347,12 @@ export function CartoesView() {
                           size="sm"
                           onClick={() => handleToggleStatus(cartao)}
                         >
-                          {cartao.isActive ? (
-                            <>
-                              <XCircle className="h-4 w-4 mr-1" />
-                              Desativar
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle className="h-4 w-4 mr-1" />
-                              Ativar
-                            </>
-                          )}
+                          {cartao.isActive ? 'Desativar' : 'Ativar'}
                         </Button>
                         <Button
-                          variant="outline"
+                          variant="destructive"
                           size="sm"
                           onClick={() => handleDeleteCartao(cartao)}
-                          className="text-red-600 hover:text-red-700"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -334,14 +365,8 @@ export function CartoesView() {
                 <TableRow>
                   <TableCell colSpan={canEdit ? 4 : 3} className="text-center py-8">
                     <div className="text-muted-foreground">
-                      <CreditCard className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <CreditCard className="h-8 w-8 mx-auto mb-2 opacity-50" />
                       <p>Nenhum cartão encontrado</p>
-                      <p className="text-sm">
-                        {searchTerm || filterStatus !== 'todos' 
-                          ? 'Tente ajustar os filtros de busca'
-                          : 'Nenhum cartão foi cadastrado ainda'
-                        }
-                      </p>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -350,18 +375,19 @@ export function CartoesView() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Modal de gravação */}
       <Dialog open={isGravingModalOpen} onOpenChange={setIsGravingModalOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Gravar Novo Cartão RFID</DialogTitle>
             <DialogDescription>
-              Selecione um usuário e posicione o cartão no leitor para gravação
+              Selecione um usuário e siga as instruções para gravar um novo cartão RFID.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {gravingStatus === 'idle' && (
-              <div>
-                <label className="text-sm font-medium">Usuário</label>
+              <div className="space-y-4">
                 <Select value={selectedUserId} onValueChange={setSelectedUserId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione um usuário" />
@@ -374,48 +400,45 @@ export function CartoesView() {
                     ))}
                   </SelectContent>
                 </Select>
+                {getUsuarioSemCartao().length === 0 && (
+                  <Alert>
+                    <AlertDescription>
+                      Todos os usuários já possuem cartões associados.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
             )}
+            
             {gravingStatus !== 'idle' && (
-              <div className="space-y-4">
-                <div className="text-center">
-                  {gravingStatus === 'waiting' && (
-                    <div className="space-y-2">
-                      <Clock className="h-12 w-12 mx-auto text-blue-600 animate-pulse" />
-                      <p className="font-medium">Aguardando posicionamento do cartão...</p>
-                      <p className="text-sm text-muted-foreground">
-                        Posicione o cartão RFID no leitor
-                      </p>
-                    </div>
-                  )}
-                  {gravingStatus === 'graving' && (
-                    <div className="space-y-2">
-                      <Zap className="h-12 w-12 mx-auto text-yellow-600 animate-bounce" />
-                      <p className="font-medium">Gravando cartão...</p>
-                      <p className="text-sm text-muted-foreground">
-                        Mantenha o cartão no leitor
-                      </p>
-                    </div>
-                  )}
-                  {gravingStatus === 'success' && (
-                    <div className="space-y-2">
-                      <CheckCircle className="h-12 w-12 mx-auto text-green-600" />
-                      <p className="font-medium text-green-600">Cartão gravado com sucesso!</p>
-                      <p className="text-sm text-muted-foreground">
-                        O cartão foi associado ao usuário
-                      </p>
-                    </div>
-                  )}
-                  {gravingStatus === 'error' && (
-                    <div className="space-y-2">
-                      <XCircle className="h-12 w-12 mx-auto text-red-600" />
-                      <p className="font-medium text-red-600">Erro na gravação</p>
-                      <p className="text-sm text-muted-foreground">
-                        Tente novamente ou verifique o leitor
-                      </p>
-                    </div>
-                  )}
-                </div>
+              <div className="space-y-4 text-center">
+                {gravingStatus === 'waiting' && (
+                  <div className="space-y-2">
+                    <Zap className="h-12 w-12 mx-auto text-blue-600 animate-pulse" />
+                    <p className="font-medium text-blue-600">Aguardando cartão RFID</p>
+                    <p className="text-sm text-muted-foreground">
+                      Aproxime o cartão do leitor para gravar
+                    </p>
+                  </div>
+                )}
+                {gravingStatus === 'success' && (
+                  <div className="space-y-2">
+                    <CheckCircle className="h-12 w-12 mx-auto text-green-600" />
+                    <p className="font-medium text-green-600">Cartão gravado com sucesso!</p>
+                    <p className="text-sm text-muted-foreground">
+                      O cartão foi associado ao usuário
+                    </p>
+                  </div>
+                )}
+                {gravingStatus === 'error' && (
+                  <div className="space-y-2">
+                    <XCircle className="h-12 w-12 mx-auto text-red-600" />
+                    <p className="font-medium text-red-600">Erro na gravação</p>
+                    <p className="text-sm text-muted-foreground">
+                      Tente novamente ou verifique o leitor
+                    </p>
+                  </div>
+                )}
                 <Progress value={gravingProgress} className="w-full" />
               </div>
             )}
@@ -453,5 +476,4 @@ export function CartoesView() {
       </Dialog>
     </div>
   );
-}
 }
