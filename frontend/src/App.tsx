@@ -6,7 +6,7 @@ import { LoginView } from './components/views/LoginView';
 import { DashboardView } from './components/views/DashboardView';
 import { UsuariosView } from './components/views/UsuariosView';
 import { FuncionariosView } from './components/views/FuncionariosView';
-import { CartoesView } from './components/views/CartoesView_novo';
+import { CartoesView } from './components/views/CartoesView';
 import { LogsView } from './components/views/LogsView';
 import { PerfilView } from './components/views/PerfilView';
 
