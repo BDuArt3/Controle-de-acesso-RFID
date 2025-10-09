@@ -33,25 +33,37 @@ export function CartoesView() {
     loadData();
   }, []);
   useEffect(() => {
+    console.log('useEffect filterCartoes disparado. cartoes.length:', cartoes.length);
     filterCartoes();
   }, [cartoes, searchTerm, filterStatus]);
   const loadData = async () => {
     try {
       setIsLoading(true);
+      
+      console.log('Iniciando carregamento de dados...');
+      
       const [cartoesData, usuariosData] = await Promise.all([
         services.cartao.getAll(),
         services.usuario.getAll()
       ]);
+      
+      console.log('Cartões carregados:', cartoesData);
+      console.log('Usuários carregados:', usuariosData);
+      
       setCartoes(cartoesData);
       setUsuarios(usuariosData);
+      setFilteredCartoes(cartoesData); // Inicializar filteredCartoes com todos os cartões
+      console.log('Estado dos cartões atualizado:', cartoesData.length);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       toast.error("Não foi possível carregar os dados.");
     } finally {
       setIsLoading(false);
+      console.log('Loading finalizado: isLoading agora é false');
     }
   };
   const filterCartoes = () => {
+    console.log('Filtrando cartões. Total:', cartoes.length);
     let filtered = cartoes;
     if (searchTerm) {
       filtered = filtered.filter(cartao => 
@@ -63,6 +75,7 @@ export function CartoesView() {
       const isActive = filterStatus === 'ativo';
       filtered = filtered.filter(cartao => cartao.isActive === isActive);
     }
+    console.log('Cartões filtrados:', filtered.length);
     setFilteredCartoes(filtered);
   };
   const handleGravarCartao = async () => {
@@ -131,6 +144,9 @@ export function CartoesView() {
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
+  
+  console.log('Renderizando CartoesView. isLoading:', isLoading, 'cartoes.length:', cartoes.length, 'filteredCartoes.length:', filteredCartoes.length);
+  
   if (isLoading) {
     return (
       <div className="space-y-6">
