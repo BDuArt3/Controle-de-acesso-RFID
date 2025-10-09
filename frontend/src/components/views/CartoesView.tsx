@@ -190,9 +190,6 @@ export function CartoesView() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Gestão de Cartões</h1>
-          <p className="text-muted-foreground">
-            {canEditCards ? 'Gerencie cartões RFID do sistema de controle de acesso' : 'Visualize cartões RFID do sistema de controle de acesso'}
-          </p>
         </div>
         {canEditCards && (
           <Button onClick={() => setIsGravingModalOpen(true)}>

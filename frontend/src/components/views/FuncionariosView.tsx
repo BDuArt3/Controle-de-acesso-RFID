@@ -383,9 +383,6 @@ export function FuncionariosView() {
       <div className="flex justify-between items-start">
         <div>
           <h1>Gestão de Funcionários</h1>
-          <p className="text-muted-foreground">
-            {canEditEmployees ? 'Gerencie administradores, operadores e visualizadores do sistema' : 'Visualize administradores, operadores e visualizadores do sistema'}
-          </p>
         </div>
         {canEditEmployees && (
           <Button onClick={handleCreateEmployee} className="bg-blue-600 hover:bg-blue-700">

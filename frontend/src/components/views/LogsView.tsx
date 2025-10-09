@@ -226,9 +226,6 @@ export function LogsView() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Logs de Acesso</h1>
-        <p className="text-muted-foreground">
-          Visualize e monitore todos os acessos à universidade
-        </p>
       </div>
 
       {/* Stats Cards */}

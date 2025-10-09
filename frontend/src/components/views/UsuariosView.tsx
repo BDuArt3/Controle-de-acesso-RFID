@@ -284,9 +284,6 @@ export function UsuariosView() {
       <div className="flex justify-between items-start">
         <div>
           <h1>Gestão de Portadores</h1>
-          <p className="text-muted-foreground">
-            {canEditUsers ? 'Gerencie alunos, professores, funcionários e visitantes' : 'Visualize alunos, professores, funcionários e visitantes'}
-          </p>
         </div>
         {canEditUsers && (
           <Button onClick={handleCreateUser} className="bg-blue-600 hover:bg-blue-700">
