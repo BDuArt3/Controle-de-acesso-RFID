@@ -10,7 +10,7 @@ namespace ControleDeAcesso.Application.DTOs
         public bool AcessoPermitido { get; set; }
         public string Motivo { get; set; } = string.Empty;
         public TipoMotivoAcesso MotivoTipo { get; set; }
-        public string? PortadorNome { get; set; }
-        public string? PortadorTipo { get; set; }
+        public string? UsuarioNome { get; set; }
+        public string? UsuarioTipo { get; set; }
     }
 }

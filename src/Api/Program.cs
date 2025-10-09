@@ -35,13 +35,13 @@ namespace ControleDeAcesso.Api
 
             // Registrar repositórios
             builder.Services.AddScoped<IFuncionarioRepository, FuncionarioRepository>();
-            builder.Services.AddScoped<IPortadorRepository, PortadorRepository>();
+            builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
             builder.Services.AddScoped<ICartaoRepository, CartaoRepository>();
             builder.Services.AddScoped<ILogAcessoRepository, LogAcessoRepository>();
 
             // Registrar serviços
             builder.Services.AddScoped<IFuncionarioService, FuncionarioService>();
-            builder.Services.AddScoped<IPortadorService, PortadorService>();
+            builder.Services.AddScoped<IUsuarioService, UsuarioService>();
             builder.Services.AddScoped<ICartaoService, CartaoService>();
             builder.Services.AddScoped<ILogAcessoService, LogAcessoService>();
             builder.Services.AddScoped<IAcessoService, AcessoService>();
@@ -79,7 +79,7 @@ namespace ControleDeAcesso.Api
                 // Política para Administradores - acesso total
                 options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
                 
-                // Política para Operadores e Administradores - pode cadastrar portadors e gravar cartões
+                // Política para Operadores e Administradores - pode cadastrar usuários e gravar cartões
                 options.AddPolicy("AdminOrOperador", policy => policy.RequireRole("Admin", "Operador"));
                 
                 // Política para todos os funcionários - pode pelo menos visualizar

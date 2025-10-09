@@ -5,6 +5,6 @@ namespace ControleDeAcesso.Application.DTOs
         public bool Success { get; set; }
         public string Message { get; set; } = string.Empty;
         public TokenDto? Token { get; set; }
-        public FuncionarioDto? Portador { get; set; }
+        public FuncionarioDto? Usuario { get; set; }
     }
 }

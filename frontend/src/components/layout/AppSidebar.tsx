@@ -33,8 +33,8 @@ const menuItems = [
     permission: null // Todos podem acessar
   },
   {
-    title: "Portadors",
-    url: "portadors",
+    title: "Usuários",
+    url: "usuarios",
     icon: Users,
     permission: 'view_users' as const
   },

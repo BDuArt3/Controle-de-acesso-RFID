@@ -20,8 +20,8 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
 
         public async Task<Funcionario> CreateAsync(Funcionario funcionario)
         {
-            _logger.LogInformation("Iniciando criação de funcionário. Nome: {Nome}, PortadorAcesso: {PortadorAcesso}", 
-                funcionario.NomeFuncionario, funcionario.PortadorAcesso);
+            _logger.LogInformation("Iniciando criação de funcionário. Nome: {Nome}, UsuarioAcesso: {UsuarioAcesso}", 
+                funcionario.NomeFuncionario, funcionario.UsuarioAcesso);
 
             try
             {
@@ -36,8 +36,8 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao criar funcionário. Nome: {Nome}, PortadorAcesso: {PortadorAcesso}", 
-                    funcionario.NomeFuncionario, funcionario.PortadorAcesso);
+                _logger.LogError(ex, "Erro ao criar funcionário. Nome: {Nome}, UsuarioAcesso: {UsuarioAcesso}", 
+                    funcionario.NomeFuncionario, funcionario.UsuarioAcesso);
                 throw;
             }
         }
@@ -70,22 +70,22 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             }
         }
 
-        public async Task<Funcionario?> GetByPortadorAcessoAsync(string portadorAcesso)
+        public async Task<Funcionario?> GetByUsuarioAcessoAsync(string usuarioAcesso)
         {
-            _logger.LogInformation("Buscando funcionário por portador de acesso: {PortadorAcesso}", portadorAcesso);
+            _logger.LogInformation("Buscando funcionário por usuário de acesso: {UsuarioAcesso}", usuarioAcesso);
 
             try
             {
                 var funcionario = await _context.Funcionarios
-                                     .FirstOrDefaultAsync(f => f.PortadorAcesso == portadorAcesso);
+                                     .FirstOrDefaultAsync(f => f.UsuarioAcesso == usuarioAcesso);
 
                 if (funcionario == null)
                 {
-                    _logger.LogWarning("Funcionário não encontrado para portador de acesso: {PortadorAcesso}", portadorAcesso);
+                    _logger.LogWarning("Funcionário não encontrado para usuário de acesso: {UsuarioAcesso}", usuarioAcesso);
                 }
                 else
                 {
-                    _logger.LogInformation("Funcionário encontrado por portador de acesso. ID: {Id}, Nome: {Nome}, Ativo: {IsActive}", 
+                    _logger.LogInformation("Funcionário encontrado por usuário de acesso. ID: {Id}, Nome: {Nome}, Ativo: {IsActive}", 
                         funcionario.Id, funcionario.NomeFuncionario, funcionario.IsActive);
                 }
 
@@ -93,7 +93,7 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao buscar funcionário por portador de acesso: {PortadorAcesso}", portadorAcesso);
+                _logger.LogError(ex, "Erro ao buscar funcionário por usuário de acesso: {UsuarioAcesso}", usuarioAcesso);
                 throw;
             }
         }
@@ -170,23 +170,23 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             }
         }
 
-        public async Task<bool> PortadorAcessoExistsAsync(string portadorAcesso)
+        public async Task<bool> UsuarioAcessoExistsAsync(string usuarioAcesso)
         {
-            _logger.LogInformation("Verificando se portador de acesso já existe: {PortadorAcesso}", portadorAcesso);
+            _logger.LogInformation("Verificando se usuário de acesso já existe: {UsuarioAcesso}", usuarioAcesso);
 
             try
             {
                 var exists = await _context.Funcionarios
-                                   .AnyAsync(f => f.PortadorAcesso == portadorAcesso);
+                                   .AnyAsync(f => f.UsuarioAcesso == usuarioAcesso);
 
-                _logger.LogInformation("Verificação de portador de acesso concluída. PortadorAcesso: {PortadorAcesso}, Existe: {Exists}", 
-                    portadorAcesso, exists);
+                _logger.LogInformation("Verificação de usuário de acesso concluída. UsuarioAcesso: {UsuarioAcesso}, Existe: {Exists}", 
+                    usuarioAcesso, exists);
 
                 return exists;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao verificar se portador de acesso existe: {PortadorAcesso}", portadorAcesso);
+                _logger.LogError(ex, "Erro ao verificar se usuário de acesso existe: {UsuarioAcesso}", usuarioAcesso);
                 throw;
             }
         }

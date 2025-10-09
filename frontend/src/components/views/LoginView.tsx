@@ -46,7 +46,7 @@ export function LoginView() {
                 <Input
                   id="username"
                   type="text"
-                  placeholder="Digite seu nome de usuário"
+                  placeholder="Digite seu usuário"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required

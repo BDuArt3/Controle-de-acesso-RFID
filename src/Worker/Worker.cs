@@ -17,7 +17,7 @@ public class Worker : BackgroundService
     private string? _ultimoGuidLido = null;
     
     // Controle de gravações pendentes
-    private readonly Dictionary<string, string> _gravacoesEntreAndamento = new(); // GUID -> PortadorId
+    private readonly Dictionary<string, string> _gravacoesEntreAndamento = new(); // GUID -> UsuarioId
     private string? _guidSendoGravado = null;
     private bool _gravacaoRecenteRealizada = false;
 

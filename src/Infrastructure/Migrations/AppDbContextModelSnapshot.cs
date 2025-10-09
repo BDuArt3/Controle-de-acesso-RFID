@@ -36,7 +36,7 @@ namespace ControleDeAcesso.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("PortadorId")
+                    b.Property<string>("UsuarioId")
                         .IsRequired()
                         .HasMaxLength(36)
                         .HasColumnType("nvarchar(36)");
@@ -46,7 +46,7 @@ namespace ControleDeAcesso.Infrastructure.Migrations
                     b.HasIndex("Uid")
                         .IsUnique();
 
-                    b.HasIndex("PortadorId");
+                    b.HasIndex("UsuarioId");
 
                     b.ToTable("Cartoes");
                 });
@@ -73,14 +73,14 @@ namespace ControleDeAcesso.Infrastructure.Migrations
                     b.Property<int>("Tipo")
                         .HasColumnType("int");
 
-                    b.Property<string>("PortadorAcesso")
+                    b.Property<string>("UsuarioAcesso")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PortadorAcesso")
+                    b.HasIndex("UsuarioAcesso")
                         .IsUnique();
 
                     b.ToTable("Funcionarios");
@@ -118,7 +118,7 @@ namespace ControleDeAcesso.Infrastructure.Migrations
                     b.ToTable("LogsAcesso");
                 });
 
-            modelBuilder.Entity("ControleDeAcesso.Core.Entities.Portador", b =>
+            modelBuilder.Entity("ControleDeAcesso.Core.Entities.Usuario", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(36)
@@ -137,21 +137,21 @@ namespace ControleDeAcesso.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Portadors");
+                    b.ToTable("Usuarios");
                 });
 
             modelBuilder.Entity("ControleDeAcesso.Core.Entities.Cartao", b =>
                 {
-                    b.HasOne("ControleDeAcesso.Core.Entities.Portador", "Portador")
+                    b.HasOne("ControleDeAcesso.Core.Entities.Usuario", "Usuario")
                         .WithMany("Cartoes")
-                        .HasForeignKey("PortadorId")
+                        .HasForeignKey("UsuarioId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Portador");
+                    b.Navigation("Usuario");
                 });
 
-            modelBuilder.Entity("ControleDeAcesso.Core.Entities.Portador", b =>
+            modelBuilder.Entity("ControleDeAcesso.Core.Entities.Usuario", b =>
                 {
                     b.Navigation("Cartoes");
                 });

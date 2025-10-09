@@ -11,14 +11,14 @@ export enum TipoFuncionario {
 export interface Funcionario {
   id: string;
   nomeFuncionario: string;
-  portadorAcesso: string;
+  usuarioAcesso: string;
   tipo: TipoFuncionario; // Mudança: agora é enum em vez de string
   isActive: boolean; // Mudança: era 'ativo', agora é 'isActive'
 }
 
 export interface CreateFuncionarioRequest {
   NomeFuncionario: string; // PascalCase para compatibilidade com C#
-  PortadorAcesso: string;   // PascalCase para compatibilidade com C#
+  UsuarioAcesso: string;   // PascalCase para compatibilidade com C#
   Senha: string;           // PascalCase para compatibilidade com C#
   Tipo: TipoFuncionario;   // PascalCase para compatibilidade com C#
 }

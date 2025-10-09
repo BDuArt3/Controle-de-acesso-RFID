@@ -42,13 +42,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               const userData: User = {
                 id: currentUser.id,
                 name: currentUser.nome,
-                username: currentUser.portadorAcesso,
+                username: currentUser.usuarioAcesso,
                 role: currentUser.tipo.toLowerCase() as 'admin' | 'operador' | 'visualizador'
               };
               setUser(userData);
               localStorage.setItem('rfid_user', JSON.stringify(userData));
             } catch (error) {
-              console.warn('Erro ao obter dados do portador:', error);
+              console.warn('Erro ao obter dados do usuário:', error);
               await authService.logout();
             }
           }
@@ -70,13 +70,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     try {
       const loginData: LoginRequest = {
-        portadorAcesso: username,
+        usuarioAcesso: username,
         senha: password
       };
 
       const response = await authService.login(loginData);
       
-      if (response.success && response.portador) {
+      if (response.success && response.usuario) {
         // Função para mapear o tipo de funcionário
         const mapTipoFuncionario = (tipo: number): 'admin' | 'operador' | 'visualizador' => {
           switch (tipo) {
@@ -88,10 +88,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
 
         const userData: User = {
-          id: response.portador.id,
-          name: response.portador.nomeFuncionario,
-          username: response.portador.portadorAcesso,
-          role: mapTipoFuncionario(response.portador.tipo)
+          id: response.usuario.id,
+          name: response.usuario.nomeFuncionario,
+          username: response.usuario.usuarioAcesso,
+          role: mapTipoFuncionario(response.usuario.tipo)
         };
         
         setUser(userData);
@@ -109,7 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error.statusCode === 0) {
         setError('Não foi possível conectar ao servidor. Verifique sua conexão.');
       } else if (error.statusCode === 401) {
-        setError('Portador ou senha incorretos.');
+        setError('Usuário ou senha incorretos.');
       } else {
         setError(error.message || 'Erro ao tentar fazer login. Tente novamente.');
       }

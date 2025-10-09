@@ -22,14 +22,14 @@ namespace ControleDeAcesso.Application.DTOs
         public string Mensagem { get; set; } = string.Empty;
         
         /// <summary>
-        /// ID do portador associado
+        /// ID do usuário associado
         /// </summary>
-        public string PortadorId { get; set; } = string.Empty;
+        public string UsuarioId { get; set; } = string.Empty;
         
         /// <summary>
-        /// Nome do portador associado
+        /// Nome do usuário associado
         /// </summary>
-        public string NomePortador { get; set; } = string.Empty;
+        public string NomeUsuario { get; set; } = string.Empty;
         
         /// <summary>
         /// Timestamp da solicitação

@@ -79,42 +79,42 @@ namespace ControleDeAcesso.Application.Services
                     };
                 }
 
-                // Verificar se o portador existe e está ativo
-                if (cartao.Portador == null)
+                // Verificar se o usuário existe e está ativo
+                if (cartao.Usuario == null)
                 {
-                    var motivoPortadorNaoEncontrado = "Portador não encontrado para este cartão.";
-                    _logger.LogWarning("Acesso negado: Portador não encontrado para o cartão. UID: {CardUid}", cardUid);
+                    var motivoUsuarioNaoEncontrado = "Usuário não encontrado para este cartão.";
+                    _logger.LogWarning("Acesso negado: Usuário não encontrado para o cartão. UID: {CardUid}", cardUid);
                     
                     // Registrar tentativa de acesso negado
-                    await RegistrarTentativaAcessoAsync(cardUid, false, TipoMotivoAcesso.PortadorNaoEncontrado, motivoPortadorNaoEncontrado);
+                    await RegistrarTentativaAcessoAsync(cardUid, false, TipoMotivoAcesso.UsuarioNaoEncontrado, motivoUsuarioNaoEncontrado);
                     
                     return new AccessCheckResponseDto 
                     { 
                         Allowed = false, 
-                        Message = motivoPortadorNaoEncontrado
+                        Message = motivoUsuarioNaoEncontrado
                     };
                 }
 
-                if (!cartao.Portador.IsActive)
+                if (!cartao.Usuario.IsActive)
                 {
-                    var motivoPortadorInativo = "Portador desativado.";
-                    _logger.LogWarning("Acesso negado: Portador inativo. UID: {CardUid}, Portador: {PortadorId}", 
-                        cardUid, cartao.Portador.Id);
+                    var motivoUsuarioInativo = "Usuário desativado.";
+                    _logger.LogWarning("Acesso negado: Usuário inativo. UID: {CardUid}, Usuário: {UsuarioId}", 
+                        cardUid, cartao.Usuario.Id);
                     
                     // Registrar tentativa de acesso negado
-                    await RegistrarTentativaAcessoAsync(cardUid, false, TipoMotivoAcesso.PortadorDesativado, motivoPortadorInativo);
+                    await RegistrarTentativaAcessoAsync(cardUid, false, TipoMotivoAcesso.UsuarioDesativado, motivoUsuarioInativo);
                     
                     return new AccessCheckResponseDto 
                     { 
                         Allowed = false, 
-                        Message = motivoPortadorInativo
+                        Message = motivoUsuarioInativo
                     };
                 }
 
-                // Acesso permitido - cartão e portador válidos e ativos
-                var motivoAcessoPermitido = $"Acesso autorizado para {cartao.Portador.Nome}";
-                _logger.LogInformation("Acesso permitido. UID: {CardUid}, Portador: {PortadorNome}, Tipo: {PortadorTipo}", 
-                    cardUid, cartao.Portador.Nome, cartao.Portador.Tipo);
+                // Acesso permitido - cartão e usuário válidos e ativos
+                var motivoAcessoPermitido = $"Acesso autorizado para {cartao.Usuario.Nome}";
+                _logger.LogInformation("Acesso permitido. UID: {CardUid}, Usuário: {UsuarioNome}, Tipo: {UsuarioTipo}", 
+                    cardUid, cartao.Usuario.Nome, cartao.Usuario.Tipo);
                 
                 // Registrar tentativa de acesso permitido
                 await RegistrarTentativaAcessoAsync(cardUid, true, TipoMotivoAcesso.AcessoAutorizado, motivoAcessoPermitido);
@@ -123,8 +123,8 @@ namespace ControleDeAcesso.Application.Services
                 { 
                     Allowed = true, 
                     Message = motivoAcessoPermitido,
-                    PortadorNome = cartao.Portador.Nome,
-                    PortadorTipo = cartao.Portador.Tipo.ToString()
+                    UsuarioNome = cartao.Usuario.Nome,
+                    UsuarioTipo = cartao.Usuario.Tipo.ToString()
                 };
             }
             catch (Exception ex)

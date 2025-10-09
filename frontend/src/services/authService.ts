@@ -2,7 +2,7 @@ import { ApiService } from './apiClient';
 
 // Tipos para autenticação
 export interface LoginRequest {
-  portadorAcesso: string;
+  usuarioAcesso: string;
   senha: string;
 }
 
@@ -15,10 +15,10 @@ export interface LoginResponse {
     expiresAt: string;
     tokenType: string;
   };
-  portador?: {
+  usuario?: {
     id: string;
     nomeFuncionario: string;
-    portadorAcesso: string;
+    usuarioAcesso: string;
     tipo: number; // Enum: 0=Visualizador, 1=Operador, 2=Admin
     isActive: boolean;
   };
@@ -41,7 +41,7 @@ export interface RefreshTokenRequest {
 export interface UserInfo {
   id: string;
   nome: string;
-  portadorAcesso: string;
+  usuarioAcesso: string;
   tipo: string;
   isAuthenticated: boolean;
 }
@@ -56,13 +56,13 @@ export class AuthService extends ApiService {
       localStorage.setItem('access_token', response.token.accessToken);
       localStorage.setItem('refresh_token', response.token.refreshToken);
       
-      // Salvar dados do portador
-      if (response.portador) {
+      // Salvar dados do usuário
+      if (response.usuario) {
         localStorage.setItem('rfid_user', JSON.stringify({
-          id: response.portador.id,
-          name: response.portador.nomeFuncionario,
-          username: response.portador.portadorAcesso,
-          role: mapTipoFuncionario(response.portador.tipo)
+          id: response.usuario.id,
+          name: response.usuario.nomeFuncionario,
+          username: response.usuario.usuarioAcesso,
+          role: mapTipoFuncionario(response.usuario.tipo)
         }));
       }
     }

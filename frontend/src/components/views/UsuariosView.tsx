@@ -15,17 +15,17 @@ import { toast } from 'sonner';
 import { useAuth } from '../providers/AuthProvider';
 import { usePermissions } from '../../hooks/usePermissions';
 import { AccessDeniedView } from '../ui/AccessDeniedView';
-import { services, TipoPortador, type PortadorDto, type CreatePortadorDto } from '../../services';
+import { services, TipoUsuario, type UsuarioDto, type CreateUsuarioDto } from '../../services';
 
 interface User {
   id: string;
   nome: string;
-  tipo: TipoPortador;
+  tipo: TipoUsuario;
   isActive: boolean;
   cartoes?: Array<{ id: string; uid: string; isActive: boolean }>;
 }
 
-export function PortadorsView() {
+export function UsuariosView() {
   const { user: currentUser } = useAuth();
   const { canView, canEdit } = usePermissions();
   const [users, setUsers] = useState<User[]>([]);
@@ -38,7 +38,7 @@ export function PortadorsView() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({
     nome: '',
-    tipo: TipoPortador.Aluno
+    tipo: TipoUsuario.Aluno
   });
 
   // Verificação de permissão para acessar esta view
@@ -49,23 +49,23 @@ export function PortadorsView() {
   const canEditUsers = canEdit('users');
 
   // Função auxiliar para converter string para enum
-  const getTipoPortadorFromString = (tipo: string): TipoPortador => {
+  const getTipoUsuarioFromString = (tipo: string): TipoUsuario => {
     switch (tipo) {
-      case 'aluno': return TipoPortador.Aluno;
-      case 'professor': return TipoPortador.Professor;
-      case 'funcionario': return TipoPortador.Funcionario;
-      case 'visitante': return TipoPortador.Visitante;
-      default: return TipoPortador.Aluno;
+      case 'aluno': return TipoUsuario.Aluno;
+      case 'professor': return TipoUsuario.Professor;
+      case 'funcionario': return TipoUsuario.Funcionario;
+      case 'visitante': return TipoUsuario.Visitante;
+      default: return TipoUsuario.Aluno;
     }
   };
 
   // Função auxiliar para converter enum para string
-  const getTipoPortadorString = (tipo: TipoPortador): string => {
+  const getTipoUsuarioString = (tipo: TipoUsuario): string => {
     switch (tipo) {
-      case TipoPortador.Aluno: return 'aluno';
-      case TipoPortador.Professor: return 'professor';
-      case TipoPortador.Funcionario: return 'funcionario';
-      case TipoPortador.Visitante: return 'visitante';
+      case TipoUsuario.Aluno: return 'aluno';
+      case TipoUsuario.Professor: return 'professor';
+      case TipoUsuario.Funcionario: return 'funcionario';
+      case TipoUsuario.Visitante: return 'visitante';
       default: return 'aluno';
     }
   };
@@ -81,23 +81,23 @@ export function PortadorsView() {
   const loadUsers = async () => {
     setIsLoading(true);
     try {
-      console.log('Carregando portadors da API...');
-      const portadorsData = await services.portador.getAll();
+      console.log('Carregando usuários da API...');
+      const usuariosData = await services.usuario.getAll();
       
-      // Converter PortadorDto para User interface
-      const usersConverted: User[] = portadorsData.map(portador => ({
-        id: portador.id,
-        nome: portador.nome,
-        tipo: portador.tipo,
-        isActive: portador.isActive,
-        cartoes: portador.cartoes
+      // Converter UsuarioDto para User interface
+      const usersConverted: User[] = usuariosData.map(usuario => ({
+        id: usuario.id,
+        nome: usuario.nome,
+        tipo: usuario.tipo,
+        isActive: usuario.isActive,
+        cartoes: usuario.cartoes
       }));
       
       setUsers(usersConverted);
-      console.log('Portadors carregados:', usersConverted);
+      console.log('Usuários carregados:', usersConverted);
     } catch (error) {
-      console.error('Erro ao carregar portadors:', error);
-      toast.error('Erro ao carregar portadors');
+      console.error('Erro ao carregar usuários:', error);
+      toast.error('Erro ao carregar usuários');
     } finally {
       setIsLoading(false);
     }
@@ -113,7 +113,7 @@ export function PortadorsView() {
     }
 
     if (filterType !== 'todos') {
-      const tipoFiltro = getTipoPortadorFromString(filterType);
+      const tipoFiltro = getTipoUsuarioFromString(filterType);
       filtered = filtered.filter(user => user.tipo === tipoFiltro);
     }
 
@@ -129,7 +129,7 @@ export function PortadorsView() {
     setEditingUser(null);
     setFormData({
       nome: '',
-      tipo: TipoPortador.Aluno
+      tipo: TipoUsuario.Aluno
     });
     setIsModalOpen(true);
   };
@@ -151,45 +151,45 @@ export function PortadorsView() {
 
     try {
       if (editingUser) {
-        // Atualizar portador existente
-        const updateDto: CreatePortadorDto = {
+        // Atualizar usuário existente
+        const updateDto: CreateUsuarioDto = {
           nome: formData.nome,
           tipo: formData.tipo
         };
         
-        const portadorAtualizado = await services.portador.update(editingUser.id, updateDto);
+        const usuarioAtualizado = await services.usuario.update(editingUser.id, updateDto);
         
         setUsers(prev => prev.map(user => 
           user.id === editingUser.id 
-            ? { ...user, nome: portadorAtualizado.nome, tipo: portadorAtualizado.tipo }
+            ? { ...user, nome: usuarioAtualizado.nome, tipo: usuarioAtualizado.tipo }
             : user
         ));
         
-        toast.success('Portador atualizado com sucesso');
+        toast.success('Usuário atualizado com sucesso');
       } else {
-        // Criar novo portador
-        const createDto: CreatePortadorDto = {
+        // Criar novo usuário
+        const createDto: CreateUsuarioDto = {
           nome: formData.nome,
           tipo: formData.tipo
         };
         
-        const novoPortador = await services.portador.create(createDto);
+        const novoUsuario = await services.usuario.create(createDto);
         
         const newUser: User = {
-          id: novoPortador.id,
-          nome: novoPortador.nome,
-          tipo: novoPortador.tipo,
-          isActive: novoPortador.isActive,
-          cartoes: novoPortador.cartoes
+          id: novoUsuario.id,
+          nome: novoUsuario.nome,
+          tipo: novoUsuario.tipo,
+          isActive: novoUsuario.isActive,
+          cartoes: novoUsuario.cartoes
         };
         
         setUsers(prev => [...prev, newUser]);
-        toast.success('Portador criado com sucesso');
+        toast.success('Usuário criado com sucesso');
       }
 
       setIsModalOpen(false);
     } catch (error: any) {
-      console.error('Erro ao salvar portador:', error);
+      console.error('Erro ao salvar usuário:', error);
       
       // Tratamento de erros específicos
       if (error.statusCode === 400) {
@@ -197,25 +197,25 @@ export function PortadorsView() {
       } else if (error.statusCode === 401) {
         toast.error('Você não tem permissão para esta operação');
       } else {
-        toast.error('Erro ao salvar portador');
+        toast.error('Erro ao salvar usuário');
       }
     }
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!confirm('Tem certeza que deseja desativar este portador?')) return;
+    if (!confirm('Tem certeza que deseja desativar este usuário?')) return;
 
     try {
-      await services.portador.deletePortador(userId);
+      await services.usuario.deleteUsuario(userId);
       setUsers(prev => prev.map(user => 
         user.id === userId 
           ? { ...user, isActive: false }
           : user
       ));
-      toast.success('Portador desativado com sucesso');
+      toast.success('Usuário desativado com sucesso');
     } catch (error) {
-      console.error('Erro ao desativar portador:', error);
-      toast.error('Erro ao desativar portador');
+      console.error('Erro ao desativar usuário:', error);
+      toast.error('Erro ao desativar usuário');
     }
   };
 
@@ -223,10 +223,10 @@ export function PortadorsView() {
     try {
       if (currentActive) {
         // Desativar
-        await services.portador.deletePortador(userId);
+        await services.usuario.deleteUsuario(userId);
       } else {
         // Ativar
-        await services.portador.activate(userId);
+        await services.usuario.activate(userId);
       }
       
       setUsers(prev => prev.map(user => 
@@ -235,29 +235,29 @@ export function PortadorsView() {
           : user
       ));
       
-      toast.success(currentActive ? 'Portador desativado' : 'Portador ativado');
+      toast.success(currentActive ? 'Usuário desativado' : 'Usuário ativado');
     } catch (error) {
       console.error('Erro ao alterar status:', error);
-      toast.error('Erro ao alterar status do portador');
+      toast.error('Erro ao alterar status do usuário');
     }
   };
 
-  const getUserTypeLabel = (tipo: TipoPortador) => {
+  const getUserTypeLabel = (tipo: TipoUsuario) => {
     switch (tipo) {
-      case TipoPortador.Aluno: return 'Aluno';
-      case TipoPortador.Professor: return 'Professor';
-      case TipoPortador.Funcionario: return 'Funcionário';
-      case TipoPortador.Visitante: return 'Visitante';
+      case TipoUsuario.Aluno: return 'Aluno';
+      case TipoUsuario.Professor: return 'Professor';
+      case TipoUsuario.Funcionario: return 'Funcionário';
+      case TipoUsuario.Visitante: return 'Visitante';
       default: return 'Aluno';
     }
   };
 
-  const getUserTypeColor = (tipo: TipoPortador) => {
+  const getUserTypeColor = (tipo: TipoUsuario) => {
     switch (tipo) {
-      case TipoPortador.Aluno: return 'bg-blue-100 text-blue-800';
-      case TipoPortador.Professor: return 'bg-green-100 text-green-800';
-      case TipoPortador.Funcionario: return 'bg-purple-100 text-purple-800';
-      case TipoPortador.Visitante: return 'bg-orange-100 text-orange-800';
+      case TipoUsuario.Aluno: return 'bg-blue-100 text-blue-800';
+      case TipoUsuario.Professor: return 'bg-green-100 text-green-800';
+      case TipoUsuario.Funcionario: return 'bg-purple-100 text-purple-800';
+      case TipoUsuario.Visitante: return 'bg-orange-100 text-orange-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -283,7 +283,7 @@ export function PortadorsView() {
     <div className="space-y-6">
       <div className="flex justify-between items-start">
         <div>
-          <h1>Gestão de Portadors</h1>
+          <h1>Gestão de Usuários</h1>
           <p className="text-muted-foreground">
             {canEditUsers ? 'Gerencie alunos, professores, funcionários e visitantes' : 'Visualize alunos, professores, funcionários e visitantes'}
           </p>
@@ -291,7 +291,7 @@ export function PortadorsView() {
         {canEditUsers && (
           <Button onClick={handleCreateUser} className="bg-blue-600 hover:bg-blue-700">
             <Plus className="h-4 w-4 mr-2" />
-            Novo Portador
+            Novo Usuário
           </Button>
         )}
       </div>
@@ -340,7 +340,7 @@ export function PortadorsView() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Portador</TableHead>
+                <TableHead>Usuário</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Cartão</TableHead>
@@ -424,7 +424,7 @@ export function PortadorsView() {
 
           {filteredUsers.length === 0 && (
             <div className="text-center py-8">
-              <p className="text-muted-foreground">Nenhum portador encontrado</p>
+              <p className="text-muted-foreground">Nenhum usuário encontrado</p>
             </div>
           )}
         </CardContent>
@@ -436,10 +436,10 @@ export function PortadorsView() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                {editingUser ? 'Editar Portador' : 'Novo Portador'}
+                {editingUser ? 'Editar Usuário' : 'Novo Usuário'}
               </DialogTitle>
               <DialogDescription>
-                {editingUser ? 'Altere as informações do portador.' : 'Preencha os dados para criar um novo portador.'}
+                {editingUser ? 'Altere as informações do usuário.' : 'Preencha os dados para criar um novo usuário.'}
               </DialogDescription>
             </DialogHeader>
             
@@ -455,19 +455,19 @@ export function PortadorsView() {
               </div>
               
               <div>
-                <Label htmlFor="tipo">Tipo de portador</Label>
+                <Label htmlFor="tipo">Tipo de usuário</Label>
                 <Select 
                   value={formData.tipo.toString()} 
-                  onValueChange={(value: string) => setFormData(prev => ({ ...prev, tipo: parseInt(value) as TipoPortador }))}
+                  onValueChange={(value: string) => setFormData(prev => ({ ...prev, tipo: parseInt(value) as TipoUsuario }))}
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={TipoPortador.Aluno.toString()}>Aluno</SelectItem>
-                    <SelectItem value={TipoPortador.Professor.toString()}>Professor</SelectItem>
-                    <SelectItem value={TipoPortador.Funcionario.toString()}>Funcionário</SelectItem>
-                    <SelectItem value={TipoPortador.Visitante.toString()}>Visitante</SelectItem>
+                    <SelectItem value={TipoUsuario.Aluno.toString()}>Aluno</SelectItem>
+                    <SelectItem value={TipoUsuario.Professor.toString()}>Professor</SelectItem>
+                    <SelectItem value={TipoUsuario.Funcionario.toString()}>Funcionário</SelectItem>
+                    <SelectItem value={TipoUsuario.Visitante.toString()}>Visitante</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

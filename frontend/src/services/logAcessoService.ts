@@ -11,7 +11,7 @@ import { ApiService } from './apiClient';
  * - Registro automático de tentativas de acesso
  * - Consulta de histórico de movimentação
  * - Relatórios e estatísticas de acesso
- * - Filtros por período, portador e tipo de resultado
+ * - Filtros por período, usuário e tipo de resultado
  * 
  * @author Sistema de Controle de Acesso RFID
  * @version 2.0
@@ -23,8 +23,8 @@ export enum TipoMotivoAcesso {
   UidObrigatorio = 2,
   CartaoNaoEncontrado = 3,
   CartaoDesativado = 4,
-  PortadorNaoEncontrado = 5,
-  PortadorDesativado = 6,
+  UsuarioNaoEncontrado = 5,
+  UsuarioDesativado = 6,
   ErroInterno = 7
 }
 
@@ -36,8 +36,8 @@ export interface LogAcessoDto {
   acessoPermitido: boolean;
   motivo: string;
   motivoTipo: TipoMotivoAcesso;
-  portadorNome?: string;
-  portadorTipo?: string;
+  usuarioNome?: string;
+  usuarioTipo?: string;
 }
 
 // Interface para filtros de pesquisa
@@ -83,8 +83,8 @@ export interface RelatorioDiarioDto {
     hora: string;
     quantidade: number;
   }>;
-  portadorsMaisAtivos: Array<{
-    portadorNome: string;
+  usuariosMaisAtivos: Array<{
+    usuarioNome: string;
     quantidade: number;
   }>;
   motivosDetalheados: Array<{
@@ -250,9 +250,9 @@ class LogAcessoService extends ApiService {
   }
 
   /**
-   * Obtém histórico completo de um portador por UID do cartão
+   * Obtém histórico completo de um usuário por UID do cartão
    */
-  async getHistoricoPortador(cartaoUid: string): Promise<LogAcessoDto[]> {
+  async getHistoricoUsuario(cartaoUid: string): Promise<LogAcessoDto[]> {
     return this.getByCartaoUid(cartaoUid);
   }
 
@@ -298,9 +298,9 @@ export class LogAcessoUtils {
       case 4:
         return TipoMotivoAcesso.CartaoDesativado;
       case 5:
-        return TipoMotivoAcesso.PortadorNaoEncontrado;
+        return TipoMotivoAcesso.UsuarioNaoEncontrado;
       case 6:
-        return TipoMotivoAcesso.PortadorDesativado;
+        return TipoMotivoAcesso.UsuarioDesativado;
       case 7:
         return TipoMotivoAcesso.ErroInterno;
       default:
@@ -321,10 +321,10 @@ export class LogAcessoUtils {
         return 'Cartão Não Cadastrado';
       case TipoMotivoAcesso.CartaoDesativado:
         return 'Cartão Desativado';
-      case TipoMotivoAcesso.PortadorNaoEncontrado:
-        return 'Portador Não Encontrado';
-      case TipoMotivoAcesso.PortadorDesativado:
-        return 'Portador Desativado';
+      case TipoMotivoAcesso.UsuarioNaoEncontrado:
+        return 'Usuário Não Encontrado';
+      case TipoMotivoAcesso.UsuarioDesativado:
+        return 'Usuário Desativado';
       case TipoMotivoAcesso.ErroInterno:
         return 'Erro do Sistema';
       default:
@@ -345,9 +345,9 @@ export class LogAcessoUtils {
         return 'bg-orange-100 text-orange-800';
       case TipoMotivoAcesso.CartaoDesativado:
         return 'bg-red-100 text-red-800';
-      case TipoMotivoAcesso.PortadorNaoEncontrado:
+      case TipoMotivoAcesso.UsuarioNaoEncontrado:
         return 'bg-purple-100 text-purple-800';
-      case TipoMotivoAcesso.PortadorDesativado:
+      case TipoMotivoAcesso.UsuarioDesativado:
         return 'bg-red-100 text-red-800';
       case TipoMotivoAcesso.ErroInterno:
         return 'bg-gray-100 text-gray-800';
@@ -393,8 +393,8 @@ export class LogAcessoUtils {
       { value: TipoMotivoAcesso.UidObrigatorio, label: 'UID Obrigatório' },
       { value: TipoMotivoAcesso.CartaoNaoEncontrado, label: 'Cartão Não Cadastrado' },
       { value: TipoMotivoAcesso.CartaoDesativado, label: 'Cartão Desativado' },
-      { value: TipoMotivoAcesso.PortadorNaoEncontrado, label: 'Portador Não Encontrado' },
-      { value: TipoMotivoAcesso.PortadorDesativado, label: 'Portador Desativado' },
+      { value: TipoMotivoAcesso.UsuarioNaoEncontrado, label: 'Usuário Não Encontrado' },
+      { value: TipoMotivoAcesso.UsuarioDesativado, label: 'Usuário Desativado' },
       { value: TipoMotivoAcesso.ErroInterno, label: 'Erro do Sistema' }
     ];
   }
@@ -412,10 +412,10 @@ export class LogAcessoUtils {
         return 'Cartão RFID não cadastrado no sistema da universidade';
       case TipoMotivoAcesso.CartaoDesativado:
         return 'Cartão RFID desativado - acesso negado à universidade';
-      case TipoMotivoAcesso.PortadorNaoEncontrado:
-        return 'Portador não encontrado no sistema da universidade';
-      case TipoMotivoAcesso.PortadorDesativado:
-        return 'Portador desativado - acesso negado à universidade';
+      case TipoMotivoAcesso.UsuarioNaoEncontrado:
+        return 'Usuário não encontrado no sistema da universidade';
+      case TipoMotivoAcesso.UsuarioDesativado:
+        return 'Usuário desativado - acesso negado à universidade';
       case TipoMotivoAcesso.ErroInterno:
         return 'Erro interno do sistema de controle de acesso';
       default:
@@ -443,9 +443,9 @@ export class LogAcessoUtils {
         return '🔍';
       case TipoMotivoAcesso.CartaoDesativado:
         return '🚫';
-      case TipoMotivoAcesso.PortadorNaoEncontrado:
+      case TipoMotivoAcesso.UsuarioNaoEncontrado:
         return '👤';
-      case TipoMotivoAcesso.PortadorDesativado:
+      case TipoMotivoAcesso.UsuarioDesativado:
         return '🔒';
       case TipoMotivoAcesso.ErroInterno:
         return '❌';

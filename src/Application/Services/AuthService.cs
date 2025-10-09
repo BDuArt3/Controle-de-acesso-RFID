@@ -31,42 +31,42 @@ namespace ControleDeAcesso.Application.Services
 
         public async Task<LoginResponseDto> LoginAsync(LoginDto loginDto)
         {
-            _logger.LogInformation("Tentativa de login para portador: {PortadorAcesso}", loginDto.PortadorAcesso);
+            _logger.LogInformation("Tentativa de login para usuário: {UsuarioAcesso}", loginDto.UsuarioAcesso);
 
             try
             {
-                // Buscar funcionário por portador de acesso
-                var funcionario = await _funcionarioRepository.GetByPortadorAcessoAsync(loginDto.PortadorAcesso);
+                // Buscar funcionário por usuário de acesso
+                var funcionario = await _funcionarioRepository.GetByUsuarioAcessoAsync(loginDto.UsuarioAcesso);
 
                 if (funcionario == null)
                 {
-                    _logger.LogWarning("Portador não encontrado: {PortadorAcesso}", loginDto.PortadorAcesso);
+                    _logger.LogWarning("Usuário não encontrado: {UsuarioAcesso}", loginDto.UsuarioAcesso);
                     return new LoginResponseDto
                     {
                         Success = false,
-                        Message = "Portador ou senha inválidos."
+                        Message = "Usuário ou senha inválidos."
                     };
                 }
 
                 // Verificar se o funcionário está ativo
                 if (!funcionario.IsActive)
                 {
-                    _logger.LogWarning("Tentativa de login com portador inativo: {PortadorAcesso}", loginDto.PortadorAcesso);
+                    _logger.LogWarning("Tentativa de login com usuário inativo: {UsuarioAcesso}", loginDto.UsuarioAcesso);
                     return new LoginResponseDto
                     {
                         Success = false,
-                        Message = "Portador desativado."
+                        Message = "Usuário desativado."
                     };
                 }
 
                 // Verificar senha
                 if (!BCrypt.Net.BCrypt.Verify(loginDto.Senha, funcionario.SenhaHash))
                 {
-                    _logger.LogWarning("Senha incorreta para portador: {PortadorAcesso}", loginDto.PortadorAcesso);
+                    _logger.LogWarning("Senha incorreta para usuário: {UsuarioAcesso}", loginDto.UsuarioAcesso);
                     return new LoginResponseDto
                     {
                         Success = false,
-                        Message = "Portador ou senha inválidos."
+                        Message = "Usuário ou senha inválidos."
                     };
                 }
 
@@ -75,7 +75,7 @@ namespace ControleDeAcesso.Application.Services
                 {
                     Id = funcionario.Id,
                     NomeFuncionario = funcionario.NomeFuncionario,
-                    PortadorAcesso = funcionario.PortadorAcesso,
+                    UsuarioAcesso = funcionario.UsuarioAcesso,
                     Tipo = funcionario.Tipo,
                     IsActive = funcionario.IsActive
                 };
@@ -96,19 +96,19 @@ namespace ControleDeAcesso.Application.Services
                     TokenType = "Bearer"
                 };
 
-                _logger.LogInformation("Login realizado com sucesso para portador: {PortadorAcesso}", loginDto.PortadorAcesso);
+                _logger.LogInformation("Login realizado com sucesso para usuário: {UsuarioAcesso}", loginDto.UsuarioAcesso);
 
                 return new LoginResponseDto
                 {
                     Success = true,
                     Message = "Login realizado com sucesso.",
                     Token = tokenDto,
-                    Portador = funcionarioDto
+                    Usuario = funcionarioDto
                 };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro durante o login para portador: {PortadorAcesso}", loginDto.PortadorAcesso);
+                _logger.LogError(ex, "Erro durante o login para usuário: {UsuarioAcesso}", loginDto.UsuarioAcesso);
                 return new LoginResponseDto
                 {
                     Success = false,
@@ -152,7 +152,7 @@ namespace ControleDeAcesso.Application.Services
                 {
                     Id = funcionario.Id,
                     NomeFuncionario = funcionario.NomeFuncionario,
-                    PortadorAcesso = funcionario.PortadorAcesso,
+                    UsuarioAcesso = funcionario.UsuarioAcesso,
                     Tipo = funcionario.Tipo,
                     IsActive = funcionario.IsActive
                 };
@@ -244,7 +244,7 @@ namespace ControleDeAcesso.Application.Services
             {
                 new Claim(ClaimTypes.NameIdentifier, funcionario.Id),
                 new Claim(ClaimTypes.Name, funcionario.NomeFuncionario),
-                new Claim("portador_acesso", funcionario.PortadorAcesso),
+                new Claim("usuario_acesso", funcionario.UsuarioAcesso),
                 new Claim(ClaimTypes.Role, funcionario.Tipo.ToString()),
                 new Claim("tipo_funcionario", funcionario.Tipo.ToString())
             };

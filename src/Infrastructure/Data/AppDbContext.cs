@@ -10,7 +10,7 @@ namespace ControleDeAcesso.Infrastructure.Data
         {
         }
 
-        public DbSet<Portador> Portadors { get; set; }
+        public DbSet<Usuario> Usuarios { get; set; }
         public DbSet<Cartao> Cartoes { get; set; }
         public DbSet<Funcionario> Funcionarios { get; set; }
         public DbSet<LogAcesso> LogsAcesso { get; set; }
@@ -19,8 +19,8 @@ namespace ControleDeAcesso.Infrastructure.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // Configuração da entidade Portador
-            modelBuilder.Entity<Portador>(entity =>
+            // Configuração da entidade Usuario
+            modelBuilder.Entity<Usuario>(entity =>
             {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Id).HasMaxLength(36);
@@ -30,8 +30,8 @@ namespace ControleDeAcesso.Infrastructure.Data
 
                 // Relacionamento 1:N com Cartao
                 entity.HasMany(e => e.Cartoes)
-                      .WithOne(c => c.Portador)
-                      .HasForeignKey(c => c.PortadorId)
+                      .WithOne(c => c.Usuario)
+                      .HasForeignKey(c => c.UsuarioId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
 
@@ -41,7 +41,7 @@ namespace ControleDeAcesso.Infrastructure.Data
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Id).HasMaxLength(36);
                 entity.Property(e => e.Uid).IsRequired().HasMaxLength(50);
-                entity.Property(e => e.PortadorId).IsRequired().HasMaxLength(36);
+                entity.Property(e => e.UsuarioId).IsRequired().HasMaxLength(36);
                 entity.Property(e => e.IsActive).IsRequired();
 
                 // Índice único para o UID do cartão
@@ -54,13 +54,13 @@ namespace ControleDeAcesso.Infrastructure.Data
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Id).HasMaxLength(36);
                 entity.Property(e => e.NomeFuncionario).IsRequired().HasMaxLength(100);
-                entity.Property(e => e.PortadorAcesso).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.UsuarioAcesso).IsRequired().HasMaxLength(50);
                 entity.Property(e => e.SenhaHash).IsRequired().HasMaxLength(255);
                 entity.Property(e => e.Tipo).IsRequired();
                 entity.Property(e => e.IsActive).IsRequired();
 
-                // Índice único para o portador de acesso
-                entity.HasIndex(e => e.PortadorAcesso).IsUnique();
+                // Índice único para o usuário de acesso
+                entity.HasIndex(e => e.UsuarioAcesso).IsUnique();
             });
 
             // Configuração da entidade LogAcesso

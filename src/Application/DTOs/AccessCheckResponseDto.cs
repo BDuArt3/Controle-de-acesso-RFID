@@ -4,9 +4,9 @@ namespace ControleDeAcesso.Application.DTOs
     {
         public bool Allowed { get; set; }
         public string Message { get; set; } = string.Empty;
-        public long? PortadorId { get; set; }
-        public string? NomePortador { get; set; }
-        public string? PortadorNome { get; set; }
-        public string? PortadorTipo { get; set; }
+        public long? UsuarioId { get; set; }
+        public string? NomeUsuario { get; set; }
+        public string? UsuarioNome { get; set; }
+        public string? UsuarioTipo { get; set; }
     }
 }

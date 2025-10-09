@@ -178,7 +178,7 @@ namespace ControleDeAcesso.Api.Controllers
                 var updateDto = new CreateFuncionarioDto
                 {
                     NomeFuncionario = funcionario.NomeFuncionario,
-                    PortadorAcesso = funcionario.PortadorAcesso,
+                    UsuarioAcesso = funcionario.UsuarioAcesso,
                     Senha = "", // Senha vazia para não alterar
                     Tipo = funcionario.Tipo
                 };

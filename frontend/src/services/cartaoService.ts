@@ -5,19 +5,19 @@ export interface Cartao {
   id: string;
   uid: string;
   isActive: boolean;
-  portadorId: string;
-  nomePortador: string;
+  usuarioId: string;
+  nomeUsuario: string;
 }
 
 // Interface para criar cartão (corresponde ao CreateCartaoDto do backend)
 export interface CreateCartaoRequest {
   uid: string;
-  portadorId: string;
+  usuarioId: string;
 }
 
 // Interface para solicitar gravação de cartão
 export interface GravarCartaoRequest {
-  portadorId: string;
+  usuarioId: string;
 }
 
 // Interface para confirmar gravação
@@ -59,10 +59,10 @@ export class CartaoService extends ApiService {
   }
 
   /**
-   * Obtém cartões por portador
+   * Obtém cartões por usuário
    */
-  async getByPortador(portadorId: string): Promise<Cartao[]> {
-    return this.get<Cartao[]>(`/Cartao/portador/${portadorId}`);
+  async getByUsuario(usuarioId: string): Promise<Cartao[]> {
+    return this.get<Cartao[]>(`/Cartao/usuario/${usuarioId}`);
   }
 
   /**
