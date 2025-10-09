@@ -81,7 +81,7 @@ export function UsuariosView() {
   const loadUsers = async () => {
     setIsLoading(true);
     try {
-      console.log('Carregando usuários da API...');
+      console.log('Carregando portadores da API...');
       const usuariosData = await services.usuario.getAll();
       
       // Converter UsuarioDto para User interface
@@ -94,10 +94,10 @@ export function UsuariosView() {
       }));
       
       setUsers(usersConverted);
-      console.log('Usuários carregados:', usersConverted);
+      console.log('Portadores carregados:', usersConverted);
     } catch (error) {
-      console.error('Erro ao carregar usuários:', error);
-      toast.error('Erro ao carregar usuários');
+      console.error('Erro ao carregar portadores:', error);
+      toast.error('Erro ao carregar portadores');
     } finally {
       setIsLoading(false);
     }
@@ -165,7 +165,7 @@ export function UsuariosView() {
             : user
         ));
         
-        toast.success('Usuário atualizado com sucesso');
+        toast.success('Portador atualizado com sucesso');
       } else {
         // Criar novo usuário
         const createDto: CreateUsuarioDto = {
@@ -184,7 +184,7 @@ export function UsuariosView() {
         };
         
         setUsers(prev => [...prev, newUser]);
-        toast.success('Usuário criado com sucesso');
+        toast.success('Portador criado com sucesso');
       }
 
       setIsModalOpen(false);
@@ -197,13 +197,13 @@ export function UsuariosView() {
       } else if (error.statusCode === 401) {
         toast.error('Você não tem permissão para esta operação');
       } else {
-        toast.error('Erro ao salvar usuário');
+        toast.error('Erro ao salvar portador');
       }
     }
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!confirm('Tem certeza que deseja desativar este usuário?')) return;
+    if (!confirm('Tem certeza que deseja desativar este portador?')) return;
 
     try {
       await services.usuario.deleteUsuario(userId);
@@ -212,10 +212,10 @@ export function UsuariosView() {
           ? { ...user, isActive: false }
           : user
       ));
-      toast.success('Usuário desativado com sucesso');
+      toast.success('Portador desativado com sucesso');
     } catch (error) {
       console.error('Erro ao desativar usuário:', error);
-      toast.error('Erro ao desativar usuário');
+      toast.error('Erro ao desativar portador');
     }
   };
 
@@ -235,10 +235,10 @@ export function UsuariosView() {
           : user
       ));
       
-      toast.success(currentActive ? 'Usuário desativado' : 'Usuário ativado');
+      toast.success(currentActive ? 'Portador desativado' : 'Portador ativado');
     } catch (error) {
       console.error('Erro ao alterar status:', error);
-      toast.error('Erro ao alterar status do usuário');
+      toast.error('Erro ao alterar status do portador');
     }
   };
 
@@ -283,7 +283,7 @@ export function UsuariosView() {
     <div className="space-y-6">
       <div className="flex justify-between items-start">
         <div>
-          <h1>Gestão de Usuários</h1>
+          <h1>Gestão de Portadores</h1>
           <p className="text-muted-foreground">
             {canEditUsers ? 'Gerencie alunos, professores, funcionários e visitantes' : 'Visualize alunos, professores, funcionários e visitantes'}
           </p>
@@ -291,7 +291,7 @@ export function UsuariosView() {
         {canEditUsers && (
           <Button onClick={handleCreateUser} className="bg-blue-600 hover:bg-blue-700">
             <Plus className="h-4 w-4 mr-2" />
-            Novo Usuário
+            Novo Portador
           </Button>
         )}
       </div>
@@ -303,7 +303,7 @@ export function UsuariosView() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar por nome ou email..."
+                  placeholder="Buscar por nome..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -340,7 +340,7 @@ export function UsuariosView() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Usuário</TableHead>
+                <TableHead>Portador</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Cartão</TableHead>
@@ -424,7 +424,7 @@ export function UsuariosView() {
 
           {filteredUsers.length === 0 && (
             <div className="text-center py-8">
-              <p className="text-muted-foreground">Nenhum usuário encontrado</p>
+              <p className="text-muted-foreground">Nenhum portador encontrado</p>
             </div>
           )}
         </CardContent>
@@ -436,10 +436,10 @@ export function UsuariosView() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                {editingUser ? 'Editar Usuário' : 'Novo Usuário'}
+                {editingUser ? 'Editar Portador' : 'Novo Portador'}
               </DialogTitle>
               <DialogDescription>
-                {editingUser ? 'Altere as informações do usuário.' : 'Preencha os dados para criar um novo usuário.'}
+                {editingUser ? 'Altere as informações do portador.' : 'Preencha os dados para criar um novo portador.'}
               </DialogDescription>
             </DialogHeader>
             
@@ -455,7 +455,7 @@ export function UsuariosView() {
               </div>
               
               <div>
-                <Label htmlFor="tipo">Tipo de usuário</Label>
+                <Label htmlFor="tipo">Tipo de portador</Label>
                 <Select 
                   value={formData.tipo.toString()} 
                   onValueChange={(value: string) => setFormData(prev => ({ ...prev, tipo: parseInt(value) as TipoUsuario }))}

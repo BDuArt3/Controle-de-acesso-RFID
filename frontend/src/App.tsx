@@ -33,7 +33,7 @@ function AppContent() {
     switch (currentView) {
       case 'dashboard':
         return <DashboardView />;
-      case 'usuarios':
+      case 'portadores':
         return canView('users') ? <UsuariosView /> : <AccessDeniedView />;
       case 'funcionarios':
         return canView('employees') ? <FuncionariosView /> : <AccessDeniedView />;
