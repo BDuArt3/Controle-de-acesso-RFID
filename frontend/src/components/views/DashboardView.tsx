@@ -218,9 +218,6 @@ export function DashboardView() {
               <Clock className="h-5 w-5" />
               Acessos Recentes
             </CardTitle>
-            <CardDescription>
-              Últimos acessos registrados em tempo real
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
