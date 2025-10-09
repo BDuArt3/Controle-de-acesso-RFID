@@ -359,7 +359,7 @@ export function CartoesView() {
       {/* Modal de gravação */}
       {canEditCards && (
         <Dialog open={isGravingModalOpen} onOpenChange={setIsGravingModalOpen}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="w-full max-w-md mx-auto">
             <DialogHeader>
               <DialogTitle>Gravar Novo Cartão RFID</DialogTitle>
               <DialogDescription>
