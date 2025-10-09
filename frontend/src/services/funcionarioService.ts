@@ -17,10 +17,10 @@ export interface Funcionario {
 }
 
 export interface CreateFuncionarioRequest {
-  nomeFuncionario: string;
-  usuarioAcesso: string;
-  senha: string;
-  tipo: TipoFuncionario; // Mudança: agora envia enum diretamente
+  NomeFuncionario: string; // PascalCase para compatibilidade com C#
+  UsuarioAcesso: string;   // PascalCase para compatibilidade com C#
+  Senha: string;           // PascalCase para compatibilidade com C#
+  Tipo: TipoFuncionario;   // PascalCase para compatibilidade com C#
 }
 
 export class FuncionarioService extends ApiService {

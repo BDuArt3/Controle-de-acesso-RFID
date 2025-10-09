@@ -26,6 +26,7 @@ export function FuncionariosView() {
   const [employees, setEmployees] = useState<Funcionario[]>([]);
   const [filteredEmployees, setFilteredEmployees] = useState<Funcionario[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<string>('todos');
   const [filterStatus, setFilterStatus] = useState<string>('todos');
@@ -66,10 +67,12 @@ export function FuncionariosView() {
     filterEmployees();
   }, [employees, searchTerm, filterRole, filterStatus]);
 
-    const loadEmployees = async () => {
+  const loadEmployees = async () => {
     try {
       setIsLoading(true);
+      console.log('Carregando funcionários...');
       const funcionariosData = await services.funcionario.getAll();
+      console.log('Funcionários carregados:', funcionariosData);
       
       // Os dados já vêm no formato correto do backend
       setEmployees(funcionariosData);
@@ -126,6 +129,7 @@ export function FuncionariosView() {
       senha: '',
       tipo: TipoFuncionario.Visualizador
     });
+    setShowPassword(false);
     setIsModalOpen(true);
   };
 
@@ -141,19 +145,51 @@ export function FuncionariosView() {
   };
 
   const handleSaveEmployee = async () => {
-    if (!formData.nomeFuncionario || !formData.usuarioAcesso) {
-      toast.error('Nome e usuário de acesso são obrigatórios');
+    // Debug: Verificar usuário atual
+    console.log('Usuário atual:', currentUser);
+    console.log('Role do usuário:', currentUser?.role);
+    
+    // Validação de campos obrigatórios
+    if (!formData.nomeFuncionario.trim()) {
+      toast.error('Nome do funcionário é obrigatório');
       return;
     }
 
-    if (!editingEmployee && !formData.senha) {
+    if (formData.nomeFuncionario.trim().length < 2) {
+      toast.error('Nome do funcionário deve ter pelo menos 2 caracteres');
+      return;
+    }
+
+    if (!formData.usuarioAcesso.trim()) {
+      toast.error('Nome de usuário é obrigatório');
+      return;
+    }
+
+    if (formData.usuarioAcesso.trim().length < 3) {
+      toast.error('Nome de usuário deve ter pelo menos 3 caracteres');
+      return;
+    }
+
+    // Validação de caracteres especiais no nome de usuário
+    const usernameRegex = /^[a-zA-Z0-9._-]+$/;
+    if (!usernameRegex.test(formData.usuarioAcesso.trim())) {
+      toast.error('Nome de usuário pode conter apenas letras, números, pontos, hífens e underscores');
+      return;
+    }
+
+    if (!editingEmployee && !formData.senha.trim()) {
       toast.error('Senha é obrigatória para novos funcionários');
       return;
     }
 
-    // Check if username already exists (when creating or changing username)
+    if (!editingEmployee && formData.senha.trim().length < 6) {
+      toast.error('Senha deve ter pelo menos 6 caracteres');
+      return;
+    }
+
+    // Validação de nome de usuário único
     const usernameExists = employees.some(emp => 
-      emp.usuarioAcesso === formData.usuarioAcesso && 
+      emp.usuarioAcesso.toLowerCase() === formData.usuarioAcesso.toLowerCase().trim() && 
       emp.id !== editingEmployee?.id
     );
 
@@ -162,16 +198,18 @@ export function FuncionariosView() {
       return;
     }
 
+    setIsSaving(true);
     try {
       if (editingEmployee) {
         // Atualizar funcionário existente
         const updateDto: CreateFuncionarioRequest = {
-          nomeFuncionario: formData.nomeFuncionario,
-          usuarioAcesso: formData.usuarioAcesso,
-          senha: formData.senha || '', // Senha vazia para não alterar
-          tipo: formData.tipo
+          NomeFuncionario: formData.nomeFuncionario.trim(),
+          UsuarioAcesso: formData.usuarioAcesso.trim(),
+          Senha: formData.senha.trim() || '', // Senha vazia para não alterar
+          Tipo: formData.tipo
         };
         
+        console.log('Atualizando funcionário:', updateDto);
         const funcionarioAtualizado = await services.funcionario.update(editingEmployee.id, updateDto);
         
         setEmployees(prev => prev.map(employee => 
@@ -184,30 +222,70 @@ export function FuncionariosView() {
       } else {
         // Criar novo funcionário
         const createDto: CreateFuncionarioRequest = {
-          nomeFuncionario: formData.nomeFuncionario,
-          usuarioAcesso: formData.usuarioAcesso,
-          senha: formData.senha,
-          tipo: formData.tipo
+          NomeFuncionario: formData.nomeFuncionario.trim(),
+          UsuarioAcesso: formData.usuarioAcesso.trim(),
+          Senha: formData.senha.trim(),
+          Tipo: formData.tipo
         };
         
+        console.log('Criando novo funcionário:', createDto);
+        console.log('Headers da requisição:', {
+          'Authorization': localStorage.getItem('access_token') ? 'Bearer ***' : 'Nenhum token',
+          'Content-Type': 'application/json'
+        });
+        
         const novoFuncionario = await services.funcionario.create(createDto);
+        console.log('Funcionário criado:', novoFuncionario);
         
         setEmployees(prev => [...prev, novoFuncionario]);
         toast.success('Funcionário criado com sucesso');
       }
 
+      // Limpar formulário e fechar modal
+      setFormData({
+        nomeFuncionario: '',
+        usuarioAcesso: '',
+        senha: '',
+        tipo: TipoFuncionario.Visualizador
+      });
       setIsModalOpen(false);
     } catch (error: any) {
-      console.error('Erro ao salvar funcionário:', error);
+      console.error('Erro completo ao salvar funcionário:', error);
+      console.error('Resposta do erro:', error.response);
+      console.error('Status do erro:', error.response?.status);
+      console.error('Dados do erro:', error.response?.data);
       
       // Tratamento de erros específicos
-      if (error.statusCode === 400 || error.statusCode === 409) {
-        toast.error('Dados inválidos: ' + (error.message || 'Verifique os campos'));
-      } else if (error.statusCode === 401) {
-        toast.error('Você não tem permissão para esta operação');
+      if (error.response?.status === 400) {
+        const errorData = error.response?.data;
+        let errorMessage = 'Dados inválidos';
+        
+        if (typeof errorData === 'string') {
+          errorMessage = errorData;
+        } else if (errorData?.message) {
+          errorMessage = errorData.message;
+        } else if (errorData?.errors) {
+          // Tratar erros de validação do ASP.NET Core
+          const validationErrors = Object.values(errorData.errors).flat();
+          errorMessage = validationErrors.join(', ');
+        }
+        
+        toast.error('Erro de validação: ' + errorMessage);
+      } else if (error.response?.status === 409) {
+        toast.error('Conflito: Nome de usuário já existe');
+      } else if (error.response?.status === 401) {
+        toast.error('Você não tem permissão para esta operação (não autenticado)');
+      } else if (error.response?.status === 403) {
+        toast.error('Acesso negado: Apenas administradores podem criar funcionários');
+      } else if (error.response?.status === 500) {
+        toast.error('Erro interno do servidor. Tente novamente mais tarde.');
+      } else if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
+        toast.error('Erro de conexão. Verifique sua internet e tente novamente.');
       } else {
-        toast.error('Erro ao salvar funcionário');
+        toast.error('Erro ao salvar funcionário: ' + (error.message || 'Erro desconhecido'));
       }
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -471,28 +549,35 @@ export function FuncionariosView() {
             
             <div className="space-y-4">
               <div>
-                <Label htmlFor="nomeFuncionario">Nome completo</Label>
+                <Label htmlFor="nomeFuncionario">Nome completo *</Label>
                 <Input
                   id="nomeFuncionario"
                   value={formData.nomeFuncionario}
                   onChange={(e) => setFormData(prev => ({ ...prev, nomeFuncionario: e.target.value }))}
                   placeholder="Digite o nome completo"
+                  disabled={isSaving}
+                  required
                 />
               </div>
               
               <div>
-                <Label htmlFor="usuarioAcesso">Nome de usuário</Label>
+                <Label htmlFor="usuarioAcesso">Nome de usuário *</Label>
                 <Input
                   id="usuarioAcesso"
                   value={formData.usuarioAcesso}
                   onChange={(e) => setFormData(prev => ({ ...prev, usuarioAcesso: e.target.value }))}
                   placeholder="Digite o nome de usuário"
+                  disabled={isSaving}
+                  required
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Apenas letras, números, pontos, hífens e underscores
+                </p>
               </div>
               
               <div>
                 <Label htmlFor="senha">
-                  {editingEmployee ? 'Nova senha (deixe vazio para manter)' : 'Senha'}
+                  {editingEmployee ? 'Nova senha (deixe vazio para manter)' : 'Senha *'}
                 </Label>
                 <div className="relative">
                   <Input
@@ -501,6 +586,8 @@ export function FuncionariosView() {
                     value={formData.senha}
                     onChange={(e) => setFormData(prev => ({ ...prev, senha: e.target.value }))}
                     placeholder={editingEmployee ? 'Nova senha' : 'Digite a senha'}
+                    disabled={isSaving}
+                    required={!editingEmployee}
                   />
                   <Button
                     type="button"
@@ -508,17 +595,24 @@ export function FuncionariosView() {
                     size="sm"
                     className="absolute right-0 top-0 h-10 px-3 hover:bg-transparent"
                     onClick={() => setShowPassword(!showPassword)}
+                    disabled={isSaving}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                 </div>
+                {!editingEmployee && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Mínimo de 6 caracteres
+                  </p>
+                )}
               </div>
               
               <div>
-                <Label htmlFor="tipo">Nível de acesso</Label>
+                <Label htmlFor="tipo">Nível de acesso *</Label>
                 <Select 
                   value={formData.tipo.toString()} 
                   onValueChange={(value: string) => setFormData(prev => ({ ...prev, tipo: parseInt(value) as TipoFuncionario }))}
+                  disabled={isSaving}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -533,11 +627,26 @@ export function FuncionariosView() {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsModalOpen(false)}>
+              <Button 
+                variant="outline" 
+                onClick={() => setIsModalOpen(false)}
+                disabled={isSaving}
+              >
                 Cancelar
               </Button>
-              <Button onClick={handleSaveEmployee} className="bg-blue-600 hover:bg-blue-700">
-                {editingEmployee ? 'Salvar' : 'Criar'}
+              <Button 
+                onClick={handleSaveEmployee} 
+                className="bg-blue-600 hover:bg-blue-700"
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    {editingEmployee ? 'Salvando...' : 'Criando...'}
+                  </>
+                ) : (
+                  editingEmployee ? 'Salvar' : 'Criar'
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>
