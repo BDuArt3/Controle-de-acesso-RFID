@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
 import { Alert, AlertDescription } from '../ui/alert';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { useAuth } from '../providers/AuthProvider';
 
 export function PerfilView() {
@@ -300,22 +300,13 @@ export function PerfilView() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label className="text-sm font-medium text-muted-foreground">
                 Nome de usuário
               </Label>
               <code className="block p-2 bg-muted rounded text-sm">
                 {user.username}
-              </code>
-            </div>
-            
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-muted-foreground">
-                ID do usuário
-              </Label>
-              <code className="block p-2 bg-muted rounded text-sm">
-                {user.id}
               </code>
             </div>
             

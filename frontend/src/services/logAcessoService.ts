@@ -1,5 +1,22 @@
 import { ApiService } from './apiClient';
 
+/**
+ * Serviço de Log de Acesso - Sistema de Controle de Acesso Universitário
+ * 
+ * Este serviço gerencia os logs de entrada e saída da universidade através
+ * de cartões RFID. O sistema tem um único ponto de controle (portaria da 
+ * universidade) onde são registradas todas as tentativas de acesso.
+ * 
+ * Funcionalidades:
+ * - Registro automático de tentativas de acesso
+ * - Consulta de histórico de movimentação
+ * - Relatórios e estatísticas de acesso
+ * - Filtros por período, usuário e tipo de resultado
+ * 
+ * @author Sistema de Controle de Acesso RFID
+ * @version 2.0
+ */
+
 // Enum para tipo de motivo de acesso (deve corresponder ao backend)
 export enum TipoMotivoAcesso {
   AcessoAutorizado = 1,
@@ -13,59 +30,68 @@ export enum TipoMotivoAcesso {
 
 // Interface para dados do log de acesso
 export interface LogAcessoDto {
-  id: string;
-  funcionarioId?: string;
-  funcionario?: {
-    id: string;
-    nome: string;
-    email: string;
-    tipo: number;
-  };
-  cartaoId?: string;
-  cartao?: {
-    id: string;
-    uid: string;
-    status: number;
-  };
-  uid?: string;
-  motivoTipo: TipoMotivoAcesso;
-  motivo: string;
+  id: number;
   dataHora: string;
-  autorizado: boolean;
+  cartaoUid: string;
+  acessoPermitido: boolean;
+  motivo: string;
+  motivoTipo: TipoMotivoAcesso;
+  usuarioNome?: string;
+  usuarioTipo?: string;
 }
 
 // Interface para filtros de pesquisa
 export interface LogAcessoFilters {
-  funcionarioId?: string;
-  cartaoId?: string;
-  uid?: string;
+  cartaoUid?: string;
   motivoTipo?: TipoMotivoAcesso;
-  autorizado?: boolean;
+  acessoPermitido?: boolean;
   dataInicio?: string;
   dataFim?: string;
-  page?: number;
-  pageSize?: number;
-  orderBy?: string;
-  orderDirection?: 'asc' | 'desc';
-}
-
-// Interface para resposta paginada
-export interface PagedResult<T> {
-  items: T[];
-  totalItems: number;
-  totalPages: number;
-  currentPage: number;
-  pageSize: number;
+  quantidade?: number;
 }
 
 // Interface para criar log de acesso
 export interface CreateLogAcessoDto {
-  funcionarioId?: string;
-  cartaoId?: string;
-  uid?: string;
-  motivoTipo: TipoMotivoAcesso;
+  cartaoUid: string;
+  acessoPermitido: boolean;
   motivo: string;
-  autorizado: boolean;
+  motivoTipo: TipoMotivoAcesso;
+}
+
+// Interface para estatísticas do dia
+export interface EstatisticasHojeDto {
+  totalAcessos: number;
+  acessosPermitidos: number;
+  acessosNegados: number;
+  percentualSucesso: number;
+  motivosMaisFrequentes: Array<{
+    motivo: TipoMotivoAcesso;
+    quantidade: number;
+  }>;
+}
+
+// Interface para relatório diário
+export interface RelatorioDiarioDto {
+  data: string;
+  totalAcessos: number;
+  acessosPermitidos: number;
+  acessosNegados: number;
+  percentualSucesso: number;
+  primeiroAcesso?: string;
+  ultimoAcesso?: string;
+  horariosPico: Array<{
+    hora: string;
+    quantidade: number;
+  }>;
+  usuariosMaisAtivos: Array<{
+    usuarioNome: string;
+    quantidade: number;
+  }>;
+  motivosDetalheados: Array<{
+    motivo: TipoMotivoAcesso;
+    quantidade: number;
+    percentual: number;
+  }>;
 }
 
 /**
@@ -75,164 +101,182 @@ class LogAcessoService extends ApiService {
   private readonly baseUrl = '/LogAcesso';
 
   /**
-   * Obtém logs de acesso com filtros e paginação
+   * Registra uma tentativa de acesso no sistema
    */
-  async getAll(filters?: LogAcessoFilters): Promise<PagedResult<LogAcessoDto>> {
-    const params = new URLSearchParams();
-    
-    if (filters) {
-      if (filters.funcionarioId) params.append('funcionarioId', filters.funcionarioId);
-      if (filters.cartaoId) params.append('cartaoId', filters.cartaoId);
-      if (filters.uid) params.append('uid', filters.uid);
-      if (filters.motivoTipo !== undefined) params.append('motivoTipo', filters.motivoTipo.toString());
-      if (filters.autorizado !== undefined) params.append('autorizado', filters.autorizado.toString());
-      if (filters.dataInicio) params.append('dataInicio', filters.dataInicio);
-      if (filters.dataFim) params.append('dataFim', filters.dataFim);
-      if (filters.page) params.append('page', filters.page.toString());
-      if (filters.pageSize) params.append('pageSize', filters.pageSize.toString());
-      if (filters.orderBy) params.append('orderBy', filters.orderBy);
-      if (filters.orderDirection) params.append('orderDirection', filters.orderDirection);
-    }
-
-    const url = params.toString() ? `${this.baseUrl}?${params.toString()}` : this.baseUrl;
-    return this.get<PagedResult<LogAcessoDto>>(url);
+  async registrarTentativa(createLogAcessoDto: CreateLogAcessoDto): Promise<LogAcessoDto> {
+    return this.post<LogAcessoDto>(this.baseUrl, createLogAcessoDto);
   }
 
   /**
-   * Obtém um log de acesso por ID
+   * Obtém um log de acesso específico pelo ID
    */
-  async getById(id: string): Promise<LogAcessoDto> {
+  async getById(id: number): Promise<LogAcessoDto> {
     return this.get<LogAcessoDto>(`${this.baseUrl}/${id}`);
   }
 
   /**
-   * Obtém logs de acesso por funcionário
+   * Obtém todos os logs de acesso
    */
-  async getByFuncionario(funcionarioId: string, filters?: Omit<LogAcessoFilters, 'funcionarioId'>): Promise<PagedResult<LogAcessoDto>> {
-    return this.getAll({ ...filters, funcionarioId });
+  async getAll(): Promise<LogAcessoDto[]> {
+    return this.get<LogAcessoDto[]>(this.baseUrl);
   }
 
   /**
-   * Obtém logs de acesso por cartão
+   * Obtém logs de acesso por UID do cartão
    */
-  async getByCartao(cartaoId: string, filters?: Omit<LogAcessoFilters, 'cartaoId'>): Promise<PagedResult<LogAcessoDto>> {
-    return this.getAll({ ...filters, cartaoId });
+  async getByCartaoUid(uid: string): Promise<LogAcessoDto[]> {
+    return this.get<LogAcessoDto[]>(`${this.baseUrl}/cartao/${encodeURIComponent(uid)}`);
   }
 
   /**
-   * Obtém logs de acesso por UID
+   * Obtém logs de acesso por período
    */
-  async getByUid(uid: string, filters?: Omit<LogAcessoFilters, 'uid'>): Promise<PagedResult<LogAcessoDto>> {
-    return this.getAll({ ...filters, uid });
+  async getByPeriodo(dataInicio: Date, dataFim: Date): Promise<LogAcessoDto[]> {
+    const params = new URLSearchParams();
+    params.append('dataInicio', dataInicio.toISOString());
+    params.append('dataFim', dataFim.toISOString());
+
+    return this.get<LogAcessoDto[]>(`${this.baseUrl}/periodo?${params.toString()}`);
   }
 
   /**
-   * Obtém logs de acesso por tipo de motivo
+   * Obtém apenas acessos permitidos por período
    */
-  async getByMotivoTipo(motivoTipo: TipoMotivoAcesso, filters?: Omit<LogAcessoFilters, 'motivoTipo'>): Promise<PagedResult<LogAcessoDto>> {
-    return this.getAll({ ...filters, motivoTipo });
+  async getAcessosPermitidos(dataInicio: Date, dataFim: Date): Promise<LogAcessoDto[]> {
+    const params = new URLSearchParams();
+    params.append('dataInicio', dataInicio.toISOString());
+    params.append('dataFim', dataFim.toISOString());
+
+    return this.get<LogAcessoDto[]>(`${this.baseUrl}/periodo/permitidos?${params.toString()}`);
   }
 
   /**
-   * Obtém logs de acesso autorizados/negados
+   * Obtém apenas acessos negados por período
    */
-  async getByAutorizado(autorizado: boolean, filters?: Omit<LogAcessoFilters, 'autorizado'>): Promise<PagedResult<LogAcessoDto>> {
-    return this.getAll({ ...filters, autorizado });
+  async getAcessosNegados(dataInicio: Date, dataFim: Date): Promise<LogAcessoDto[]> {
+    const params = new URLSearchParams();
+    params.append('dataInicio', dataInicio.toISOString());
+    params.append('dataFim', dataFim.toISOString());
+
+    return this.get<LogAcessoDto[]>(`${this.baseUrl}/periodo/negados?${params.toString()}`);
   }
+
+  /**
+   * Obtém os últimos acessos registrados
+   */
+  async getUltimos(quantidade: number = 50): Promise<LogAcessoDto[]> {
+    const params = new URLSearchParams();
+    params.append('quantidade', quantidade.toString());
+
+    return this.get<LogAcessoDto[]>(`${this.baseUrl}/ultimos?${params.toString()}`);
+  }
+
+  /**
+   * Obtém estatísticas de acesso do dia atual
+   */
+  async getEstatisticasHoje(): Promise<EstatisticasHojeDto> {
+    return this.get<EstatisticasHojeDto>(`${this.baseUrl}/estatisticas/hoje`);
+  }
+
+  /**
+   * Obtém relatório completo de acessos para uma data específica
+   */
+  async getRelatorioDiario(data: Date): Promise<RelatorioDiarioDto> {
+    const params = new URLSearchParams();
+    params.append('data', data.toISOString().split('T')[0]);
+
+    return this.get<RelatorioDiarioDto>(`${this.baseUrl}/relatorio/diario?${params.toString()}`);
+  }
+
+  /**
+   * Métodos de conveniência para datas específicas
+   */
 
   /**
    * Obtém logs de acesso de hoje
    */
-  async getToday(filters?: Omit<LogAcessoFilters, 'dataInicio' | 'dataFim'>): Promise<PagedResult<LogAcessoDto>> {
-    const today = new Date().toISOString().split('T')[0];
-    return this.getAll({ 
-      ...filters, 
-      dataInicio: today + 'T00:00:00', 
-      dataFim: today + 'T23:59:59' 
-    });
+  async getHoje(): Promise<LogAcessoDto[]> {
+    const hoje = new Date();
+    const inicioDia = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+    const fimDia = new Date(inicioDia.getTime() + 24 * 60 * 60 * 1000 - 1);
+    
+    return this.getByPeriodo(inicioDia, fimDia);
   }
 
   /**
    * Obtém logs de acesso da última semana
    */
-  async getLastWeek(filters?: Omit<LogAcessoFilters, 'dataInicio' | 'dataFim'>): Promise<PagedResult<LogAcessoDto>> {
+  async getUltimaSemana(): Promise<LogAcessoDto[]> {
     const hoje = new Date();
     const semanaPassada = new Date(hoje.getTime() - 7 * 24 * 60 * 60 * 1000);
     
-    return this.getAll({ 
-      ...filters, 
-      dataInicio: semanaPassada.toISOString(), 
-      dataFim: hoje.toISOString() 
-    });
+    return this.getByPeriodo(semanaPassada, hoje);
   }
 
   /**
    * Obtém logs de acesso do último mês
    */
-  async getLastMonth(filters?: Omit<LogAcessoFilters, 'dataInicio' | 'dataFim'>): Promise<PagedResult<LogAcessoDto>> {
+  async getUltimoMes(): Promise<LogAcessoDto[]> {
     const hoje = new Date();
     const mesPassado = new Date(hoje.getFullYear(), hoje.getMonth() - 1, hoje.getDate());
     
-    return this.getAll({ 
-      ...filters, 
-      dataInicio: mesPassado.toISOString(), 
-      dataFim: hoje.toISOString() 
-    });
+    return this.getByPeriodo(mesPassado, hoje);
   }
 
   /**
-   * Cria um novo log de acesso (geralmente usado pelo sistema automaticamente)
+   * Métodos específicos para controle de acesso universitário
    */
-  async create(logAcesso: CreateLogAcessoDto): Promise<LogAcessoDto> {
-    return this.post<LogAcessoDto>(this.baseUrl, logAcesso);
+
+  /**
+   * Obtém entradas autorizadas de hoje
+   */
+  async getEntradasHoje(): Promise<LogAcessoDto[]> {
+    const hoje = new Date();
+    const inicioDia = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+    const fimDia = new Date(inicioDia.getTime() + 24 * 60 * 60 * 1000 - 1);
+    
+    return this.getAcessosPermitidos(inicioDia, fimDia);
   }
 
   /**
-   * Obtém estatísticas de acesso
+   * Obtém tentativas de acesso negadas de hoje
    */
-  async getEstatisticas(dataInicio?: string, dataFim?: string): Promise<{
-    totalAcessos: number;
-    acessosAutorizados: number;
-    acessosNegados: number;
-    percentualSucesso: number;
-    motivosMaisFrequentes: Array<{ motivo: TipoMotivoAcesso; quantidade: number }>;
+  async getTentativasNegadasHoje(): Promise<LogAcessoDto[]> {
+    const hoje = new Date();
+    const inicioDia = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+    const fimDia = new Date(inicioDia.getTime() + 24 * 60 * 60 * 1000 - 1);
+    
+    return this.getAcessosNegados(inicioDia, fimDia);
+  }
+
+  /**
+   * Obtém histórico completo de um usuário por UID do cartão
+   */
+  async getHistoricoUsuario(cartaoUid: string): Promise<LogAcessoDto[]> {
+    return this.getByCartaoUid(cartaoUid);
+  }
+
+  /**
+   * Obtém resumo de atividade da universidade (últimas 24 horas)
+   */
+  async getResumoAtividade(): Promise<{
+    totalMovimentacao: number;
+    entradasAutorizadas: number;
+    tentativasNegadas: number;
+    ultimaAtividade?: LogAcessoDto;
   }> {
-    const params = new URLSearchParams();
-    if (dataInicio) params.append('dataInicio', dataInicio);
-    if (dataFim) params.append('dataFim', dataFim);
+    const ultimasAtividades = await this.getUltimos(1);
+    const atividadeHoje = await this.getHoje();
     
-    const url = params.toString() ? `${this.baseUrl}/estatisticas?${params.toString()}` : `${this.baseUrl}/estatisticas`;
-    return this.get(url);
-  }
-
-  /**
-   * Exporta logs para CSV
-   */
-  async exportToCsv(filters?: LogAcessoFilters): Promise<Blob> {
-    const params = new URLSearchParams();
+    const entradasAutorizadas = atividadeHoje.filter(log => log.acessoPermitido).length;
+    const tentativasNegadas = atividadeHoje.filter(log => !log.acessoPermitido).length;
     
-    if (filters) {
-      if (filters.funcionarioId) params.append('funcionarioId', filters.funcionarioId);
-      if (filters.cartaoId) params.append('cartaoId', filters.cartaoId);
-      if (filters.uid) params.append('uid', filters.uid);
-      if (filters.motivoTipo !== undefined) params.append('motivoTipo', filters.motivoTipo.toString());
-      if (filters.autorizado !== undefined) params.append('autorizado', filters.autorizado.toString());
-      if (filters.dataInicio) params.append('dataInicio', filters.dataInicio);
-      if (filters.dataFim) params.append('dataFim', filters.dataFim);
-    }
-
-    const url = params.toString() ? `${this.baseUrl}/export/csv?${params.toString()}` : `${this.baseUrl}/export/csv`;
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error('Erro ao exportar dados');
-    }
-
-    return response.blob();
+    return {
+      totalMovimentacao: atividadeHoje.length,
+      entradasAutorizadas,
+      tentativasNegadas,
+      ultimaAtividade: ultimasAtividades[0] || undefined
+    };
   }
 }
 
@@ -274,7 +318,7 @@ export class LogAcessoUtils {
       case TipoMotivoAcesso.UidObrigatorio:
         return 'UID Obrigatório';
       case TipoMotivoAcesso.CartaoNaoEncontrado:
-        return 'Cartão Não Encontrado';
+        return 'Cartão Não Cadastrado';
       case TipoMotivoAcesso.CartaoDesativado:
         return 'Cartão Desativado';
       case TipoMotivoAcesso.UsuarioNaoEncontrado:
@@ -282,9 +326,9 @@ export class LogAcessoUtils {
       case TipoMotivoAcesso.UsuarioDesativado:
         return 'Usuário Desativado';
       case TipoMotivoAcesso.ErroInterno:
-        return 'Erro Interno';
+        return 'Erro do Sistema';
       default:
-        return 'Erro Interno';
+        return 'Erro do Sistema';
     }
   }
 
@@ -347,11 +391,11 @@ export class LogAcessoUtils {
     return [
       { value: TipoMotivoAcesso.AcessoAutorizado, label: 'Acesso Autorizado' },
       { value: TipoMotivoAcesso.UidObrigatorio, label: 'UID Obrigatório' },
-      { value: TipoMotivoAcesso.CartaoNaoEncontrado, label: 'Cartão Não Encontrado' },
+      { value: TipoMotivoAcesso.CartaoNaoEncontrado, label: 'Cartão Não Cadastrado' },
       { value: TipoMotivoAcesso.CartaoDesativado, label: 'Cartão Desativado' },
       { value: TipoMotivoAcesso.UsuarioNaoEncontrado, label: 'Usuário Não Encontrado' },
       { value: TipoMotivoAcesso.UsuarioDesativado, label: 'Usuário Desativado' },
-      { value: TipoMotivoAcesso.ErroInterno, label: 'Erro Interno' }
+      { value: TipoMotivoAcesso.ErroInterno, label: 'Erro do Sistema' }
     ];
   }
 
@@ -361,21 +405,52 @@ export class LogAcessoUtils {
   static getTipoMotivoDescricao(tipo: TipoMotivoAcesso): string {
     switch (tipo) {
       case TipoMotivoAcesso.AcessoAutorizado:
-        return 'Acesso foi autorizado com sucesso';
+        return 'Entrada/saída autorizada na universidade';
       case TipoMotivoAcesso.UidObrigatorio:
-        return 'UID é obrigatório para acessar o sistema';
+        return 'UID é obrigatório para acessar a universidade';
       case TipoMotivoAcesso.CartaoNaoEncontrado:
-        return 'Cartão RFID não foi encontrado no sistema';
+        return 'Cartão RFID não cadastrado no sistema da universidade';
       case TipoMotivoAcesso.CartaoDesativado:
-        return 'Cartão RFID está desativado';
+        return 'Cartão RFID desativado - acesso negado à universidade';
       case TipoMotivoAcesso.UsuarioNaoEncontrado:
-        return 'Usuário associado ao cartão não foi encontrado';
+        return 'Usuário não encontrado no sistema da universidade';
       case TipoMotivoAcesso.UsuarioDesativado:
-        return 'Usuário associado ao cartão está desativado';
+        return 'Usuário desativado - acesso negado à universidade';
       case TipoMotivoAcesso.ErroInterno:
-        return 'Erro interno do sistema durante o processamento';
+        return 'Erro interno do sistema de controle de acesso';
       default:
         return 'Motivo desconhecido';
+    }
+  }
+
+  /**
+   * Determina se um acesso é permitido baseado no tipo de motivo
+   */
+  static isAcessoPermitido(tipo: TipoMotivoAcesso): boolean {
+    return tipo === TipoMotivoAcesso.AcessoAutorizado;
+  }
+
+  /**
+   * Obtém ícone para o tipo de motivo
+   */
+  static getTipoMotivoIcon(tipo: TipoMotivoAcesso): string {
+    switch (tipo) {
+      case TipoMotivoAcesso.AcessoAutorizado:
+        return '✅';
+      case TipoMotivoAcesso.UidObrigatorio:
+        return '⚠️';
+      case TipoMotivoAcesso.CartaoNaoEncontrado:
+        return '🔍';
+      case TipoMotivoAcesso.CartaoDesativado:
+        return '🚫';
+      case TipoMotivoAcesso.UsuarioNaoEncontrado:
+        return '👤';
+      case TipoMotivoAcesso.UsuarioDesativado:
+        return '🔒';
+      case TipoMotivoAcesso.ErroInterno:
+        return '❌';
+      default:
+        return '❓';
     }
   }
 }
