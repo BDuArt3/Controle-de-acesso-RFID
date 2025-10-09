@@ -289,9 +289,6 @@ export function CartoesView() {
       <Card>
         <CardHeader>
           <CardTitle>Cartões RFID ({filteredCartoes.length})</CardTitle>
-          <CardDescription>
-            Lista de todos os cartões RFID do sistema
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
