@@ -287,118 +287,110 @@ export function LogsView() {
       <Card>
         <CardHeader>
           <CardTitle>Filtros</CardTitle>
-          <CardDescription>
-            Filtre os logs por diferentes critérios
-          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-6">
-            <div className="space-y-2">
-              <label htmlFor="search" className="text-sm font-medium">Buscar</label>
+        <CardContent className="space-y-4">
+          {/* Primeira linha - Busca e filtros principais */}
+          <div className="grid gap-4 md:grid-cols-5">
+            <div className="md:col-span-2">
               <Input
-                id="search"
-                placeholder="Nome, cartão, motivo..."
+                placeholder="Buscar por nome, cartão ou motivo..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full"
               />
             </div>
             
-            <div className="space-y-2">
-              <label htmlFor="filter-type" className="text-sm font-medium">Tipo de Usuário</label>
-              <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos os tipos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os tipos</SelectItem>
-                  <SelectItem value="aluno">Aluno</SelectItem>
-                  <SelectItem value="professor">Professor</SelectItem>
-                  <SelectItem value="funcionario">Funcionário</SelectItem>
-                  <SelectItem value="visitante">Visitante</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Select value={filterType} onValueChange={setFilterType}>
+              <SelectTrigger>
+                <SelectValue placeholder="Tipo de usuário" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os tipos</SelectItem>
+                <SelectItem value="aluno">Aluno</SelectItem>
+                <SelectItem value="professor">Professor</SelectItem>
+                <SelectItem value="funcionario">Funcionário</SelectItem>
+                <SelectItem value="visitante">Visitante</SelectItem>
+              </SelectContent>
+            </Select>
             
-            <div className="space-y-2">
-              <label htmlFor="filter-status" className="text-sm font-medium">Status</label>
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos os status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os status</SelectItem>
-                  <SelectItem value="permitido">Permitido</SelectItem>
-                  <SelectItem value="negado">Negado</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger>
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os status</SelectItem>
+                <SelectItem value="permitido">Permitido</SelectItem>
+                <SelectItem value="negado">Negado</SelectItem>
+              </SelectContent>
+            </Select>
             
-            <div className="space-y-2">
-              <label htmlFor="filter-reason" className="text-sm font-medium">Motivo</label>
-              <Select value={filterReason} onValueChange={setFilterReason}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos os motivos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os motivos</SelectItem>
-                  {LogAcessoUtils.getTipoMotivoAcessoOptions().map((option) => (
-                    <SelectItem key={option.value} value={option.value.toString()}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Data Inicial</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start text-left font-normal">
-                    <Calendar className="mr-2 h-4 w-4" />
-                    {dateRange.from ? format(dateRange.from, 'dd/MM/yyyy', { locale: ptBR }) : 'Selecionar'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <CalendarComponent
-                    mode="single"
-                    selected={dateRange.from}
-                    onSelect={(date: Date | undefined) => setDateRange(prev => ({ ...prev, from: date }))}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Data Final</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start text-left font-normal">
-                    <Calendar className="mr-2 h-4 w-4" />
-                    {dateRange.to ? format(dateRange.to, 'dd/MM/yyyy', { locale: ptBR }) : 'Selecionar'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <CalendarComponent
-                    mode="single"
-                    selected={dateRange.to}
-                    onSelect={(date: Date | undefined) => setDateRange(prev => ({ ...prev, to: date }))}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
+            <Select value={filterReason} onValueChange={setFilterReason}>
+              <SelectTrigger>
+                <SelectValue placeholder="Motivo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os motivos</SelectItem>
+                {LogAcessoUtils.getTipoMotivoAcessoOptions().map((option) => (
+                  <SelectItem key={option.value} value={option.value.toString()}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           
-          <div className="flex items-center justify-between mt-4">
-            <div className="text-sm text-muted-foreground">
-              {filteredLogs.length} de {logs.length} logs
+          {/* Segunda linha - Datas e ações */}
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">De:</span>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="text-xs">
+                      <Calendar className="mr-1 h-3 w-3" />
+                      {dateRange.from ? format(dateRange.from, 'dd/MM', { locale: ptBR }) : 'Data inicial'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={dateRange.from}
+                      onSelect={(date: Date | undefined) => setDateRange(prev => ({ ...prev, from: date }))}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Até:</span>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="text-xs">
+                      <Calendar className="mr-1 h-3 w-3" />
+                      {dateRange.to ? format(dateRange.to, 'dd/MM', { locale: ptBR }) : 'Data final'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={dateRange.to}
+                      onSelect={(date: Date | undefined) => setDateRange(prev => ({ ...prev, to: date }))}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              
+              <div className="text-sm text-muted-foreground">
+                {filteredLogs.length} de {logs.length} logs
+              </div>
             </div>
+            
             <div className="flex gap-2">
               <Button 
                 variant="outline" 
+                size="sm"
                 onClick={() => {
                   setSearchTerm('');
                   setFilterType('todos');
@@ -409,7 +401,7 @@ export function LogsView() {
               >
                 Limpar Filtros
               </Button>
-              <Button onClick={exportToCSV} disabled={filteredLogs.length === 0}>
+              <Button size="sm" onClick={exportToCSV} disabled={filteredLogs.length === 0}>
                 <Download className="mr-2 h-4 w-4" />
                 Exportar CSV
               </Button>
