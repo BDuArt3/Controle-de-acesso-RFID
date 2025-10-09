@@ -7,13 +7,13 @@ namespace ControleDeAcesso.Application.DTOs
     public class GravarCartaoDto
     {
         /// <summary>
-        /// ID do usuário que receberá o cartão
+        /// ID do portador que receberá o cartão
         /// </summary>
-        public string UsuarioId { get; set; } = string.Empty;
+        public string PortadorId { get; set; } = string.Empty;
         
         /// <summary>
         /// Descrição opcional do cartão (ex: "Cartão principal", "Cartão backup", "Cartão temporário")
-        /// Útil para diferenciar quando o usuário possui múltiplos cartões
+        /// Útil para diferenciar quando o portador possui múltiplos cartões
         /// </summary>
         public string? Descricao { get; set; }
     }

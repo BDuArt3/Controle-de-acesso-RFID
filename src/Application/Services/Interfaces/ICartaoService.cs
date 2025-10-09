@@ -9,7 +9,7 @@ namespace ControleDeAcesso.Application.Services.Interfaces
         Task<CartaoDto?> GetByIdAsync(string id);
         Task<CartaoDto?> GetByUidAsync(string uid);
         Task<IEnumerable<CartaoDto>> GetAllAsync();
-        Task<IEnumerable<CartaoDto>> GetByUsuarioIdAsync(string usuarioId);
+        Task<IEnumerable<CartaoDto>> GetByPortadorIdAsync(string portadorId);
         Task<CartaoDto> UpdateAsync(string id, CreateCartaoDto updateCartaoDto);
         Task<bool> DeleteAsync(string id);
         Task<bool> ActivateAsync(string id);

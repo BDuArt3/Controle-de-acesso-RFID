@@ -96,7 +96,7 @@ export function PerfilView() {
       case 'admin': 
         return 'Acesso total ao sistema, incluindo gestão de funcionários e configurações';
       case 'operador': 
-        return 'Pode gerenciar usuários e cartões, mas não funcionários do sistema';
+        return 'Pode gerenciar portadors e cartões, mas não funcionários do sistema';
       case 'visualizador': 
         return 'Apenas visualização de dados, sem permissões de edição';
       default: 
@@ -303,7 +303,7 @@ export function PerfilView() {
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label className="text-sm font-medium text-muted-foreground">
-                Nome de usuário
+                Nome de portador
               </Label>
               <code className="block p-2 bg-muted rounded text-sm">
                 {user.username}

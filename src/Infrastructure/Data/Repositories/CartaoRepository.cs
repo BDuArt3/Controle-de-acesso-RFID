@@ -20,8 +20,8 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
 
         public async Task<Cartao> CreateAsync(Cartao cartao)
         {
-            _logger.LogInformation("Iniciando criação de cartão. UID: {Uid}, UsuarioId: {UsuarioId}", 
-                cartao.Uid, cartao.UsuarioId);
+            _logger.LogInformation("Iniciando criação de cartão. UID: {Uid}, PortadorId: {PortadorId}", 
+                cartao.Uid, cartao.PortadorId);
 
             try
             {
@@ -36,8 +36,8 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao criar cartão. UID: {Uid}, UsuarioId: {UsuarioId}", 
-                    cartao.Uid, cartao.UsuarioId);
+                _logger.LogError(ex, "Erro ao criar cartão. UID: {Uid}, PortadorId: {PortadorId}", 
+                    cartao.Uid, cartao.PortadorId);
                 throw;
             }
         }
@@ -49,7 +49,7 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             try
             {
                 var cartao = await _context.Cartoes
-                                    .Include(c => c.Usuario)
+                                    .Include(c => c.Portador)
                                     .FirstOrDefaultAsync(c => c.Id == id);
 
                 if (cartao == null)
@@ -78,7 +78,7 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             try
             {
                 var cartao = await _context.Cartoes
-                                    .Include(c => c.Usuario)
+                                    .Include(c => c.Portador)
                                     .FirstOrDefaultAsync(c => c.Uid == uid);
 
                 if (cartao == null)
@@ -107,7 +107,7 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             try
             {
                 var cartoes = await _context.Cartoes
-                                     .Include(c => c.Usuario)
+                                     .Include(c => c.Portador)
                                      .ToListAsync();
 
                 _logger.LogInformation("Encontrados {Count} cartões", cartoes.Count());
@@ -121,25 +121,25 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             }
         }
 
-        public async Task<IEnumerable<Cartao>> GetByUsuarioIdAsync(string usuarioId)
+        public async Task<IEnumerable<Cartao>> GetByPortadorIdAsync(string portadorId)
         {
-            _logger.LogInformation("Buscando cartões por UsuarioId: {UsuarioId}", usuarioId);
+            _logger.LogInformation("Buscando cartões por PortadorId: {PortadorId}", portadorId);
 
             try
             {
                 var cartoes = await _context.Cartoes
-                                     .Include(c => c.Usuario)
-                                     .Where(c => c.UsuarioId == usuarioId && c.IsActive)
+                                     .Include(c => c.Portador)
+                                     .Where(c => c.PortadorId == portadorId && c.IsActive)
                                      .ToListAsync();
 
-                _logger.LogInformation("Encontrados {Count} cartões ativos para o usuário {UsuarioId}", 
-                    cartoes.Count(), usuarioId);
+                _logger.LogInformation("Encontrados {Count} cartões ativos para o portador {PortadorId}", 
+                    cartoes.Count(), portadorId);
 
                 return cartoes;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao buscar cartões por UsuarioId: {UsuarioId}", usuarioId);
+                _logger.LogError(ex, "Erro ao buscar cartões por PortadorId: {PortadorId}", portadorId);
                 throw;
             }
         }

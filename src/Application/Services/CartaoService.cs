@@ -11,20 +11,20 @@ namespace ControleDeAcesso.Application.Services
     public class CartaoService : ICartaoService
     {
         private readonly ICartaoRepository _cartaoRepository;
-        private readonly IUsuarioRepository _usuarioRepository;
+        private readonly IPortadorRepository _portadorRepository;
         private readonly ILogger<CartaoService> _logger;
 
-        public CartaoService(ICartaoRepository cartaoRepository, IUsuarioRepository usuarioRepository, ILogger<CartaoService> logger)
+        public CartaoService(ICartaoRepository cartaoRepository, IPortadorRepository portadorRepository, ILogger<CartaoService> logger)
         {
             _cartaoRepository = cartaoRepository;
-            _usuarioRepository = usuarioRepository;
+            _portadorRepository = portadorRepository;
             _logger = logger;
         }
 
         public async Task<CartaoDto> CreateAsync(CreateCartaoDto createCartaoDto)
         {
-            _logger.LogInformation("Iniciando criação de cartão. UID: {Uid}, UsuarioId: {UsuarioId}", 
-                createCartaoDto.Uid, createCartaoDto.UsuarioId);
+            _logger.LogInformation("Iniciando criação de cartão. UID: {Uid}, PortadorId: {PortadorId}", 
+                createCartaoDto.Uid, createCartaoDto.PortadorId);
 
             try
             {
@@ -33,16 +33,16 @@ namespace ControleDeAcesso.Application.Services
                     throw new ArgumentException("UID do cartão é obrigatório", nameof(createCartaoDto.Uid));
                 }
 
-                if (string.IsNullOrWhiteSpace(createCartaoDto.UsuarioId))
+                if (string.IsNullOrWhiteSpace(createCartaoDto.PortadorId))
                 {
-                    throw new ArgumentException("ID do usuário é obrigatório", nameof(createCartaoDto.UsuarioId));
+                    throw new ArgumentException("ID do portador é obrigatório", nameof(createCartaoDto.PortadorId));
                 }
 
-                // Verificar se o usuário existe
-                var usuario = await _usuarioRepository.GetByIdAsync(createCartaoDto.UsuarioId);
-                if (usuario == null)
+                // Verificar se o portador existe
+                var portador = await _portadorRepository.GetByIdAsync(createCartaoDto.PortadorId);
+                if (portador == null)
                 {
-                    throw new InvalidOperationException($"Usuário com ID {createCartaoDto.UsuarioId} não encontrado");
+                    throw new InvalidOperationException($"Portador com ID {createCartaoDto.PortadorId} não encontrado");
                 }
 
                 // Verificar se o UID já existe
@@ -55,7 +55,7 @@ namespace ControleDeAcesso.Application.Services
                 var cartao = new Cartao
                 {
                     Uid = createCartaoDto.Uid.Trim(),
-                    UsuarioId = createCartaoDto.UsuarioId.Trim(),
+                    PortadorId = createCartaoDto.PortadorId.Trim(),
                     IsActive = true
                 };
 
@@ -68,8 +68,8 @@ namespace ControleDeAcesso.Application.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao criar cartão. UID: {Uid}, UsuarioId: {UsuarioId}", 
-                    createCartaoDto.Uid, createCartaoDto.UsuarioId);
+                _logger.LogError(ex, "Erro ao criar cartão. UID: {Uid}, PortadorId: {PortadorId}", 
+                    createCartaoDto.Uid, createCartaoDto.PortadorId);
                 throw;
             }
         }
@@ -153,27 +153,27 @@ namespace ControleDeAcesso.Application.Services
             }
         }
 
-        public async Task<IEnumerable<CartaoDto>> GetByUsuarioIdAsync(string usuarioId)
+        public async Task<IEnumerable<CartaoDto>> GetByPortadorIdAsync(string portadorId)
         {
-            _logger.LogInformation("Buscando cartões por UsuarioId: {UsuarioId}", usuarioId);
+            _logger.LogInformation("Buscando cartões por PortadorId: {PortadorId}", portadorId);
 
             try
             {
-                if (string.IsNullOrWhiteSpace(usuarioId))
+                if (string.IsNullOrWhiteSpace(portadorId))
                 {
-                    throw new ArgumentException("ID do usuário é obrigatório", nameof(usuarioId));
+                    throw new ArgumentException("ID do portador é obrigatório", nameof(portadorId));
                 }
 
-                var cartoes = await _cartaoRepository.GetByUsuarioIdAsync(usuarioId);
+                var cartoes = await _cartaoRepository.GetByPortadorIdAsync(portadorId);
 
-                _logger.LogInformation("Encontrados {Count} cartões ativos para o usuário {UsuarioId}", 
-                    cartoes.Count(), usuarioId);
+                _logger.LogInformation("Encontrados {Count} cartões ativos para o portador {PortadorId}", 
+                    cartoes.Count(), portadorId);
 
                 return cartoes.Select(MapToDto);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao buscar cartões por UsuarioId: {UsuarioId}", usuarioId);
+                _logger.LogError(ex, "Erro ao buscar cartões por PortadorId: {PortadorId}", portadorId);
                 throw;
             }
         }
@@ -194,9 +194,9 @@ namespace ControleDeAcesso.Application.Services
                     throw new ArgumentException("UID do cartão é obrigatório", nameof(updateCartaoDto.Uid));
                 }
 
-                if (string.IsNullOrWhiteSpace(updateCartaoDto.UsuarioId))
+                if (string.IsNullOrWhiteSpace(updateCartaoDto.PortadorId))
                 {
-                    throw new ArgumentException("ID do usuário é obrigatório", nameof(updateCartaoDto.UsuarioId));
+                    throw new ArgumentException("ID do portador é obrigatório", nameof(updateCartaoDto.PortadorId));
                 }
 
                 var cartaoExistente = await _cartaoRepository.GetByIdAsync(id);
@@ -205,11 +205,11 @@ namespace ControleDeAcesso.Application.Services
                     throw new InvalidOperationException($"Cartão com ID {id} não encontrado");
                 }
 
-                // Verificar se o usuário existe
-                var usuario = await _usuarioRepository.GetByIdAsync(updateCartaoDto.UsuarioId);
-                if (usuario == null)
+                // Verificar se o portador existe
+                var portador = await _portadorRepository.GetByIdAsync(updateCartaoDto.PortadorId);
+                if (portador == null)
                 {
-                    throw new InvalidOperationException($"Usuário com ID {updateCartaoDto.UsuarioId} não encontrado");
+                    throw new InvalidOperationException($"Portador com ID {updateCartaoDto.PortadorId} não encontrado");
                 }
 
                 // Verificar se o UID já existe (apenas se mudou)
@@ -223,7 +223,7 @@ namespace ControleDeAcesso.Application.Services
                 }
 
                 cartaoExistente.Uid = updateCartaoDto.Uid.Trim();
-                cartaoExistente.UsuarioId = updateCartaoDto.UsuarioId.Trim();
+                cartaoExistente.PortadorId = updateCartaoDto.PortadorId.Trim();
 
                 var cartaoAtualizado = await _cartaoRepository.UpdateAsync(cartaoExistente);
 
@@ -310,8 +310,8 @@ namespace ControleDeAcesso.Application.Services
                 Id = cartao.Id,
                 Uid = cartao.Uid,
                 IsActive = cartao.IsActive,
-                UsuarioId = cartao.UsuarioId,
-                NomeUsuario = cartao.Usuario?.Nome ?? "Usuário não encontrado"
+                PortadorId = cartao.PortadorId,
+                NomePortador = cartao.Portador?.Nome ?? "Portador não encontrado"
             };
         }
     }

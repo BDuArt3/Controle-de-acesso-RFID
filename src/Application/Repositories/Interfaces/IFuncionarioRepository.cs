@@ -7,10 +7,10 @@ namespace ControleDeAcesso.Application.Repositories.Interfaces
     {
         Task<Funcionario> CreateAsync(Funcionario funcionario);
         Task<Funcionario?> GetByIdAsync(string id);
-        Task<Funcionario?> GetByUsuarioAcessoAsync(string usuarioAcesso);
+        Task<Funcionario?> GetByPortadorAcessoAsync(string portadorAcesso);
         Task<IEnumerable<Funcionario>> GetAllAsync();
         Task<Funcionario> UpdateAsync(Funcionario funcionario);
         Task<bool> DeleteAsync(string id);
-        Task<bool> UsuarioAcessoExistsAsync(string usuarioAcesso);
+        Task<bool> PortadorAcessoExistsAsync(string portadorAcesso);
     }
 }

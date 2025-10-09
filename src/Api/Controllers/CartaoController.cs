@@ -37,7 +37,7 @@ namespace ControleDeAcesso.Api.Controllers
         [Authorize(Policy = "AdminOrOperador")] // Admins e Operadores podem gravar cartões
         public async Task<ActionResult<GravacaoCartaoResponseDto>> SolicitarGravacao([FromBody] GravarCartaoDto gravarCartaoDto)
         {
-            _logger.LogInformation("Solicitação de gravação de cartão para usuário: {UsuarioId}", gravarCartaoDto.UsuarioId);
+            _logger.LogInformation("Solicitação de gravação de cartão para portador: {PortadorId}", gravarCartaoDto.PortadorId);
 
             try
             {
@@ -45,7 +45,7 @@ namespace ControleDeAcesso.Api.Controllers
                 string guidGerado = Guid.NewGuid().ToString();
                 
                 // Registrar solicitação pendente para rastreamento
-                GravacaoHub.AdicionarSolicitacaoPendente(guidGerado, gravarCartaoDto.UsuarioId);
+                GravacaoHub.AdicionarSolicitacaoPendente(guidGerado, gravarCartaoDto.PortadorId);
                 
                 // NÃO criar o cartão ainda - aguardar confirmação do Arduino
                 // O cartão será criado apenas quando o Worker confirmar a gravação bem-sucedida
@@ -61,8 +61,8 @@ namespace ControleDeAcesso.Api.Controllers
                     CartaoRef = guidGerado.Substring(0, 8) + "...", // Apenas primeiros 8 caracteres
                     Status = "Solicitado",
                     Mensagem = "Comando de gravação enviado. Aproxime o cartão do leitor.",
-                    UsuarioId = gravarCartaoDto.UsuarioId,
-                    NomeUsuario = "", // Será preenchido quando o cartão for criado
+                    PortadorId = gravarCartaoDto.PortadorId,
+                    NomePortador = "", // Será preenchido quando o cartão for criado
                     DataSolicitacao = DateTime.UtcNow
                 };
                 
@@ -101,10 +101,10 @@ namespace ControleDeAcesso.Api.Controllers
                     return BadRequest(new { message = "GUID gravado é obrigatório" });
                 }
 
-                // Buscar a solicitação pendente para encontrar o usuário
-                var usuarioId = GravacaoHub.RemoverSolicitacaoPendente(request.GuidGravado);
+                // Buscar a solicitação pendente para encontrar o portador
+                var portadorId = GravacaoHub.RemoverSolicitacaoPendente(request.GuidGravado);
                 
-                if (string.IsNullOrEmpty(usuarioId))
+                if (string.IsNullOrEmpty(portadorId))
                 {
                     _logger.LogWarning("Solicitação de gravação não encontrada para GUID: {guid}", request.GuidGravado);
                     return BadRequest(new { message = "Solicitação de gravação não encontrada" });
@@ -113,7 +113,7 @@ namespace ControleDeAcesso.Api.Controllers
                 var createCartaoDto = new CreateCartaoDto
                 {
                     Uid = request.GuidGravado,
-                    UsuarioId = usuarioId
+                    PortadorId = portadorId
                 };
                 
                 try
@@ -229,18 +229,18 @@ namespace ControleDeAcesso.Api.Controllers
         }
 
         /// <summary>
-        /// Lista cartões de um usuário específico
+        /// Lista cartões de um portador específico
         /// </summary>
-        /// <param name="usuarioId">ID do usuário</param>
-        /// <returns>Lista de cartões do usuário</returns>
-        [HttpGet("usuario/{usuarioId}")]
-        public async Task<ActionResult<IEnumerable<CartaoDto>>> GetByUsuarioId(string usuarioId)
+        /// <param name="portadorId">ID do portador</param>
+        /// <returns>Lista de cartões do portador</returns>
+        [HttpGet("portador/{portadorId}")]
+        public async Task<ActionResult<IEnumerable<CartaoDto>>> GetByPortadorId(string portadorId)
         {
-            _logger.LogInformation("Requisição para listar cartões do usuário: {UsuarioId}", usuarioId);
+            _logger.LogInformation("Requisição para listar cartões do portador: {PortadorId}", portadorId);
 
             try
             {
-                var cartoes = await _cartaoService.GetByUsuarioIdAsync(usuarioId);
+                var cartoes = await _cartaoService.GetByPortadorIdAsync(portadorId);
                 return Ok(cartoes);
             }
             catch (ArgumentException ex)
@@ -249,7 +249,7 @@ namespace ControleDeAcesso.Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao listar cartões do usuário: {UsuarioId}", usuarioId);
+                _logger.LogError(ex, "Erro ao listar cartões do portador: {PortadorId}", portadorId);
                 return StatusCode(500, new { message = "Erro interno do servidor", details = ex.Message });
             }
         }

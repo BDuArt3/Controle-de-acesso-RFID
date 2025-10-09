@@ -11,7 +11,7 @@ public class GravacaoHub : Hub
 {
     private readonly ILogger<GravacaoHub> _logger;
     
-    // Dicionário para rastrear solicitações de gravação pendentes: GUID -> UsuarioId
+    // Dicionário para rastrear solicitações de gravação pendentes: GUID -> PortadorId
     private static readonly ConcurrentDictionary<string, string> _solicitacoesPendentes = new();
 
     public GravacaoHub(ILogger<GravacaoHub> logger)
@@ -22,19 +22,19 @@ public class GravacaoHub : Hub
     /// <summary>
     /// Adiciona uma solicitação de gravação pendente
     /// </summary>
-    public static void AdicionarSolicitacaoPendente(string guid, string usuarioId)
+    public static void AdicionarSolicitacaoPendente(string guid, string portadorId)
     {
         var guidReduzido = guid.Replace("-", "").Substring(0, 16);
-        _solicitacoesPendentes.TryAdd(guidReduzido, usuarioId);
+        _solicitacoesPendentes.TryAdd(guidReduzido, portadorId);
     }
 
     /// <summary>
-    /// Remove e retorna o usuário ID de uma solicitação pendente
+    /// Remove e retorna o portador ID de uma solicitação pendente
     /// </summary>
     public static string? RemoverSolicitacaoPendente(string guidGravado)
     {
-        _solicitacoesPendentes.TryRemove(guidGravado, out var usuarioId);
-        return usuarioId;
+        _solicitacoesPendentes.TryRemove(guidGravado, out var portadorId);
+        return portadorId;
     }
 
     public override async Task OnConnectedAsync()

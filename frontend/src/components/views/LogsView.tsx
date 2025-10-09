@@ -70,9 +70,9 @@ export function LogsView() {
   const convertToAccessLog = (logDto: LogAcessoDto): AccessLog => {
     return {
       id: logDto.id,
-      userId: logDto.usuarioNome ? `user-${logDto.id}` : undefined,
-      userName: logDto.usuarioNome || 'Usuário Desconhecido',
-      userType: logDto.usuarioTipo || 'visitante',
+      userId: logDto.portadorNome ? `user-${logDto.id}` : undefined,
+      userName: logDto.portadorNome || 'Portador Desconhecido',
+      userType: logDto.portadorTipo || 'visitante',
       cardId: logDto.cartaoUid,
       location: 'Entrada da Universidade', // Ponto único de acesso
       status: logDto.acessoPermitido ? 'permitido' : 'negado',
@@ -160,7 +160,7 @@ export function LogsView() {
   };
 
   const exportToCSV = () => {
-    const headers = ['Data/Hora', 'Usuário', 'Cartão', 'Status', 'Motivo', 'Tipo de Usuário'];
+    const headers = ['Data/Hora', 'Portador', 'Cartão', 'Status', 'Motivo', 'Tipo de Portador'];
     const csvData = [
       headers.join(','),
       ...filteredLogs.map(log => [
@@ -274,13 +274,13 @@ export function LogsView() {
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Usuários Únicos</CardTitle>
+            <CardTitle className="text-sm font-medium">Portadors Únicos</CardTitle>
             <Search className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.uniqueUsers.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
-              Diferentes usuários
+              Diferentes portadors
             </p>
           </CardContent>
         </Card>
@@ -308,7 +308,7 @@ export function LogsView() {
             </div>
             
             <div className="space-y-2">
-              <label htmlFor="filter-type" className="text-sm font-medium">Tipo de Usuário</label>
+              <label htmlFor="filter-type" className="text-sm font-medium">Tipo de Portador</label>
               <Select value={filterType} onValueChange={setFilterType}>
                 <SelectTrigger>
                   <SelectValue placeholder="Todos os tipos" />
@@ -433,7 +433,7 @@ export function LogsView() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Usuário</TableHead>
+                <TableHead>Portador</TableHead>
                 <TableHead>Cartão</TableHead>
                 <TableHead>Data/Hora</TableHead>
                 <TableHead>Status</TableHead>

@@ -9,8 +9,8 @@ export * from './authService';
 // Exportações do serviço de funcionários (compatibilidade)
 export * from './funcionarioService';
 
-// Exportações do serviço de usuários
-export * from './usuarioService';
+// Exportações do serviço de portadors
+export * from './portadorService';
 
 // Exportações do serviço de cartões
 export * from './cartaoService';
@@ -24,7 +24,7 @@ export * from './acessoService';
 // Importações para criar instâncias
 import { authService } from './authService';
 import { funcionarioService } from './funcionarioService';
-import { usuarioService } from './usuarioService';
+import { portadorService } from './portadorService';
 import { cartaoService, CartaoUtils } from './cartaoService';
 import { logAcessoService, LogAcessoUtils } from './logAcessoService';
 import { acessoService, AcessoUtils } from './acessoService';
@@ -33,7 +33,7 @@ import { acessoService, AcessoUtils } from './acessoService';
 export const services = {
   auth: authService,
   funcionario: funcionarioService,
-  usuario: usuarioService,
+  portador: portadorService,
   cartao: cartaoService,
   logAcesso: logAcessoService,
   acesso: acessoService

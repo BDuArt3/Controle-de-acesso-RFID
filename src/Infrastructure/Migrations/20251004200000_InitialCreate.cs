@@ -17,7 +17,7 @@ namespace ControleDeAcesso.Infrastructure.Migrations
                 {
                     Id = table.Column<string>(type: "nvarchar(36)", maxLength: 36, nullable: false),
                     NomeFuncionario = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    UsuarioAcesso = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    PortadorAcesso = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     SenhaHash = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: false),
                     Tipo = table.Column<int>(type: "int", nullable: false),
                     IsActive = table.Column<bool>(type: "bit", nullable: false)
@@ -44,7 +44,7 @@ namespace ControleDeAcesso.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Usuarios",
+                name: "Portadors",
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "nvarchar(36)", maxLength: 36, nullable: false),
@@ -54,7 +54,7 @@ namespace ControleDeAcesso.Infrastructure.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Usuarios", x => x.Id);
+                    table.PrimaryKey("PK_Portadors", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -64,15 +64,15 @@ namespace ControleDeAcesso.Infrastructure.Migrations
                     Id = table.Column<string>(type: "nvarchar(36)", maxLength: 36, nullable: false),
                     Uid = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     IsActive = table.Column<bool>(type: "bit", nullable: false),
-                    UsuarioId = table.Column<string>(type: "nvarchar(36)", maxLength: 36, nullable: false)
+                    PortadorId = table.Column<string>(type: "nvarchar(36)", maxLength: 36, nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Cartoes", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Cartoes_Usuarios_UsuarioId",
-                        column: x => x.UsuarioId,
-                        principalTable: "Usuarios",
+                        name: "FK_Cartoes_Portadors_PortadorId",
+                        column: x => x.PortadorId,
+                        principalTable: "Portadors",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -84,14 +84,14 @@ namespace ControleDeAcesso.Infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_Cartoes_UsuarioId",
+                name: "IX_Cartoes_PortadorId",
                 table: "Cartoes",
-                column: "UsuarioId");
+                column: "PortadorId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Funcionarios_UsuarioAcesso",
+                name: "IX_Funcionarios_PortadorAcesso",
                 table: "Funcionarios",
-                column: "UsuarioAcesso",
+                column: "PortadorAcesso",
                 unique: true);
         }
 
@@ -108,7 +108,7 @@ namespace ControleDeAcesso.Infrastructure.Migrations
                 name: "LogsAcesso");
 
             migrationBuilder.DropTable(
-                name: "Usuarios");
+                name: "Portadors");
         }
     }
 }

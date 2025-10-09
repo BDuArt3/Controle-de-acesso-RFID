@@ -6,8 +6,8 @@ namespace ControleDeAcesso.Core.Entities
         UidObrigatorio = 2,
         CartaoNaoEncontrado = 3,
         CartaoDesativado = 4,
-        UsuarioNaoEncontrado = 5,
-        UsuarioDesativado = 6,
+        PortadorNaoEncontrado = 5,
+        PortadorDesativado = 6,
         ErroInterno = 7
     }
 

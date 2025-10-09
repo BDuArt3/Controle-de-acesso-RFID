@@ -325,19 +325,19 @@ namespace ControleDeAcesso.Application.Services
                 MotivoTipo = logAcesso.MotivoTipo
             };
 
-            // Tentar obter informações do usuário através do cartão
+            // Tentar obter informações do portador através do cartão
             try
             {
                 var cartao = await _cartaoRepository.GetByUidAsync(logAcesso.CartaoUid);
-                if (cartao?.Usuario != null)
+                if (cartao?.Portador != null)
                 {
-                    dto.UsuarioNome = cartao.Usuario.Nome;
-                    dto.UsuarioTipo = cartao.Usuario.Tipo.ToString();
+                    dto.PortadorNome = cartao.Portador.Nome;
+                    dto.PortadorTipo = cartao.Portador.Tipo.ToString();
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Erro ao buscar informações do usuário para o cartão {CartaoUid}", logAcesso.CartaoUid);
+                _logger.LogWarning(ex, "Erro ao buscar informações do portador para o cartão {CartaoUid}", logAcesso.CartaoUid);
             }
 
             return dto;

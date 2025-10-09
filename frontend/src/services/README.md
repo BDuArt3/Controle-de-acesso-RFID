@@ -19,15 +19,15 @@ Esta pasta contém todos os serviços para comunicação com a API backend do si
 - **Funcionalidades**:
   - Login/logout
   - Refresh de tokens
-  - Gerenciamento de estado do usuário
+  - Gerenciamento de estado do portador
   - Verificação de permissões
 
-#### `usuarioService.ts`
-- **Descrição**: Operações CRUD para usuários/funcionários
+#### `portadorService.ts`
+- **Descrição**: Operações CRUD para portadors/funcionários
 - **Funcionalidades**:
-  - Listagem, criação, edição e exclusão de usuários
+  - Listagem, criação, edição e exclusão de portadors
   - Ativação/desativação de contas
-  - Enum `TipoUsuario` (Aluno, Professor, Visitante, Funcionário)
+  - Enum `TipoPortador` (Aluno, Professor, Visitante, Funcionário)
   - Métodos utilitários para conversão de tipos
 
 #### `cartaoService.ts`
@@ -63,7 +63,7 @@ Esta pasta contém todos os serviços para comunicação com a API backend do si
 
 #### `funcionarioService.ts`
 - **Descrição**: Serviço legado (mantido para compatibilidade)
-- **Status**: Deprecated - usar `usuarioService.ts`
+- **Status**: Deprecated - usar `portadorService.ts`
 
 #### `index.ts`
 - **Descrição**: Ponto central de exportação
@@ -76,15 +76,15 @@ Esta pasta contém todos os serviços para comunicação com a API backend do si
 
 ### Importação Básica
 ```typescript
-import { usuarioService, cartaoService, logAcessoService } from '@/services';
+import { portadorService, cartaoService, logAcessoService } from '@/services';
 ```
 
 ### Usando Instâncias Diretas
 ```typescript
 import { services } from '@/services';
 
-// Listar usuários
-const usuarios = await services.usuario.getAll();
+// Listar portadors
+const portadors = await services.portador.getAll();
 
 // Verificar acesso
 const acesso = await services.acesso.verificarAcesso({ uid: '1234ABCD' });
@@ -105,7 +105,7 @@ const dataFormatada = utils.logAcesso.formatDateTime(log.dataHora);
 
 ### Enums Principais
 ```typescript
-enum TipoUsuario {
+enum TipoPortador {
   Aluno = 1,
   Professor = 2,
   Visitante = 3,
@@ -123,18 +123,18 @@ enum TipoMotivoAcesso {
   UidObrigatorio = 2,
   CartaoNaoEncontrado = 3,
   CartaoDesativado = 4,
-  UsuarioNaoEncontrado = 5,
-  UsuarioDesativado = 6,
+  PortadorNaoEncontrado = 5,
+  PortadorDesativado = 6,
   ErroInterno = 7
 }
 ```
 
 ### Interfaces Principais
 ```typescript
-interface UsuarioDto {
+interface PortadorDto {
   id: string;
   nome: string;
-  tipo: TipoUsuario;
+  tipo: TipoPortador;
   isActive: boolean;
   cartoes: Array<{ id: string; uid: string; isActive: boolean }>;
 }
@@ -155,8 +155,8 @@ interface LogAcessoDto {
   acessoPermitido: boolean;
   motivo: string;
   motivoTipo: TipoMotivoAcesso;
-  usuarioNome?: string;
-  usuarioTipo?: string;
+  portadorNome?: string;
+  portadorTipo?: string;
 }
 ```
 
@@ -171,7 +171,7 @@ Todos os serviços automaticamente:
 
 ```typescript
 try {
-  const usuario = await usuarioService.getById('123');
+  const portador = await portadorService.getById('123');
 } catch (error: ApiError) {
   console.error(error.message);
   console.error('Status:', error.statusCode);
@@ -205,7 +205,7 @@ console.log(`${logs.items.length} de ${logs.totalItems} itens`);
 ## 🔄 Sincronização Backend
 
 Todos os tipos e enums estão sincronizados com o backend:
-- `TipoUsuario` → `TipoUsuario` (C#)
+- `TipoPortador` → `TipoPortador` (C#)
 - `StatusCartao` → Status do cartão (C#)
 - `TipoMotivoAcesso` → `TipoMotivoAcesso` (C#)
 

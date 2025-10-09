@@ -35,7 +35,7 @@ export function FuncionariosView() {
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     nomeFuncionario: '',
-    usuarioAcesso: '',
+    portadorAcesso: '',
     senha: '',
     tipo: TipoFuncionario.Visualizador
   });
@@ -91,7 +91,7 @@ export function FuncionariosView() {
     if (searchTerm) {
       filtered = filtered.filter(employee =>
         employee.nomeFuncionario.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        employee.usuarioAcesso.toLowerCase().includes(searchTerm.toLowerCase())
+        employee.portadorAcesso.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -125,7 +125,7 @@ export function FuncionariosView() {
     setEditingEmployee(null);
     setFormData({
       nomeFuncionario: '',
-      usuarioAcesso: '',
+      portadorAcesso: '',
       senha: '',
       tipo: TipoFuncionario.Visualizador
     });
@@ -137,7 +137,7 @@ export function FuncionariosView() {
     setEditingEmployee(employee);
     setFormData({
       nomeFuncionario: employee.nomeFuncionario,
-      usuarioAcesso: employee.usuarioAcesso,
+      portadorAcesso: employee.portadorAcesso,
       senha: '',
       tipo: employee.tipo
     });
@@ -145,9 +145,9 @@ export function FuncionariosView() {
   };
 
   const handleSaveEmployee = async () => {
-    // Debug: Verificar usuário atual
-    console.log('Usuário atual:', currentUser);
-    console.log('Role do usuário:', currentUser?.role);
+    // Debug: Verificar portador atual
+    console.log('Portador atual:', currentUser);
+    console.log('Role do portador:', currentUser?.role);
     
     // Validação de campos obrigatórios
     if (!formData.nomeFuncionario.trim()) {
@@ -160,20 +160,20 @@ export function FuncionariosView() {
       return;
     }
 
-    if (!formData.usuarioAcesso.trim()) {
-      toast.error('Nome de usuário é obrigatório');
+    if (!formData.portadorAcesso.trim()) {
+      toast.error('Nome de portador é obrigatório');
       return;
     }
 
-    if (formData.usuarioAcesso.trim().length < 3) {
-      toast.error('Nome de usuário deve ter pelo menos 3 caracteres');
+    if (formData.portadorAcesso.trim().length < 3) {
+      toast.error('Nome de portador deve ter pelo menos 3 caracteres');
       return;
     }
 
-    // Validação de caracteres especiais no nome de usuário
+    // Validação de caracteres especiais no nome de portador
     const usernameRegex = /^[a-zA-Z0-9._-]+$/;
-    if (!usernameRegex.test(formData.usuarioAcesso.trim())) {
-      toast.error('Nome de usuário pode conter apenas letras, números, pontos, hífens e underscores');
+    if (!usernameRegex.test(formData.portadorAcesso.trim())) {
+      toast.error('Nome de portador pode conter apenas letras, números, pontos, hífens e underscores');
       return;
     }
 
@@ -187,14 +187,14 @@ export function FuncionariosView() {
       return;
     }
 
-    // Validação de nome de usuário único
+    // Validação de nome de portador único
     const usernameExists = employees.some(emp => 
-      emp.usuarioAcesso.toLowerCase() === formData.usuarioAcesso.toLowerCase().trim() && 
+      emp.portadorAcesso.toLowerCase() === formData.portadorAcesso.toLowerCase().trim() && 
       emp.id !== editingEmployee?.id
     );
 
     if (usernameExists) {
-      toast.error('Este nome de usuário já está em uso');
+      toast.error('Este nome de portador já está em uso');
       return;
     }
 
@@ -204,7 +204,7 @@ export function FuncionariosView() {
         // Atualizar funcionário existente
         const updateDto: CreateFuncionarioRequest = {
           NomeFuncionario: formData.nomeFuncionario.trim(),
-          UsuarioAcesso: formData.usuarioAcesso.trim(),
+          PortadorAcesso: formData.portadorAcesso.trim(),
           Senha: formData.senha.trim() || '', // Senha vazia para não alterar
           Tipo: formData.tipo
         };
@@ -223,7 +223,7 @@ export function FuncionariosView() {
         // Criar novo funcionário
         const createDto: CreateFuncionarioRequest = {
           NomeFuncionario: formData.nomeFuncionario.trim(),
-          UsuarioAcesso: formData.usuarioAcesso.trim(),
+          PortadorAcesso: formData.portadorAcesso.trim(),
           Senha: formData.senha.trim(),
           Tipo: formData.tipo
         };
@@ -244,7 +244,7 @@ export function FuncionariosView() {
       // Limpar formulário e fechar modal
       setFormData({
         nomeFuncionario: '',
-        usuarioAcesso: '',
+        portadorAcesso: '',
         senha: '',
         tipo: TipoFuncionario.Visualizador
       });
@@ -272,7 +272,7 @@ export function FuncionariosView() {
         
         toast.error('Erro de validação: ' + errorMessage);
       } else if (error.response?.status === 409) {
-        toast.error('Conflito: Nome de usuário já existe');
+        toast.error('Conflito: Nome de portador já existe');
       } else if (error.response?.status === 401) {
         toast.error('Você não tem permissão para esta operação (não autenticado)');
       } else if (error.response?.status === 403) {
@@ -409,7 +409,7 @@ export function FuncionariosView() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar por nome, usuário ou email..."
+                  placeholder="Buscar por nome, portador ou email..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -446,7 +446,7 @@ export function FuncionariosView() {
             <TableHeader>
               <TableRow>
                 <TableHead>Funcionário</TableHead>
-                <TableHead>Usuário</TableHead>
+                <TableHead>Portador</TableHead>
                 <TableHead>Nível</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Último Acesso</TableHead>
@@ -470,7 +470,7 @@ export function FuncionariosView() {
                   </TableCell>
                   <TableCell>
                     <code className="bg-muted px-2 py-1 rounded text-sm">
-                      {employee.usuarioAcesso}
+                      {employee.portadorAcesso}
                     </code>
                   </TableCell>
                   <TableCell>
@@ -561,12 +561,12 @@ export function FuncionariosView() {
               </div>
               
               <div>
-                <Label htmlFor="usuarioAcesso">Nome de usuário *</Label>
+                <Label htmlFor="portadorAcesso">Nome de portador *</Label>
                 <Input
-                  id="usuarioAcesso"
-                  value={formData.usuarioAcesso}
-                  onChange={(e) => setFormData(prev => ({ ...prev, usuarioAcesso: e.target.value }))}
-                  placeholder="Digite o nome de usuário"
+                  id="portadorAcesso"
+                  value={formData.portadorAcesso}
+                  onChange={(e) => setFormData(prev => ({ ...prev, portadorAcesso: e.target.value }))}
+                  placeholder="Digite o nome de portador"
                   disabled={isSaving}
                   required
                 />

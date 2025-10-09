@@ -23,12 +23,12 @@ namespace ControleDeAcesso.Api.Controllers
         /// Realiza o login de um funcionário
         /// </summary>
         /// <param name="loginDto">Dados de login</param>
-        /// <returns>Token de acesso e informações do usuário</returns>
+        /// <returns>Token de acesso e informações do portador</returns>
         [HttpPost("login")]
         [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody] LoginDto loginDto)
         {
-            _logger.LogInformation("Tentativa de login para usuário: {UsuarioAcesso}", loginDto.UsuarioAcesso);
+            _logger.LogInformation("Tentativa de login para portador: {PortadorAcesso}", loginDto.PortadorAcesso);
 
             try
             {
@@ -41,19 +41,19 @@ namespace ControleDeAcesso.Api.Controllers
 
                 if (resultado.Success)
                 {
-                    _logger.LogInformation("Login realizado com sucesso para usuário: {UsuarioAcesso}", loginDto.UsuarioAcesso);
+                    _logger.LogInformation("Login realizado com sucesso para portador: {PortadorAcesso}", loginDto.PortadorAcesso);
                     return Ok(resultado);
                 }
                 else
                 {
-                    _logger.LogWarning("Falha no login para usuário: {UsuarioAcesso} - {Message}", 
-                        loginDto.UsuarioAcesso, resultado.Message);
+                    _logger.LogWarning("Falha no login para portador: {PortadorAcesso} - {Message}", 
+                        loginDto.PortadorAcesso, resultado.Message);
                     return Unauthorized(resultado);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro inesperado durante login para usuário: {UsuarioAcesso}", loginDto.UsuarioAcesso);
+                _logger.LogError(ex, "Erro inesperado durante login para portador: {PortadorAcesso}", loginDto.PortadorAcesso);
                 return StatusCode(500, new LoginResponseDto 
                 { 
                     Success = false, 
@@ -136,9 +136,9 @@ namespace ControleDeAcesso.Api.Controllers
         }
 
         /// <summary>
-        /// Verifica se o usuário está autenticado (endpoint de teste)
+        /// Verifica se o portador está autenticado (endpoint de teste)
         /// </summary>
-        /// <returns>Informações do usuário autenticado</returns>
+        /// <returns>Informações do portador autenticado</returns>
         [HttpGet("me")]
         [Authorize]
         public IActionResult GetCurrentUser()
@@ -148,20 +148,20 @@ namespace ControleDeAcesso.Api.Controllers
                 var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
                 var userName = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value;
                 var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
-                var usuarioAcesso = User.FindFirst("usuario_acesso")?.Value;
+                var portadorAcesso = User.FindFirst("portador_acesso")?.Value;
 
                 return Ok(new
                 {
                     id = userId,
                     nome = userName,
-                    usuarioAcesso = usuarioAcesso,
+                    portadorAcesso = portadorAcesso,
                     tipo = userRole,
                     isAuthenticated = true
                 });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao obter informações do usuário autenticado");
+                _logger.LogError(ex, "Erro ao obter informações do portador autenticado");
                 return StatusCode(500, new { message = "Erro interno do servidor" });
             }
         }

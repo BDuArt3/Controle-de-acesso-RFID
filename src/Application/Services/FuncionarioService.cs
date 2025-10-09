@@ -21,28 +21,28 @@ namespace ControleDeAcesso.Application.Services
 
         public async Task<FuncionarioDto> CreateAsync(CreateFuncionarioDto funcionarioDto)
         {
-            _logger.LogInformation("Iniciando criação de funcionário. Nome: {Nome}, UsuarioAcesso: {UsuarioAcesso}, Tipo: {Tipo}", 
-                funcionarioDto.NomeFuncionario, funcionarioDto.UsuarioAcesso, funcionarioDto.Tipo);
+            _logger.LogInformation("Iniciando criação de funcionário. Nome: {Nome}, PortadorAcesso: {PortadorAcesso}, Tipo: {Tipo}", 
+                funcionarioDto.NomeFuncionario, funcionarioDto.PortadorAcesso, funcionarioDto.Tipo);
 
             try
             {
-                // Validação: verificar se o usuário de acesso já existe
-                if (await _funcionarioRepository.UsuarioAcessoExistsAsync(funcionarioDto.UsuarioAcesso))
+                // Validação: verificar se o portador de acesso já existe
+                if (await _funcionarioRepository.PortadorAcessoExistsAsync(funcionarioDto.PortadorAcesso))
                 {
-                    _logger.LogWarning("Tentativa de criar funcionário com usuário de acesso já existente: {UsuarioAcesso}", 
-                        funcionarioDto.UsuarioAcesso);
-                    throw new InvalidOperationException("Usuário de acesso já existe.");
+                    _logger.LogWarning("Tentativa de criar funcionário com portador de acesso já existente: {PortadorAcesso}", 
+                        funcionarioDto.PortadorAcesso);
+                    throw new InvalidOperationException("Portador de acesso já existe.");
                 }
 
                 // Criptografar a senha
                 var senhaHash = BCrypt.Net.BCrypt.HashPassword(funcionarioDto.Senha);
-                _logger.LogInformation("Senha criptografada com sucesso para o funcionário: {UsuarioAcesso}", 
-                    funcionarioDto.UsuarioAcesso);
+                _logger.LogInformation("Senha criptografada com sucesso para o funcionário: {PortadorAcesso}", 
+                    funcionarioDto.PortadorAcesso);
 
                 var funcionario = new Funcionario
                 {
                     NomeFuncionario = funcionarioDto.NomeFuncionario,
-                    UsuarioAcesso = funcionarioDto.UsuarioAcesso,
+                    PortadorAcesso = funcionarioDto.PortadorAcesso,
                     SenhaHash = senhaHash,
                     Tipo = funcionarioDto.Tipo,
                     IsActive = true
@@ -50,14 +50,14 @@ namespace ControleDeAcesso.Application.Services
 
                 var novoFuncionario = await _funcionarioRepository.CreateAsync(funcionario);
 
-                _logger.LogInformation("Funcionário criado com sucesso. ID: {Id}, Nome: {Nome}, UsuarioAcesso: {UsuarioAcesso}", 
-                    novoFuncionario.Id, novoFuncionario.NomeFuncionario, novoFuncionario.UsuarioAcesso);
+                _logger.LogInformation("Funcionário criado com sucesso. ID: {Id}, Nome: {Nome}, PortadorAcesso: {PortadorAcesso}", 
+                    novoFuncionario.Id, novoFuncionario.NomeFuncionario, novoFuncionario.PortadorAcesso);
 
                 return new FuncionarioDto
                 {
                     Id = novoFuncionario.Id,
                     NomeFuncionario = novoFuncionario.NomeFuncionario,
-                    UsuarioAcesso = novoFuncionario.UsuarioAcesso,
+                    PortadorAcesso = novoFuncionario.PortadorAcesso,
                     Tipo = novoFuncionario.Tipo,
                     IsActive = novoFuncionario.IsActive
                 };
@@ -69,8 +69,8 @@ namespace ControleDeAcesso.Application.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro inesperado ao criar funcionário. Nome: {Nome}, UsuarioAcesso: {UsuarioAcesso}", 
-                    funcionarioDto.NomeFuncionario, funcionarioDto.UsuarioAcesso);
+                _logger.LogError(ex, "Erro inesperado ao criar funcionário. Nome: {Nome}, PortadorAcesso: {PortadorAcesso}", 
+                    funcionarioDto.NomeFuncionario, funcionarioDto.PortadorAcesso);
                 throw;
             }
         }
@@ -96,7 +96,7 @@ namespace ControleDeAcesso.Application.Services
                 {
                     Id = funcionario.Id,
                     NomeFuncionario = funcionario.NomeFuncionario,
-                    UsuarioAcesso = funcionario.UsuarioAcesso,
+                    PortadorAcesso = funcionario.PortadorAcesso,
                     Tipo = funcionario.Tipo,
                     IsActive = funcionario.IsActive
                 };
@@ -119,7 +119,7 @@ namespace ControleDeAcesso.Application.Services
                 {
                     Id = f.Id,
                     NomeFuncionario = f.NomeFuncionario,
-                    UsuarioAcesso = f.UsuarioAcesso,
+                    PortadorAcesso = f.PortadorAcesso,
                     Tipo = f.Tipo,
                     IsActive = f.IsActive
                 }).ToList();
@@ -149,18 +149,18 @@ namespace ControleDeAcesso.Application.Services
                     throw new InvalidOperationException("Funcionário não encontrado.");
                 }
 
-                // Verificar se o novo usuário de acesso já existe (exceto para o próprio funcionário)
-                var funcionarioComMesmoUsuario = await _funcionarioRepository.GetByUsuarioAcessoAsync(funcionarioDto.UsuarioAcesso);
-                if (funcionarioComMesmoUsuario != null && funcionarioComMesmoUsuario.Id != id)
+                // Verificar se o novo portador de acesso já existe (exceto para o próprio funcionário)
+                var funcionarioComMesmoPortador = await _funcionarioRepository.GetByPortadorAcessoAsync(funcionarioDto.PortadorAcesso);
+                if (funcionarioComMesmoPortador != null && funcionarioComMesmoPortador.Id != id)
                 {
-                    _logger.LogWarning("Tentativa de atualizar funcionário com usuário de acesso já existente: {UsuarioAcesso}", 
-                        funcionarioDto.UsuarioAcesso);
-                    throw new InvalidOperationException("Usuário de acesso já existe.");
+                    _logger.LogWarning("Tentativa de atualizar funcionário com portador de acesso já existente: {PortadorAcesso}", 
+                        funcionarioDto.PortadorAcesso);
+                    throw new InvalidOperationException("Portador de acesso já existe.");
                 }
 
                 // Atualizar dados
                 funcionarioExistente.NomeFuncionario = funcionarioDto.NomeFuncionario;
-                funcionarioExistente.UsuarioAcesso = funcionarioDto.UsuarioAcesso;
+                funcionarioExistente.PortadorAcesso = funcionarioDto.PortadorAcesso;
                 funcionarioExistente.Tipo = funcionarioDto.Tipo;
 
                 // Atualizar senha apenas se uma nova senha foi fornecida
@@ -179,7 +179,7 @@ namespace ControleDeAcesso.Application.Services
                 {
                     Id = funcionarioAtualizado.Id,
                     NomeFuncionario = funcionarioAtualizado.NomeFuncionario,
-                    UsuarioAcesso = funcionarioAtualizado.UsuarioAcesso,
+                    PortadorAcesso = funcionarioAtualizado.PortadorAcesso,
                     Tipo = funcionarioAtualizado.Tipo,
                     IsActive = funcionarioAtualizado.IsActive
                 };

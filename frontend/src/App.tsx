@@ -6,7 +6,7 @@ import { AccessDeniedView } from './components/ui/AccessDeniedView';
 import { Layout } from './components/layout/Layout';
 import { LoginView } from './components/views/LoginView';
 import { DashboardView } from './components/views/DashboardView';
-import { UsuariosView } from './components/views/UsuariosView';
+import { PortadorsView } from './components/views/PortadorView';
 import { FuncionariosView } from './components/views/FuncionariosView';
 import { CartoesView } from './components/views/CartoesView';
 import { LogsView } from './components/views/LogsView';
@@ -33,8 +33,8 @@ function AppContent() {
     switch (currentView) {
       case 'dashboard':
         return <DashboardView />;
-      case 'usuarios':
-        return canView('users') ? <UsuariosView /> : <AccessDeniedView />;
+      case 'portadors':
+        return canView('users') ? <PortadorsView /> : <AccessDeniedView />;
       case 'funcionarios':
         return canView('employees') ? <FuncionariosView /> : <AccessDeniedView />;
       case 'cartoes':

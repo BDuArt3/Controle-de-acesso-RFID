@@ -16,14 +16,14 @@ import { usePermissions } from '../../hooks/usePermissions';
 import { AccessDeniedView } from '../ui/AccessDeniedView';
 import { services } from '../../services';
 import { type Cartao, type GravarCartaoRequest, CartaoUtils } from '../../services/cartaoService';
-import { type UsuarioDto } from '../../services/usuarioService';
+import { type PortadorDto } from '../../services/portadorService';
 
 export function CartoesView() {
   const { user: currentUser } = useAuth();
   const { canView, canEdit } = usePermissions();
   const [cartoes, setCartoes] = useState<Cartao[]>([]);
   const [filteredCartoes, setFilteredCartoes] = useState<Cartao[]>([]);
-  const [usuarios, setUsuarios] = useState<UsuarioDto[]>([]);
+  const [portadors, setPortadors] = useState<PortadorDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'todos' | 'ativo' | 'inativo'>('todos');
@@ -53,13 +53,13 @@ export function CartoesView() {
     try {
       setIsLoading(true);
       
-      const [cartoesData, usuariosData] = await Promise.all([
+      const [cartoesData, portadorsData] = await Promise.all([
         services.cartao.getAll(),
-        services.usuario.getAll()
+        services.portador.getAll()
       ]);
       
       setCartoes(cartoesData);
-      setUsuarios(usuariosData);
+      setPortadors(portadorsData);
       setFilteredCartoes(cartoesData);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
@@ -74,7 +74,7 @@ export function CartoesView() {
     
     if (searchTerm) {
       filtered = filtered.filter(cartao => 
-        cartao.nomeUsuario.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        cartao.nomePortador.toLowerCase().includes(searchTerm.toLowerCase()) ||
         cartao.uid.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
@@ -96,15 +96,15 @@ export function CartoesView() {
       .substring(0, 2);
   };
 
-  const getUsuarioSemCartao = () => {
-    return usuarios.filter(usuario => 
-      !cartoes.some(cartao => cartao.usuarioId === usuario.id)
+  const getPortadorSemCartao = () => {
+    return portadors.filter(portador => 
+      !cartoes.some(cartao => cartao.portadorId === portador.id)
     );
   };
 
   const handleGravarCartao = async () => {
     if (!selectedUserId) {
-      toast.error("Selecione um usuário para gravar o cartão.");
+      toast.error("Selecione um portador para gravar o cartão.");
       return;
     }
 
@@ -124,7 +124,7 @@ export function CartoesView() {
       }, 200);
 
       // Solicitar gravação
-      await services.cartao.solicitarGravacao({ usuarioId: selectedUserId });
+      await services.cartao.solicitarGravacao({ portadorId: selectedUserId });
       
       // Aguardar alguns segundos simulando gravação
       await new Promise(resolve => setTimeout(resolve, 3000));
@@ -247,9 +247,9 @@ export function CartoesView() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Usuários sem Cartão</p>
+                <p className="text-sm font-medium text-muted-foreground">Portadors sem Cartão</p>
                 <p className="text-3xl font-bold text-orange-600">
-                  {getUsuarioSemCartao().length}
+                  {getPortadorSemCartao().length}
                 </p>
               </div>
               <User className="h-8 w-8 text-orange-600" />
@@ -267,7 +267,7 @@ export function CartoesView() {
           <div className="flex gap-4">
             <div className="flex-1">
               <Input
-                placeholder="Buscar por usuário ou UID do cartão..."
+                placeholder="Buscar por portador ou UID do cartão..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full"
@@ -299,7 +299,7 @@ export function CartoesView() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Usuário</TableHead>
+                <TableHead>Portador</TableHead>
                 <TableHead>UID do Cartão</TableHead>
                 <TableHead>Status</TableHead>
                 {canEditCards && <TableHead>Ações</TableHead>}
@@ -312,10 +312,10 @@ export function CartoesView() {
                     <div className="flex items-center space-x-3">
                       <Avatar className="h-8 w-8">
                         <AvatarFallback className="text-xs">
-                          {getInitials(cartao.nomeUsuario)}
+                          {getInitials(cartao.nomePortador)}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="font-medium">{cartao.nomeUsuario}</span>
+                      <span className="font-medium">{cartao.nomePortador}</span>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -368,7 +368,7 @@ export function CartoesView() {
             <DialogHeader>
               <DialogTitle>Gravar Novo Cartão RFID</DialogTitle>
               <DialogDescription>
-                Selecione um usuário e siga as instruções para gravar um novo cartão RFID.
+                Selecione um portador e siga as instruções para gravar um novo cartão RFID.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
@@ -376,20 +376,20 @@ export function CartoesView() {
                 <div className="space-y-4">
                   <Select value={selectedUserId} onValueChange={setSelectedUserId}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione um usuário" />
+                      <SelectValue placeholder="Selecione um portador" />
                     </SelectTrigger>
                     <SelectContent>
-                      {getUsuarioSemCartao().map((usuario) => (
-                        <SelectItem key={usuario.id} value={usuario.id}>
-                          {usuario.nome}
+                      {getPortadorSemCartao().map((portador) => (
+                        <SelectItem key={portador.id} value={portador.id}>
+                          {portador.nome}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {getUsuarioSemCartao().length === 0 && (
+                  {getPortadorSemCartao().length === 0 && (
                     <Alert>
                       <AlertDescription>
-                        Todos os usuários já possuem cartões associados.
+                        Todos os portadors já possuem cartões associados.
                       </AlertDescription>
                     </Alert>
                   )}
@@ -412,7 +412,7 @@ export function CartoesView() {
                       <CheckCircle className="h-12 w-12 mx-auto text-green-600" />
                       <p className="font-medium text-green-600">Cartão gravado com sucesso!</p>
                       <p className="text-sm text-muted-foreground">
-                        O cartão foi associado ao usuário
+                        O cartão foi associado ao portador
                       </p>
                     </div>
                   )}
