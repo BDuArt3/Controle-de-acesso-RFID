@@ -14,12 +14,15 @@ import { Switch } from '../ui/switch';
 import { Alert, AlertDescription } from '../ui/alert';
 import { toast } from 'sonner';
 import { useAuth } from '../providers/AuthProvider';
+import { usePermissions } from '../../hooks/usePermissions';
+import { AccessDeniedView } from '../ui/AccessDeniedView';
 import { services } from '../../services';
 import { TipoFuncionario, CreateFuncionarioRequest, type Funcionario } from '../../services/funcionarioService';
 
 // Enum para tipos de funcionário (deve coincidir com o backend)
 export function FuncionariosView() {
   const { user: currentUser } = useAuth();
+  const { canView, canEdit } = usePermissions();
   const [employees, setEmployees] = useState<Funcionario[]>([]);
   const [filteredEmployees, setFilteredEmployees] = useState<Funcionario[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -36,22 +39,12 @@ export function FuncionariosView() {
     tipo: TipoFuncionario.Visualizador
   });
 
-  // Only admins can access this view
-  if (currentUser?.role !== 'admin') {
-    return (
-      <div className="space-y-6">
-        <Card>
-          <CardContent className="p-8 text-center">
-            <Shield className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-            <h2>Acesso Restrito</h2>
-            <p className="text-muted-foreground">
-              Apenas administradores podem acessar a gestão de funcionários.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
+  // Verificação de permissão para acessar esta view
+  if (!canView('employees')) {
+    return <AccessDeniedView />;
   }
+
+  const canEditEmployees = canEdit('employees');
 
   const getTipoDisplayName = (tipo: TipoFuncionario): string => {
     switch (tipo) {
@@ -313,13 +306,15 @@ export function FuncionariosView() {
         <div>
           <h1>Gestão de Funcionários</h1>
           <p className="text-muted-foreground">
-            Gerencie administradores, operadores e visualizadores do sistema
+            {canEditEmployees ? 'Gerencie administradores, operadores e visualizadores do sistema' : 'Visualize administradores, operadores e visualizadores do sistema'}
           </p>
         </div>
-        <Button onClick={handleCreateEmployee} className="bg-blue-600 hover:bg-blue-700">
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Funcionário
-        </Button>
+        {canEditEmployees && (
+          <Button onClick={handleCreateEmployee} className="bg-blue-600 hover:bg-blue-700">
+            <Plus className="h-4 w-4 mr-2" />
+            Novo Funcionário
+          </Button>
+        )}
       </div>
 
       <Alert>
@@ -377,7 +372,7 @@ export function FuncionariosView() {
                 <TableHead>Nível</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Último Acesso</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
+                {canEditEmployees && <TableHead className="text-right">Ações</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -407,39 +402,47 @@ export function FuncionariosView() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <Switch
-                        checked={employee.isActive}
-                        onCheckedChange={() => handleToggleStatus(employee.id)}
-                        disabled={employee.id === currentUser?.id}
-                      />
+                      {canEditEmployees ? (
+                        <Switch
+                          checked={employee.isActive}
+                          onCheckedChange={() => handleToggleStatus(employee.id)}
+                          disabled={employee.id === currentUser?.id}
+                        />
+                      ) : (
+                        <Badge variant={employee.isActive ? 'default' : 'secondary'}>
+                          {employee.isActive ? 'Ativo' : 'Inativo'}
+                        </Badge>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
                     <span className="text-sm text-muted-foreground">-</span>
                   </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleEditEmployee(employee)}>
-                          <Edit className="h-4 w-4 mr-2" />
-                          Editar
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onClick={() => handleDeleteEmployee(employee.id)}
-                          disabled={employee.id === currentUser?.id}
-                          className="text-red-600"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Excluir
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
+                  {canEditEmployees && (
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleEditEmployee(employee)}>
+                            <Edit className="h-4 w-4 mr-2" />
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => handleDeleteEmployee(employee.id)}
+                            disabled={employee.id === currentUser?.id}
+                            className="text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Excluir
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -454,90 +457,92 @@ export function FuncionariosView() {
       </Card>
 
       {/* Modal de Criação/Edição */}
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {editingEmployee ? 'Editar Funcionário' : 'Novo Funcionário'}
-            </DialogTitle>
-            <DialogDescription>
-              {editingEmployee ? 'Altere as informações do funcionário.' : 'Preencha os dados para criar um novo funcionário.'}
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="nomeFuncionario">Nome completo</Label>
-              <Input
-                id="nomeFuncionario"
-                value={formData.nomeFuncionario}
-                onChange={(e) => setFormData(prev => ({ ...prev, nomeFuncionario: e.target.value }))}
-                placeholder="Digite o nome completo"
-              />
-            </div>
+      {canEditEmployees && (
+        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {editingEmployee ? 'Editar Funcionário' : 'Novo Funcionário'}
+              </DialogTitle>
+              <DialogDescription>
+                {editingEmployee ? 'Altere as informações do funcionário.' : 'Preencha os dados para criar um novo funcionário.'}
+              </DialogDescription>
+            </DialogHeader>
             
-            <div>
-              <Label htmlFor="usuarioAcesso">Nome de usuário</Label>
-              <Input
-                id="usuarioAcesso"
-                value={formData.usuarioAcesso}
-                onChange={(e) => setFormData(prev => ({ ...prev, usuarioAcesso: e.target.value }))}
-                placeholder="Digite o nome de usuário"
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="senha">
-                {editingEmployee ? 'Nova senha (deixe vazio para manter)' : 'Senha'}
-              </Label>
-              <div className="relative">
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="nomeFuncionario">Nome completo</Label>
                 <Input
-                  id="senha"
-                  type={showPassword ? 'text' : 'password'}
-                  value={formData.senha}
-                  onChange={(e) => setFormData(prev => ({ ...prev, senha: e.target.value }))}
-                  placeholder={editingEmployee ? 'Nova senha' : 'Digite a senha'}
+                  id="nomeFuncionario"
+                  value={formData.nomeFuncionario}
+                  onChange={(e) => setFormData(prev => ({ ...prev, nomeFuncionario: e.target.value }))}
+                  placeholder="Digite o nome completo"
                 />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-10 px-3 hover:bg-transparent"
-                  onClick={() => setShowPassword(!showPassword)}
+              </div>
+              
+              <div>
+                <Label htmlFor="usuarioAcesso">Nome de usuário</Label>
+                <Input
+                  id="usuarioAcesso"
+                  value={formData.usuarioAcesso}
+                  onChange={(e) => setFormData(prev => ({ ...prev, usuarioAcesso: e.target.value }))}
+                  placeholder="Digite o nome de usuário"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="senha">
+                  {editingEmployee ? 'Nova senha (deixe vazio para manter)' : 'Senha'}
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="senha"
+                    type={showPassword ? 'text' : 'password'}
+                    value={formData.senha}
+                    onChange={(e) => setFormData(prev => ({ ...prev, senha: e.target.value }))}
+                    placeholder={editingEmployee ? 'Nova senha' : 'Digite a senha'}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-10 px-3 hover:bg-transparent"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              
+              <div>
+                <Label htmlFor="tipo">Nível de acesso</Label>
+                <Select 
+                  value={formData.tipo.toString()} 
+                  onValueChange={(value: string) => setFormData(prev => ({ ...prev, tipo: parseInt(value) as TipoFuncionario }))}
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={TipoFuncionario.Admin.toString()}>Administrador</SelectItem>
+                    <SelectItem value={TipoFuncionario.Operador.toString()}>Operador</SelectItem>
+                    <SelectItem value={TipoFuncionario.Visualizador.toString()}>Visualizador</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-            
-            <div>
-              <Label htmlFor="tipo">Nível de acesso</Label>
-              <Select 
-                value={formData.tipo.toString()} 
-                onValueChange={(value: string) => setFormData(prev => ({ ...prev, tipo: parseInt(value) as TipoFuncionario }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={TipoFuncionario.Admin.toString()}>Administrador</SelectItem>
-                  <SelectItem value={TipoFuncionario.Operador.toString()}>Operador</SelectItem>
-                  <SelectItem value={TipoFuncionario.Visualizador.toString()}>Visualizador</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsModalOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveEmployee} className="bg-blue-600 hover:bg-blue-700">
-              {editingEmployee ? 'Salvar' : 'Criar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSaveEmployee} className="bg-blue-600 hover:bg-blue-700">
+                {editingEmployee ? 'Salvar' : 'Criar'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

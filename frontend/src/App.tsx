@@ -1,6 +1,8 @@
 import React from 'react';
 import { Toaster } from './components/ui/sonner';
 import { AuthProvider, useAuth } from './components/providers/AuthProvider';
+import { usePermissions } from './hooks/usePermissions';
+import { AccessDeniedView } from './components/ui/AccessDeniedView';
 import { Layout } from './components/layout/Layout';
 import { LoginView } from './components/views/LoginView';
 import { DashboardView } from './components/views/DashboardView';
@@ -12,6 +14,7 @@ import { PerfilView } from './components/views/PerfilView';
 
 function AppContent() {
   const { isAuthenticated, currentView, isLoading } = useAuth();
+  const { canView } = usePermissions();
 
   // Mostrar loading durante a inicialização
   if (isLoading) {
@@ -31,13 +34,13 @@ function AppContent() {
       case 'dashboard':
         return <DashboardView />;
       case 'usuarios':
-        return <UsuariosView />;
+        return canView('users') ? <UsuariosView /> : <AccessDeniedView />;
       case 'funcionarios':
-        return <FuncionariosView />;
+        return canView('employees') ? <FuncionariosView /> : <AccessDeniedView />;
       case 'cartoes':
-        return <CartoesView />;
+        return canView('cards') ? <CartoesView /> : <AccessDeniedView />;
       case 'logs':
-        return <LogsView />;
+        return canView('logs') ? <LogsView /> : <AccessDeniedView />;
       case 'perfil':
         return <PerfilView />;
       default:

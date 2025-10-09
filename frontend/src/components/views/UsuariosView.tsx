@@ -13,6 +13,8 @@ import { Label } from '../ui/label';
 import { Switch } from '../ui/switch';
 import { toast } from 'sonner';
 import { useAuth } from '../providers/AuthProvider';
+import { usePermissions } from '../../hooks/usePermissions';
+import { AccessDeniedView } from '../ui/AccessDeniedView';
 import { services, TipoUsuario, type UsuarioDto, type CreateUsuarioDto } from '../../services';
 
 interface User {
@@ -25,6 +27,7 @@ interface User {
 
 export function UsuariosView() {
   const { user: currentUser } = useAuth();
+  const { canView, canEdit } = usePermissions();
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -38,7 +41,12 @@ export function UsuariosView() {
     tipo: TipoUsuario.Aluno
   });
 
-  const canEdit = currentUser?.role === 'admin' || currentUser?.role === 'operador';
+  // Verificação de permissão para acessar esta view
+  if (!canView('users')) {
+    return <AccessDeniedView />;
+  }
+
+  const canEditUsers = canEdit('users');
 
   // Função auxiliar para converter string para enum
   const getTipoUsuarioFromString = (tipo: string): TipoUsuario => {
@@ -277,10 +285,10 @@ export function UsuariosView() {
         <div>
           <h1>Gestão de Usuários</h1>
           <p className="text-muted-foreground">
-            Gerencie alunos, professores, funcionários e visitantes
+            {canEditUsers ? 'Gerencie alunos, professores, funcionários e visitantes' : 'Visualize alunos, professores, funcionários e visitantes'}
           </p>
         </div>
-        {canEdit && (
+        {canEditUsers && (
           <Button onClick={handleCreateUser} className="bg-blue-600 hover:bg-blue-700">
             <Plus className="h-4 w-4 mr-2" />
             Novo Usuário
@@ -336,7 +344,7 @@ export function UsuariosView() {
                 <TableHead>Tipo</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Cartão</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
+                {canEditUsers && <TableHead className="text-right">Ações</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -361,7 +369,7 @@ export function UsuariosView() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      {canEdit ? (
+                      {canEditUsers ? (
                         <Switch
                           checked={user.isActive}
                           onCheckedChange={() => handleToggleStatus(user.id, user.isActive)}
@@ -385,8 +393,8 @@ export function UsuariosView() {
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-right">
-                    {canEdit && (
+                  {canEditUsers && (
+                    <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="sm">
@@ -407,8 +415,8 @@ export function UsuariosView() {
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    )}
-                  </TableCell>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -423,57 +431,59 @@ export function UsuariosView() {
       </Card>
 
       {/* Modal de Criação/Edição */}
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingUser ? 'Editar Usuário' : 'Novo Usuário'}
-            </DialogTitle>
-            <DialogDescription>
-              {editingUser ? 'Altere as informações do usuário.' : 'Preencha os dados para criar um novo usuário.'}
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="nome">Nome completo</Label>
-              <Input
-                id="nome"
-                value={formData.nome}
-                onChange={(e) => setFormData(prev => ({ ...prev, nome: e.target.value }))}
-                placeholder="Digite o nome completo"
-              />
-            </div>
+      {canEditUsers && (
+        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {editingUser ? 'Editar Usuário' : 'Novo Usuário'}
+              </DialogTitle>
+              <DialogDescription>
+                {editingUser ? 'Altere as informações do usuário.' : 'Preencha os dados para criar um novo usuário.'}
+              </DialogDescription>
+            </DialogHeader>
             
-            <div>
-              <Label htmlFor="tipo">Tipo de usuário</Label>
-              <Select 
-                value={formData.tipo.toString()} 
-                onValueChange={(value: string) => setFormData(prev => ({ ...prev, tipo: parseInt(value) as TipoUsuario }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={TipoUsuario.Aluno.toString()}>Aluno</SelectItem>
-                  <SelectItem value={TipoUsuario.Professor.toString()}>Professor</SelectItem>
-                  <SelectItem value={TipoUsuario.Funcionario.toString()}>Funcionário</SelectItem>
-                  <SelectItem value={TipoUsuario.Visitante.toString()}>Visitante</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="nome">Nome completo</Label>
+                <Input
+                  id="nome"
+                  value={formData.nome}
+                  onChange={(e) => setFormData(prev => ({ ...prev, nome: e.target.value }))}
+                  placeholder="Digite o nome completo"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="tipo">Tipo de usuário</Label>
+                <Select 
+                  value={formData.tipo.toString()} 
+                  onValueChange={(value: string) => setFormData(prev => ({ ...prev, tipo: parseInt(value) as TipoUsuario }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={TipoUsuario.Aluno.toString()}>Aluno</SelectItem>
+                    <SelectItem value={TipoUsuario.Professor.toString()}>Professor</SelectItem>
+                    <SelectItem value={TipoUsuario.Funcionario.toString()}>Funcionário</SelectItem>
+                    <SelectItem value={TipoUsuario.Visitante.toString()}>Visitante</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-          </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsModalOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveUser} className="bg-blue-600 hover:bg-blue-700">
-              {editingUser ? 'Salvar' : 'Criar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSaveUser} className="bg-blue-600 hover:bg-blue-700">
+                {editingUser ? 'Salvar' : 'Criar'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

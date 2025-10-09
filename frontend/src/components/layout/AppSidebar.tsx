@@ -23,45 +23,48 @@ import {
   SidebarFooter,
 } from "../ui/sidebar"
 import { useAuth } from "../providers/AuthProvider"
+import { usePermissions } from "../../hooks/usePermissions"
 
 const menuItems = [
   {
     title: "Dashboard",
     url: "dashboard",
     icon: Home,
-    roles: ['admin', 'operador', 'visualizador']
+    permission: null // Todos podem acessar
   },
   {
     title: "Usuários",
     url: "usuarios",
     icon: Users,
-    roles: ['admin', 'operador', 'visualizador']
+    permission: 'view_users' as const
   },
   {
     title: "Funcionários",
     url: "funcionarios",
     icon: Building2,
-    roles: ['admin']
+    permission: 'view_employees' as const
   },
   {
     title: "Cartões RFID",
     url: "cartoes",
     icon: CreditCard,
-    roles: ['admin', 'operador']
+    permission: 'view_cards' as const
   },
   {
     title: "Logs de Acesso",
     url: "logs",
     icon: FileText,
-    roles: ['admin', 'operador', 'visualizador']
+    permission: 'view_logs' as const
   },
 ]
 
 export function AppSidebar() {
   const { user, logout, currentView, setCurrentView } = useAuth();
+  const { hasPermission } = usePermissions();
 
-  const canAccessItem = (roles: string[]) => {
-    return roles.includes(user?.role || '');
+  const canAccessItem = (permission: string | null) => {
+    if (!permission) return true; // Dashboard pode ser acessado por todos
+    return hasPermission(permission as any);
   };
 
   const handleLogout = () => {
@@ -88,7 +91,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => (
-                canAccessItem(item.roles) && (
+                canAccessItem(item.permission) && (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton 
                       isActive={currentView === item.url}

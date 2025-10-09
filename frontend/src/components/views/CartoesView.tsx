@@ -12,12 +12,15 @@ import { Progress } from '../ui/progress';
 import { Alert, AlertDescription } from '../ui/alert';
 import { toast } from 'sonner';
 import { useAuth } from '../providers/AuthProvider';
+import { usePermissions } from '../../hooks/usePermissions';
+import { AccessDeniedView } from '../ui/AccessDeniedView';
 import { services } from '../../services';
 import { type Cartao, type GravarCartaoRequest, CartaoUtils } from '../../services/cartaoService';
 import { type UsuarioDto } from '../../services/usuarioService';
 
 export function CartoesView() {
   const { user: currentUser } = useAuth();
+  const { canView, canEdit } = usePermissions();
   const [cartoes, setCartoes] = useState<Cartao[]>([]);
   const [filteredCartoes, setFilteredCartoes] = useState<Cartao[]>([]);
   const [usuarios, setUsuarios] = useState<UsuarioDto[]>([]);
@@ -31,8 +34,12 @@ export function CartoesView() {
   const [gravingStatus, setGravingStatus] = useState<'idle' | 'waiting' | 'success' | 'error'>('idle');
   const [gravingProgress, setGravingProgress] = useState(0);
 
-  // Verificar permissões
-  const canEdit = currentUser?.role === 'admin' || currentUser?.role === 'operador';
+  // Verificação de permissão para acessar esta view
+  if (!canView('cards')) {
+    return <AccessDeniedView />;
+  }
+
+  const canEditCards = canEdit('cards');
 
   useEffect(() => {
     loadData();
@@ -183,10 +190,10 @@ export function CartoesView() {
         <div>
           <h1 className="text-3xl font-bold">Gestão de Cartões</h1>
           <p className="text-muted-foreground">
-            Gerencie cartões RFID do sistema de controle de acesso
+            {canEditCards ? 'Gerencie cartões RFID do sistema de controle de acesso' : 'Visualize cartões RFID do sistema de controle de acesso'}
           </p>
         </div>
-        {canEdit && (
+        {canEditCards && (
           <Button onClick={() => setIsGravingModalOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Gravar Novo Cartão
@@ -295,7 +302,7 @@ export function CartoesView() {
                 <TableHead>Usuário</TableHead>
                 <TableHead>UID do Cartão</TableHead>
                 <TableHead>Status</TableHead>
-                {canEdit && <TableHead>Ações</TableHead>}
+                {canEditCards && <TableHead>Ações</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -324,7 +331,7 @@ export function CartoesView() {
                       {CartaoUtils.getStatusText(cartao.isActive)}
                     </Badge>
                   </TableCell>
-                  {canEdit && (
+                  {canEditCards && (
                     <TableCell>
                       <div className="flex space-x-2">
                         <Button
@@ -341,7 +348,7 @@ export function CartoesView() {
               ))}
               {filteredCartoes.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={canEdit ? 4 : 3} className="text-center py-8">
+                  <TableCell colSpan={canEditCards ? 4 : 3} className="text-center py-8">
                     <div className="text-muted-foreground">
                       <CreditCard className="h-8 w-8 mx-auto mb-2 opacity-50" />
                       <p>Nenhum cartão encontrado</p>
@@ -355,103 +362,105 @@ export function CartoesView() {
       </Card>
 
       {/* Modal de gravação */}
-      <Dialog open={isGravingModalOpen} onOpenChange={setIsGravingModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Gravar Novo Cartão RFID</DialogTitle>
-            <DialogDescription>
-              Selecione um usuário e siga as instruções para gravar um novo cartão RFID.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {gravingStatus === 'idle' && (
-              <div className="space-y-4">
-                <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um usuário" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {getUsuarioSemCartao().map((usuario) => (
-                      <SelectItem key={usuario.id} value={usuario.id}>
-                        {usuario.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {getUsuarioSemCartao().length === 0 && (
-                  <Alert>
-                    <AlertDescription>
-                      Todos os usuários já possuem cartões associados.
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </div>
-            )}
-            
-            {gravingStatus !== 'idle' && (
-              <div className="space-y-4 text-center">
-                {gravingStatus === 'waiting' && (
-                  <div className="space-y-2">
-                    <Zap className="h-12 w-12 mx-auto text-blue-600 animate-pulse" />
-                    <p className="font-medium text-blue-600">Aguardando cartão RFID</p>
-                    <p className="text-sm text-muted-foreground">
-                      Aproxime o cartão do leitor para gravar
-                    </p>
-                  </div>
-                )}
-                {gravingStatus === 'success' && (
-                  <div className="space-y-2">
-                    <CheckCircle className="h-12 w-12 mx-auto text-green-600" />
-                    <p className="font-medium text-green-600">Cartão gravado com sucesso!</p>
-                    <p className="text-sm text-muted-foreground">
-                      O cartão foi associado ao usuário
-                    </p>
-                  </div>
-                )}
-                {gravingStatus === 'error' && (
-                  <div className="space-y-2">
-                    <XCircle className="h-12 w-12 mx-auto text-red-600" />
-                    <p className="font-medium text-red-600">Erro na gravação</p>
-                    <p className="text-sm text-muted-foreground">
-                      Tente novamente ou verifique o leitor
-                    </p>
-                  </div>
-                )}
-                <Progress value={gravingProgress} className="w-full" />
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            {gravingStatus === 'idle' && (
-              <>
+      {canEditCards && (
+        <Dialog open={isGravingModalOpen} onOpenChange={setIsGravingModalOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Gravar Novo Cartão RFID</DialogTitle>
+              <DialogDescription>
+                Selecione um usuário e siga as instruções para gravar um novo cartão RFID.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              {gravingStatus === 'idle' && (
+                <div className="space-y-4">
+                  <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um usuário" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getUsuarioSemCartao().map((usuario) => (
+                        <SelectItem key={usuario.id} value={usuario.id}>
+                          {usuario.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {getUsuarioSemCartao().length === 0 && (
+                    <Alert>
+                      <AlertDescription>
+                        Todos os usuários já possuem cartões associados.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              )}
+              
+              {gravingStatus !== 'idle' && (
+                <div className="space-y-4 text-center">
+                  {gravingStatus === 'waiting' && (
+                    <div className="space-y-2">
+                      <Zap className="h-12 w-12 mx-auto text-blue-600 animate-pulse" />
+                      <p className="font-medium text-blue-600">Aguardando cartão RFID</p>
+                      <p className="text-sm text-muted-foreground">
+                        Aproxime o cartão do leitor para gravar
+                      </p>
+                    </div>
+                  )}
+                  {gravingStatus === 'success' && (
+                    <div className="space-y-2">
+                      <CheckCircle className="h-12 w-12 mx-auto text-green-600" />
+                      <p className="font-medium text-green-600">Cartão gravado com sucesso!</p>
+                      <p className="text-sm text-muted-foreground">
+                        O cartão foi associado ao usuário
+                      </p>
+                    </div>
+                  )}
+                  {gravingStatus === 'error' && (
+                    <div className="space-y-2">
+                      <XCircle className="h-12 w-12 mx-auto text-red-600" />
+                      <p className="font-medium text-red-600">Erro na gravação</p>
+                      <p className="text-sm text-muted-foreground">
+                        Tente novamente ou verifique o leitor
+                      </p>
+                    </div>
+                  )}
+                  <Progress value={gravingProgress} className="w-full" />
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              {gravingStatus === 'idle' && (
+                <>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setIsGravingModalOpen(false)}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button 
+                    onClick={handleGravarCartao}
+                    disabled={!selectedUserId}
+                  >
+                    <Zap className="h-4 w-4 mr-2" />
+                    Iniciar Gravação
+                  </Button>
+                </>
+              )}
+              {gravingStatus === 'error' && (
                 <Button 
-                  variant="outline" 
-                  onClick={() => setIsGravingModalOpen(false)}
+                  onClick={() => {
+                    setGravingStatus('idle');
+                    setGravingProgress(0);
+                  }}
                 >
-                  Cancelar
+                  Tentar Novamente
                 </Button>
-                <Button 
-                  onClick={handleGravarCartao}
-                  disabled={!selectedUserId}
-                >
-                  <Zap className="h-4 w-4 mr-2" />
-                  Iniciar Gravação
-                </Button>
-              </>
-            )}
-            {gravingStatus === 'error' && (
-              <Button 
-                onClick={() => {
-                  setGravingStatus('idle');
-                  setGravingProgress(0);
-                }}
-              >
-                Tentar Novamente
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

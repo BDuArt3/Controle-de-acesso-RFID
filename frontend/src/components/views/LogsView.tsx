@@ -11,6 +11,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar as CalendarComponent } from '../ui/calendar';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { usePermissions } from '../../hooks/usePermissions';
+import { AccessDeniedView } from '../ui/AccessDeniedView';
 import { services } from '../../services';
 import { LogAcessoDto, TipoMotivoAcesso, LogAcessoUtils } from '../../services/logAcessoService';
 import { toast } from 'sonner';
@@ -38,6 +40,7 @@ interface LogStats {
 }
 
 export function LogsView() {
+  const { canView } = usePermissions();
   const [logs, setLogs] = useState<AccessLog[]>([]);
   const [filteredLogs, setFilteredLogs] = useState<AccessLog[]>([]);
   const [stats, setStats] = useState<LogStats>({ total: 0, permitidos: 0, negados: 0, uniqueUsers: 0 });
@@ -49,6 +52,11 @@ export function LogsView() {
   const [dateRange, setDateRange] = useState<{from?: Date, to?: Date}>({});
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+
+  // Verificação de permissão para acessar esta view
+  if (!canView('logs')) {
+    return <AccessDeniedView />;
+  }
 
   useEffect(() => {
     loadLogs();
