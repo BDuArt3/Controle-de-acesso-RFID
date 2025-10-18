@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using ControleDeAcesso.Core.Entities;
 
 namespace ControleDeAcesso.Application.DTOs
 {
@@ -13,5 +14,8 @@ namespace ControleDeAcesso.Application.DTOs
 
         [StringLength(200, ErrorMessage = "Motivo deve ter no máximo 200 caracteres")]
         public string Motivo { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Tipo do motivo é obrigatório")]
+        public TipoMotivoAcesso MotivoTipo { get; set; } = TipoMotivoAcesso.ErroInterno;
     }
 }

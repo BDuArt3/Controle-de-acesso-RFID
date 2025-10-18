@@ -110,6 +110,9 @@ namespace ControleDeAcesso.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<int>("MotivoTipo")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.ToTable("LogsAcesso");

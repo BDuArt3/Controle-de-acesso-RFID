@@ -41,6 +41,7 @@ namespace ControleDeAcesso.Application.Services
                     CartaoUid = createLogAcessoDto.CartaoUid.Trim(),
                     AcessoPermitido = createLogAcessoDto.AcessoPermitido,
                     Motivo = createLogAcessoDto.Motivo?.Trim() ?? string.Empty,
+                    MotivoTipo = createLogAcessoDto.MotivoTipo,
                     DataHora = DateTime.Now
                 };
 
@@ -320,7 +321,8 @@ namespace ControleDeAcesso.Application.Services
                 DataHora = logAcesso.DataHora,
                 CartaoUid = logAcesso.CartaoUid,
                 AcessoPermitido = logAcesso.AcessoPermitido,
-                Motivo = logAcesso.Motivo
+                Motivo = logAcesso.Motivo,
+                MotivoTipo = logAcesso.MotivoTipo
             };
 
             // Tentar obter informações do usuário através do cartão

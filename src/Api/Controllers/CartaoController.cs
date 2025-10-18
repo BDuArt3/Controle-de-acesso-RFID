@@ -2,37 +2,71 @@ using Microsoft.AspNetCore.Mvc;
 using ControleDeAcesso.Application.Services.Interfaces;
 using ControleDeAcesso.Application.DTOs;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.SignalR;
+using ControleDeAcesso.Api.Hubs;
+using Microsoft.AspNetCore.Authorization;
 
 namespace ControleDeAcesso.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize] // Requer autenticação para todos os endpoints
     public class CartaoController : ControllerBase
     {
         private readonly ICartaoService _cartaoService;
         private readonly ILogger<CartaoController> _logger;
+        private readonly IHubContext<GravacaoHub> _hubContext;
 
-        public CartaoController(ICartaoService cartaoService, ILogger<CartaoController> logger)
+        public CartaoController(
+            ICartaoService cartaoService, 
+            ILogger<CartaoController> logger,
+            IHubContext<GravacaoHub> hubContext)
         {
             _cartaoService = cartaoService;
             _logger = logger;
+            _hubContext = hubContext;
         }
 
         /// <summary>
-        /// Cria um novo cartão
+        /// Cria e grava um novo cartão RFID
+        /// O GUID é gerado automaticamente pelo sistema para garantir segurança
         /// </summary>
-        /// <param name="createCartaoDto">Dados do cartão a ser criado</param>
-        /// <returns>Cartão criado</returns>
+        /// <param name="gravarCartaoDto">Dados da solicitação de gravação</param>
+        /// <returns>Status da solicitação de gravação</returns>
         [HttpPost]
-        public async Task<ActionResult<CartaoDto>> Create([FromBody] CreateCartaoDto createCartaoDto)
+        [Authorize(Policy = "AdminOrOperador")] // Admins e Operadores podem gravar cartões
+        public async Task<ActionResult<GravacaoCartaoResponseDto>> SolicitarGravacao([FromBody] GravarCartaoDto gravarCartaoDto)
         {
-            _logger.LogInformation("Requisição para criar cartão. UID: {Uid}, UsuarioId: {UsuarioId}", 
-                createCartaoDto.Uid, createCartaoDto.UsuarioId);
+            _logger.LogInformation("Solicitação de gravação de cartão para usuário: {UsuarioId}", gravarCartaoDto.UsuarioId);
 
             try
             {
-                var cartao = await _cartaoService.CreateAsync(createCartaoDto);
-                return CreatedAtAction(nameof(GetById), new { id = cartao.Id }, cartao);
+                // Gerar GUID único e seguro
+                string guidGerado = Guid.NewGuid().ToString();
+                
+                // Registrar solicitação pendente para rastreamento
+                GravacaoHub.AdicionarSolicitacaoPendente(guidGerado, gravarCartaoDto.UsuarioId);
+                
+                // NÃO criar o cartão ainda - aguardar confirmação do Arduino
+                // O cartão será criado apenas quando o Worker confirmar a gravação bem-sucedida
+                
+                // Enviar comando de gravação para todos os Worker Services conectados
+                await _hubContext.Clients.All.SendAsync("ReceberComandoGravacao", guidGerado);
+                
+                _logger.LogInformation("Comando de gravação enviado para GUID: {guid}", guidGerado);
+                
+                // Retornar resposta sem expor o GUID completo
+                var response = new GravacaoCartaoResponseDto
+                {
+                    CartaoRef = guidGerado.Substring(0, 8) + "...", // Apenas primeiros 8 caracteres
+                    Status = "Solicitado",
+                    Mensagem = "Comando de gravação enviado. Aproxime o cartão do leitor.",
+                    UsuarioId = gravarCartaoDto.UsuarioId,
+                    NomeUsuario = "", // Será preenchido quando o cartão for criado
+                    DataSolicitacao = DateTime.UtcNow
+                };
+                
+                return Ok(response);
             }
             catch (ArgumentException ex)
             {
@@ -44,7 +78,66 @@ namespace ControleDeAcesso.Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao criar cartão");
+                _logger.LogError(ex, "Erro ao solicitar gravação de cartão");
+                return StatusCode(500, new { message = "Erro interno do servidor", details = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Confirma a gravação bem-sucedida de um cartão RFID
+        /// Chamado pelo Worker quando o Arduino confirma a gravação
+        /// </summary>
+        /// <param name="request">Dados da confirmação de gravação</param>
+        /// <returns>Status da confirmação</returns>
+        [HttpPost("confirmar-gravacao")]
+        public async Task<ActionResult> ConfirmarGravacao([FromBody] ConfirmarGravacaoRequestDto request)
+        {
+            _logger.LogInformation("Confirmação de gravação de cartão para GUID: {GuidGravado}", request.GuidGravado);
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.GuidGravado))
+                {
+                    return BadRequest(new { message = "GUID gravado é obrigatório" });
+                }
+
+                // Buscar a solicitação pendente para encontrar o usuário
+                var usuarioId = GravacaoHub.RemoverSolicitacaoPendente(request.GuidGravado);
+                
+                if (string.IsNullOrEmpty(usuarioId))
+                {
+                    _logger.LogWarning("Solicitação de gravação não encontrada para GUID: {guid}", request.GuidGravado);
+                    return BadRequest(new { message = "Solicitação de gravação não encontrada" });
+                }
+                
+                var createCartaoDto = new CreateCartaoDto
+                {
+                    Uid = request.GuidGravado,
+                    UsuarioId = usuarioId
+                };
+                
+                try
+                {
+                    var cartao = await _cartaoService.CreateAsync(createCartaoDto);
+                    _logger.LogInformation("Cartão criado com sucesso após confirmação de gravação. ID: {Id}, UID: {Uid}", 
+                        cartao.Id, cartao.Uid);
+                        
+                    return Ok(new { 
+                        message = "Cartão criado com sucesso", 
+                        cartaoId = cartao.Id,
+                        uid = cartao.Uid 
+                    });
+                }
+                catch (InvalidOperationException ex) when (ex.Message.Contains("já está em uso"))
+                {
+                    // GUID já existe - possivelmente gravação duplicada
+                    _logger.LogWarning("Tentativa de criar cartão com GUID já existente: {guid}", request.GuidGravado);
+                    return Ok(new { message = "Cartão já existe no sistema" });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao confirmar gravação de cartão");
                 return StatusCode(500, new { message = "Erro interno do servidor", details = ex.Message });
             }
         }
@@ -114,13 +207,14 @@ namespace ControleDeAcesso.Api.Controllers
         }
 
         /// <summary>
-        /// Lista todos os cartões ativos
+        /// Lista todos os cartões (incluindo inativos)
         /// </summary>
-        /// <returns>Lista de cartões ativos</returns>
+        /// <returns>Lista de todos os cartões</returns>
         [HttpGet]
+        [Authorize(Policy = "TodosFuncionarios")] // Todos os funcionários podem listar cartões
         public async Task<ActionResult<IEnumerable<CartaoDto>>> GetAll()
         {
-            _logger.LogInformation("Requisição para listar todos os cartões ativos");
+            _logger.LogInformation("Requisição para listar todos os cartões (incluindo inativos)");
 
             try
             {
@@ -255,5 +349,13 @@ namespace ControleDeAcesso.Api.Controllers
                 return StatusCode(500, new { message = "Erro interno do servidor", details = ex.Message });
             }
         }
+    }
+
+    /// <summary>
+    /// DTO para confirmação de gravação de cartão
+    /// </summary>
+    public class ConfirmarGravacaoRequestDto
+    {
+        public string GuidGravado { get; set; } = string.Empty;
     }
 }

@@ -2,9 +2,10 @@ namespace ControleDeAcesso.Core.Entities
 {
     public enum TipoUsuario
     {
-        Aluno,
-        Professor,
-        Visitante
+        Aluno = 0,
+        Professor = 1,
+        Visitante = 2,
+        Funcionario = 3
     }
 
     public class Usuario

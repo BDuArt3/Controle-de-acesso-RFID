@@ -102,16 +102,15 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
 
         public async Task<IEnumerable<Cartao>> GetAllAsync()
         {
-            _logger.LogInformation("Buscando todos os cartões ativos");
+            _logger.LogInformation("Buscando todos os cartões (incluindo inativos)");
 
             try
             {
                 var cartoes = await _context.Cartoes
                                      .Include(c => c.Usuario)
-                                     .Where(c => c.IsActive)
                                      .ToListAsync();
 
-                _logger.LogInformation("Encontrados {Count} cartões ativos", cartoes.Count());
+                _logger.LogInformation("Encontrados {Count} cartões", cartoes.Count());
 
                 return cartoes;
             }
@@ -141,6 +140,29 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erro ao buscar cartões por UsuarioId: {UsuarioId}", usuarioId);
+                throw;
+            }
+        }
+
+        public async Task<IEnumerable<Cartao>> GetAllByUsuarioIdAsync(string usuarioId)
+        {
+            _logger.LogInformation("Buscando todos os cartões (ativos e inativos) por UsuarioId: {UsuarioId}", usuarioId);
+
+            try
+            {
+                var cartoes = await _context.Cartoes
+                                     .Include(c => c.Usuario)
+                                     .Where(c => c.UsuarioId == usuarioId)
+                                     .ToListAsync();
+
+                _logger.LogInformation("Encontrados {Count} cartões (ativos e inativos) para o usuário {UsuarioId}", 
+                    cartoes.Count(), usuarioId);
+
+                return cartoes;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao buscar todos os cartões por UsuarioId: {UsuarioId}", usuarioId);
                 throw;
             }
         }

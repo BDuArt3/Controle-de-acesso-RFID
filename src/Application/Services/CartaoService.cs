@@ -52,16 +52,27 @@ namespace ControleDeAcesso.Application.Services
                     throw new InvalidOperationException($"UID {createCartaoDto.Uid} já está em uso");
                 }
 
+                // REGRA DE NEGÓCIO: Desativar outros cartões do mesmo usuário antes de criar o novo
+                var cartoesExistentes = await _cartaoRepository.GetAllByUsuarioIdAsync(createCartaoDto.UsuarioId);
+                foreach (var cartaoExistente in cartoesExistentes.Where(c => c.IsActive))
+                {
+                    _logger.LogInformation("Desativando cartão existente. ID: {Id}, UID: {Uid}", 
+                        cartaoExistente.Id, cartaoExistente.Uid);
+                    
+                    cartaoExistente.IsActive = false;
+                    await _cartaoRepository.UpdateAsync(cartaoExistente);
+                }
+
                 var cartao = new Cartao
                 {
                     Uid = createCartaoDto.Uid.Trim(),
                     UsuarioId = createCartaoDto.UsuarioId.Trim(),
-                    IsActive = true
+                    IsActive = true // Novo cartão sempre ativo
                 };
 
                 var cartaoCriado = await _cartaoRepository.CreateAsync(cartao);
 
-                _logger.LogInformation("Cartão criado com sucesso. ID: {Id}, UID: {Uid}", 
+                _logger.LogInformation("Cartão criado com sucesso. ID: {Id}, UID: {Uid}. Cartões anteriores foram desativados.", 
                     cartaoCriado.Id, cartaoCriado.Uid);
 
                 return MapToDto(cartaoCriado);
@@ -136,13 +147,13 @@ namespace ControleDeAcesso.Application.Services
 
         public async Task<IEnumerable<CartaoDto>> GetAllAsync()
         {
-            _logger.LogInformation("Buscando todos os cartões ativos");
+            _logger.LogInformation("Buscando todos os cartões (incluindo inativos)");
 
             try
             {
                 var cartoes = await _cartaoRepository.GetAllAsync();
 
-                _logger.LogInformation("Encontrados {Count} cartões ativos", cartoes.Count());
+                _logger.LogInformation("Encontrados {Count} cartões", cartoes.Count());
 
                 return cartoes.Select(MapToDto);
             }
@@ -288,10 +299,21 @@ namespace ControleDeAcesso.Application.Services
                     return false;
                 }
 
+                // REGRA DE NEGÓCIO: Desativar outros cartões do mesmo usuário antes de ativar este
+                var cartoesDoUsuario = await _cartaoRepository.GetAllByUsuarioIdAsync(cartao.UsuarioId);
+                foreach (var outroCartao in cartoesDoUsuario.Where(c => c.IsActive && c.Id != id))
+                {
+                    _logger.LogInformation("Desativando cartão existente antes de ativar novo. ID: {Id}, UID: {Uid}", 
+                        outroCartao.Id, outroCartao.Uid);
+                    
+                    outroCartao.IsActive = false;
+                    await _cartaoRepository.UpdateAsync(outroCartao);
+                }
+
                 cartao.IsActive = true;
                 await _cartaoRepository.UpdateAsync(cartao);
 
-                _logger.LogInformation("Cartão ativado com sucesso. ID: {Id}, UID: {Uid}", 
+                _logger.LogInformation("Cartão ativado com sucesso. ID: {Id}, UID: {Uid}. Outros cartões do usuário foram desativados.", 
                     cartao.Id, cartao.Uid);
 
                 return true;
@@ -310,7 +332,8 @@ namespace ControleDeAcesso.Application.Services
                 Id = cartao.Id,
                 Uid = cartao.Uid,
                 IsActive = cartao.IsActive,
-                UsuarioId = cartao.UsuarioId
+                UsuarioId = cartao.UsuarioId,
+                NomeUsuario = cartao.Usuario?.Nome ?? "Usuário não encontrado"
             };
         }
     }

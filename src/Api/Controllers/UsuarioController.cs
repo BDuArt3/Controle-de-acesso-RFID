@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Mvc;
 using ControleDeAcesso.Application.Services.Interfaces;
 using ControleDeAcesso.Application.DTOs;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Authorization;
 
 namespace ControleDeAcesso.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize] // Requer autenticação para todos os endpoints
     public class UsuarioController : ControllerBase
     {
         private readonly IUsuarioService _usuarioService;
@@ -24,6 +26,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="createUsuarioDto">Dados do usuário a ser criado</param>
         /// <returns>Usuário criado</returns>
         [HttpPost]
+        [Authorize(Policy = "AdminOrOperador")] // Admins e Operadores podem criar usuários
         public async Task<ActionResult<UsuarioDto>> Create([FromBody] CreateUsuarioDto createUsuarioDto)
         {
             _logger.LogInformation("Requisição para criar usuário. Nome: {Nome}, Tipo: {Tipo}", 
@@ -82,6 +85,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// </summary>
         /// <returns>Lista de usuários ativos</returns>
         [HttpGet]
+        [Authorize(Policy = "TodosFuncionarios")] // Todos os funcionários podem listar usuários
         public async Task<ActionResult<IEnumerable<UsuarioDto>>> GetAll()
         {
             _logger.LogInformation("Requisição para listar todos os usuários ativos");
@@ -105,6 +109,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="updateUsuarioDto">Dados atualizados do usuário</param>
         /// <returns>Usuário atualizado</returns>
         [HttpPut("{id}")]
+        [Authorize(Policy = "AdminOnly")] // Apenas admins podem atualizar usuários
         public async Task<ActionResult<UsuarioDto>> Update(string id, [FromBody] CreateUsuarioDto updateUsuarioDto)
         {
             _logger.LogInformation("Requisição para atualizar usuário. ID: {Id}, Nome: {Nome}", 
@@ -136,6 +141,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="id">ID do usuário</param>
         /// <returns>Resultado da operação</returns>
         [HttpDelete("{id}")]
+        [Authorize(Policy = "AdminOnly")] // Apenas admins podem desativar usuários
         public async Task<ActionResult> Delete(string id)
         {
             _logger.LogInformation("Requisição para desativar usuário. ID: {Id}", id);
@@ -168,6 +174,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="id">ID do usuário</param>
         /// <returns>Resultado da operação</returns>
         [HttpPut("{id}/ativar")]
+        [Authorize(Policy = "AdminOnly")] // Apenas admins podem ativar usuários
         public async Task<ActionResult> Activate(string id)
         {
             _logger.LogInformation("Requisição para ativar usuário. ID: {Id}", id);

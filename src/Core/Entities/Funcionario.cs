@@ -2,8 +2,9 @@ namespace ControleDeAcesso.Core.Entities
 {
     public enum TipoFuncionario
     {
-        Comum,
-        Admin
+        Visualizador = 0,  // Apenas consulta - menor privilégio
+        Operador = 1,      // Pode cadastrar usuários e gravar cartões
+        Admin = 2          // Acesso completo - maior privilégio
     }
 
     public class Funcionario
