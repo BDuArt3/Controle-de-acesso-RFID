@@ -20,8 +20,8 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
 
         public async Task<Funcionario> CreateAsync(Funcionario funcionario)
         {
-            _logger.LogInformation("Iniciando criação de funcionário. Nome: {Nome}, UsuarioAcesso: {UsuarioAcesso}", 
-                funcionario.NomeFuncionario, funcionario.UsuarioAcesso);
+            _logger.LogInformation("Iniciando criação de funcionário. Nome: {Nome}, Email: {Email}", 
+                funcionario.NomeFuncionario, funcionario.Email);
 
             try
             {
@@ -36,8 +36,8 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao criar funcionário. Nome: {Nome}, UsuarioAcesso: {UsuarioAcesso}", 
-                    funcionario.NomeFuncionario, funcionario.UsuarioAcesso);
+                _logger.LogError(ex, "Erro ao criar funcionário. Nome: {Nome}, Email: {Email}", 
+                    funcionario.NomeFuncionario, funcionario.Email);
                 throw;
             }
         }
@@ -70,18 +70,18 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             }
         }
 
-        public async Task<Funcionario?> GetByUsuarioAcessoAsync(string usuarioAcesso)
+        public async Task<Funcionario?> GetByEmailAsync(string Email)
         {
-            _logger.LogInformation("Buscando funcionário por usuário de acesso: {UsuarioAcesso}", usuarioAcesso);
+            _logger.LogInformation("Buscando funcionário por email: {Email}", Email);
 
             try
             {
                 var funcionario = await _context.Funcionarios
-                                     .FirstOrDefaultAsync(f => f.UsuarioAcesso == usuarioAcesso);
+                                     .FirstOrDefaultAsync(f => f.Email == Email);
 
                 if (funcionario == null)
                 {
-                    _logger.LogWarning("Funcionário não encontrado para usuário de acesso: {UsuarioAcesso}", usuarioAcesso);
+                    _logger.LogWarning("Funcionário não encontrado para email: {Email}", Email);
                 }
                 else
                 {
@@ -93,7 +93,7 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao buscar funcionário por usuário de acesso: {UsuarioAcesso}", usuarioAcesso);
+                _logger.LogError(ex, "Erro ao buscar funcionário por usuário de acesso: {Email}", Email);
                 throw;
             }
         }
@@ -170,23 +170,23 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             }
         }
 
-        public async Task<bool> UsuarioAcessoExistsAsync(string usuarioAcesso)
+        public async Task<bool> EmailExistsAsync(string Email)
         {
-            _logger.LogInformation("Verificando se usuário de acesso já existe: {UsuarioAcesso}", usuarioAcesso);
+            _logger.LogInformation("Verificando se usuário de acesso já existe: {Email}", Email);
 
             try
             {
                 var exists = await _context.Funcionarios
-                                   .AnyAsync(f => f.UsuarioAcesso == usuarioAcesso);
+                                   .AnyAsync(f => f.Email == Email);
 
-                _logger.LogInformation("Verificação de usuário de acesso concluída. UsuarioAcesso: {UsuarioAcesso}, Existe: {Exists}", 
-                    usuarioAcesso, exists);
+                _logger.LogInformation("Verificação de usuário de acesso concluída. Email: {Email}, Existe: {Exists}", 
+                    Email, exists);
 
                 return exists;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao verificar se usuário de acesso existe: {UsuarioAcesso}", usuarioAcesso);
+                _logger.LogError(ex, "Erro ao verificar se usuário de acesso existe: {Email}", Email);
                 throw;
             }
         }

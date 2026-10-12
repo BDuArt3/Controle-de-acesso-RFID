@@ -28,7 +28,7 @@ namespace ControleDeAcesso.Api.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody] LoginDto loginDto)
         {
-            _logger.LogInformation("Tentativa de login para usuário: {UsuarioAcesso}", loginDto.UsuarioAcesso);
+            _logger.LogInformation("Tentativa de login para o email: {Email}", loginDto.Email);
 
             try
             {
@@ -41,19 +41,18 @@ namespace ControleDeAcesso.Api.Controllers
 
                 if (resultado.Success)
                 {
-                    _logger.LogInformation("Login realizado com sucesso para usuário: {UsuarioAcesso}", loginDto.UsuarioAcesso);
+                    _logger.LogInformation("Login realizado com sucesso para o email: {Email}", loginDto.Email);
                     return Ok(resultado);
                 }
                 else
                 {
-                    _logger.LogWarning("Falha no login para usuário: {UsuarioAcesso} - {Message}", 
-                        loginDto.UsuarioAcesso, resultado.Message);
+                    _logger.LogWarning("Falha no login: {Message}", resultado.Message);
                     return Unauthorized(resultado);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro inesperado durante login para usuário: {UsuarioAcesso}", loginDto.UsuarioAcesso);
+                _logger.LogError(ex, "Erro inesperado durante login");
                 return StatusCode(500, new LoginResponseDto 
                 { 
                     Success = false, 
@@ -148,13 +147,13 @@ namespace ControleDeAcesso.Api.Controllers
                 var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
                 var userName = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value;
                 var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
-                var usuarioAcesso = User.FindFirst("usuario_acesso")?.Value;
+                var userEmail = User.FindFirst("email")?.Value;
 
                 return Ok(new
                 {
                     id = userId,
                     nome = userName,
-                    usuarioAcesso = usuarioAcesso,
+                    Email = userEmail,
                     tipo = userRole,
                     isAuthenticated = true
                 });
