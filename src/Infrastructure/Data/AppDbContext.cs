@@ -54,13 +54,13 @@ namespace ControleDeAcesso.Infrastructure.Data
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Id).HasMaxLength(36);
                 entity.Property(e => e.NomeFuncionario).IsRequired().HasMaxLength(100);
-                entity.Property(e => e.UsuarioAcesso).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.Email).IsRequired().HasMaxLength(50);
                 entity.Property(e => e.SenhaHash).IsRequired().HasMaxLength(255);
                 entity.Property(e => e.Tipo).IsRequired();
                 entity.Property(e => e.IsActive).IsRequired();
 
                 // Índice único para o usuário de acesso
-                entity.HasIndex(e => e.UsuarioAcesso).IsUnique();
+                entity.HasIndex(e => e.Email).IsUnique();
             });
 
             // Configuração da entidade LogAcesso

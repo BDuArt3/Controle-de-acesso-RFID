@@ -31,27 +31,27 @@ namespace ControleDeAcesso.Application.Services
 
         public async Task<LoginResponseDto> LoginAsync(LoginDto loginDto)
         {
-            _logger.LogInformation("Tentativa de login para usuário: {UsuarioAcesso}", loginDto.UsuarioAcesso);
+            _logger.LogInformation("Tentativa de login para email: {Email}", loginDto.Email);
 
             try
             {
-                // Buscar funcionário por usuário de acesso
-                var funcionario = await _funcionarioRepository.GetByUsuarioAcessoAsync(loginDto.UsuarioAcesso);
+                // Buscar funcionário por email
+                var funcionario = await _funcionarioRepository.GetByEmailAsync(loginDto.Email);
 
                 if (funcionario == null)
                 {
-                    _logger.LogWarning("Usuário não encontrado: {UsuarioAcesso}", loginDto.UsuarioAcesso);
+                    _logger.LogWarning("Email não encontrado: {Email}", loginDto.Email);
                     return new LoginResponseDto
                     {
                         Success = false,
-                        Message = "Usuário ou senha inválidos."
+                        Message = "Email ou senha inválidos."
                     };
                 }
 
                 // Verificar se o funcionário está ativo
                 if (!funcionario.IsActive)
                 {
-                    _logger.LogWarning("Tentativa de login com usuário inativo: {UsuarioAcesso}", loginDto.UsuarioAcesso);
+                    _logger.LogWarning("Tentativa de login com usuário inativo: {email}", loginDto.Email);
                     return new LoginResponseDto
                     {
                         Success = false,
@@ -62,7 +62,7 @@ namespace ControleDeAcesso.Application.Services
                 // Verificar senha
                 if (!BCrypt.Net.BCrypt.Verify(loginDto.Senha, funcionario.SenhaHash))
                 {
-                    _logger.LogWarning("Senha incorreta para usuário: {UsuarioAcesso}", loginDto.UsuarioAcesso);
+                    _logger.LogWarning("Senha incorreta para usuário: {Email}", loginDto.Email);
                     return new LoginResponseDto
                     {
                         Success = false,
@@ -75,7 +75,7 @@ namespace ControleDeAcesso.Application.Services
                 {
                     Id = funcionario.Id,
                     NomeFuncionario = funcionario.NomeFuncionario,
-                    UsuarioAcesso = funcionario.UsuarioAcesso,
+                    Email = funcionario.Email,
                     Tipo = funcionario.Tipo,
                     IsActive = funcionario.IsActive
                 };
@@ -96,7 +96,7 @@ namespace ControleDeAcesso.Application.Services
                     TokenType = "Bearer"
                 };
 
-                _logger.LogInformation("Login realizado com sucesso para usuário: {UsuarioAcesso}", loginDto.UsuarioAcesso);
+                _logger.LogInformation("Login realizado com sucesso para usuário: {Email}", loginDto.Email);
 
                 return new LoginResponseDto
                 {
@@ -108,7 +108,7 @@ namespace ControleDeAcesso.Application.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro durante o login para usuário: {UsuarioAcesso}", loginDto.UsuarioAcesso);
+                _logger.LogError(ex, "Erro durante o login para usuário: {Email}", loginDto.Email);
                 return new LoginResponseDto
                 {
                     Success = false,
@@ -152,7 +152,7 @@ namespace ControleDeAcesso.Application.Services
                 {
                     Id = funcionario.Id,
                     NomeFuncionario = funcionario.NomeFuncionario,
-                    UsuarioAcesso = funcionario.UsuarioAcesso,
+                    Email = funcionario.Email,
                     Tipo = funcionario.Tipo,
                     IsActive = funcionario.IsActive
                 };
@@ -244,7 +244,7 @@ namespace ControleDeAcesso.Application.Services
             {
                 new Claim(ClaimTypes.NameIdentifier, funcionario.Id),
                 new Claim(ClaimTypes.Name, funcionario.NomeFuncionario),
-                new Claim("usuario_acesso", funcionario.UsuarioAcesso),
+                new Claim("email", funcionario.Email),
                 new Claim(ClaimTypes.Role, funcionario.Tipo.ToString()),
                 new Claim("tipo_funcionario", funcionario.Tipo.ToString())
             };

@@ -96,14 +96,15 @@ namespace ControleDeAcesso.Api
                 {
                     policy.WithOrigins(
                             "http://localhost:5173",
-                            "http://localhost:3000",
+                        "http://localhost:3000",
                             "http://localhost:4173",
                             "https://*.azurestaticapps.net",  // Permitir Azure Static Web Apps (wildcard)
                             "https://witty-mushroom-06bc22d0f.2.azurestaticapps.net",
                             "https://delightful-plant-08df30610.3.azurestaticapps.net")  // URL específica do seu site
                           .AllowAnyMethod()
                           .AllowAnyHeader()
-                          .AllowCredentials();
+                          .AllowCredentials()
+                          .SetIsOriginAllowedToAllowWildcardSubdomains();
                 });
             });
 
