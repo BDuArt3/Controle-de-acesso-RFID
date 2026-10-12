@@ -21,28 +21,28 @@ namespace ControleDeAcesso.Application.Services
 
         public async Task<FuncionarioDto> CreateAsync(CreateFuncionarioDto funcionarioDto)
         {
-            _logger.LogInformation("Iniciando criação de funcionário. Nome: {Nome}, UsuarioAcesso: {UsuarioAcesso}, Tipo: {Tipo}", 
-                funcionarioDto.NomeFuncionario, funcionarioDto.UsuarioAcesso, funcionarioDto.Tipo);
+            _logger.LogInformation("Iniciando criação de funcionário. Nome: {Nome}, Email: {Email}, Tipo: {Tipo}", 
+                funcionarioDto.NomeFuncionario, funcionarioDto.Email, funcionarioDto.Tipo);
 
             try
             {
                 // Validação: verificar se o usuário de acesso já existe
-                if (await _funcionarioRepository.UsuarioAcessoExistsAsync(funcionarioDto.UsuarioAcesso))
+                if (await _funcionarioRepository.EmailExistsAsync(funcionarioDto.Email))
                 {
-                    _logger.LogWarning("Tentativa de criar funcionário com usuário de acesso já existente: {UsuarioAcesso}", 
-                        funcionarioDto.UsuarioAcesso);
+                    _logger.LogWarning("Tentativa de criar funcionário com usuário de acesso já existente: {Email}", 
+                        funcionarioDto.Email);
                     throw new InvalidOperationException("Usuário de acesso já existe.");
                 }
 
                 // Criptografar a senha
                 var senhaHash = BCrypt.Net.BCrypt.HashPassword(funcionarioDto.Senha);
-                _logger.LogInformation("Senha criptografada com sucesso para o funcionário: {UsuarioAcesso}", 
-                    funcionarioDto.UsuarioAcesso);
+                _logger.LogInformation("Senha criptografada com sucesso para o funcionário: {Email}", 
+                    funcionarioDto.Email);
 
                 var funcionario = new Funcionario
                 {
                     NomeFuncionario = funcionarioDto.NomeFuncionario,
-                    UsuarioAcesso = funcionarioDto.UsuarioAcesso,
+                    Email = funcionarioDto.Email,
                     SenhaHash = senhaHash,
                     Tipo = funcionarioDto.Tipo,
                     IsActive = true
@@ -50,14 +50,14 @@ namespace ControleDeAcesso.Application.Services
 
                 var novoFuncionario = await _funcionarioRepository.CreateAsync(funcionario);
 
-                _logger.LogInformation("Funcionário criado com sucesso. ID: {Id}, Nome: {Nome}, UsuarioAcesso: {UsuarioAcesso}", 
-                    novoFuncionario.Id, novoFuncionario.NomeFuncionario, novoFuncionario.UsuarioAcesso);
+                _logger.LogInformation("Funcionário criado com sucesso. ID: {Id}, Nome: {Nome}, Email: {Email}", 
+                    novoFuncionario.Id, novoFuncionario.NomeFuncionario, novoFuncionario.Email);
 
                 return new FuncionarioDto
                 {
                     Id = novoFuncionario.Id,
                     NomeFuncionario = novoFuncionario.NomeFuncionario,
-                    UsuarioAcesso = novoFuncionario.UsuarioAcesso,
+                    Email = novoFuncionario.Email,
                     Tipo = novoFuncionario.Tipo,
                     IsActive = novoFuncionario.IsActive
                 };
@@ -69,8 +69,8 @@ namespace ControleDeAcesso.Application.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro inesperado ao criar funcionário. Nome: {Nome}, UsuarioAcesso: {UsuarioAcesso}", 
-                    funcionarioDto.NomeFuncionario, funcionarioDto.UsuarioAcesso);
+                _logger.LogError(ex, "Erro inesperado ao criar funcionário. Nome: {Nome}, Email: {Email}", 
+                    funcionarioDto.NomeFuncionario, funcionarioDto.Email);
                 throw;
             }
         }
@@ -96,7 +96,7 @@ namespace ControleDeAcesso.Application.Services
                 {
                     Id = funcionario.Id,
                     NomeFuncionario = funcionario.NomeFuncionario,
-                    UsuarioAcesso = funcionario.UsuarioAcesso,
+                    Email = funcionario.Email,
                     Tipo = funcionario.Tipo,
                     IsActive = funcionario.IsActive
                 };
@@ -119,7 +119,7 @@ namespace ControleDeAcesso.Application.Services
                 {
                     Id = f.Id,
                     NomeFuncionario = f.NomeFuncionario,
-                    UsuarioAcesso = f.UsuarioAcesso,
+                    Email = f.Email,
                     Tipo = f.Tipo,
                     IsActive = f.IsActive
                 }).ToList();
@@ -150,17 +150,17 @@ namespace ControleDeAcesso.Application.Services
                 }
 
                 // Verificar se o novo usuário de acesso já existe (exceto para o próprio funcionário)
-                var funcionarioComMesmoUsuario = await _funcionarioRepository.GetByUsuarioAcessoAsync(funcionarioDto.UsuarioAcesso);
+                var funcionarioComMesmoUsuario = await _funcionarioRepository.GetByEmailAsync(funcionarioDto.Email);
                 if (funcionarioComMesmoUsuario != null && funcionarioComMesmoUsuario.Id != id)
                 {
-                    _logger.LogWarning("Tentativa de atualizar funcionário com usuário de acesso já existente: {UsuarioAcesso}", 
-                        funcionarioDto.UsuarioAcesso);
+                    _logger.LogWarning("Tentativa de atualizar funcionário com usuário de acesso já existente: {Email}", 
+                        funcionarioDto.Email);
                     throw new InvalidOperationException("Usuário de acesso já existe.");
                 }
 
                 // Atualizar dados
                 funcionarioExistente.NomeFuncionario = funcionarioDto.NomeFuncionario;
-                funcionarioExistente.UsuarioAcesso = funcionarioDto.UsuarioAcesso;
+                funcionarioExistente.Email = funcionarioDto.Email;
                 funcionarioExistente.Tipo = funcionarioDto.Tipo;
 
                 // Atualizar senha apenas se uma nova senha foi fornecida
@@ -179,7 +179,7 @@ namespace ControleDeAcesso.Application.Services
                 {
                     Id = funcionarioAtualizado.Id,
                     NomeFuncionario = funcionarioAtualizado.NomeFuncionario,
-                    UsuarioAcesso = funcionarioAtualizado.UsuarioAcesso,
+                    Email = funcionarioAtualizado.Email,
                     Tipo = funcionarioAtualizado.Tipo,
                     IsActive = funcionarioAtualizado.IsActive
                 };
