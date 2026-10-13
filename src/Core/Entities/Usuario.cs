@@ -12,6 +12,9 @@ namespace ControleDeAcesso.Core.Entities
     {
         public string Id { get; set; } = Guid.NewGuid().ToString();
         public string Nome { get; set; } = string.Empty;
+        public string Email {get; set; } = string.Empty;
+        public string Documento {get; set; } = string.Empty;
+        public string Uid {get; set;} = string.Empty;
         public TipoUsuario Tipo { get; set; }
         public bool IsActive { get; set; }
         public ICollection<Cartao> Cartoes { get; set; } = new List<Cartao>();

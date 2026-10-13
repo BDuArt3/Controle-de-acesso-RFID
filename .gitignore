@@ -218,3 +218,5 @@ nunit-*.xml
 CodeCoverage/
 
 appsettings.json
+src\Api\appsettings.Development.json
+appsettings.Development.json

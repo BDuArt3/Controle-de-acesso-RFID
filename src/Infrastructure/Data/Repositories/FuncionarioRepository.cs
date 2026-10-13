@@ -85,7 +85,7 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
                 }
                 else
                 {
-                    _logger.LogInformation("Funcionário encontrado por usuário de acesso. ID: {Id}, Nome: {Nome}, Ativo: {IsActive}", 
+                    _logger.LogInformation("Funcionário encontrado por email. ID: {Id}, Nome: {Nome}, Ativo: {IsActive}", 
                         funcionario.Id, funcionario.NomeFuncionario, funcionario.IsActive);
                 }
 

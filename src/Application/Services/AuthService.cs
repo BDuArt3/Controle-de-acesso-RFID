@@ -44,7 +44,7 @@ namespace ControleDeAcesso.Application.Services
                     return new LoginResponseDto
                     {
                         Success = false,
-                        Message = "Usuário ou senha inválidos."
+                        Message = "Email ou senha inválidos."
                     };
                 }
 
@@ -218,9 +218,9 @@ namespace ControleDeAcesso.Application.Services
                     ValidateIssuerSigningKey = true,
                     IssuerSigningKey = new SymmetricSecurityKey(secretKey),
                     ValidateIssuer = true,
-                    ValidIssuer = _configuration["Jwt:Issuer"],
+                    ValidIssuer = GetRequiredJwtSetting("Issuer"),
                     ValidateAudience = true,
-                    ValidAudience = _configuration["Jwt:Audience"],
+                    ValidAudience = GetRequiredJwtSetting("Audience"),
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.Zero
                 };
@@ -237,7 +237,7 @@ namespace ControleDeAcesso.Application.Services
 
         public string GenerateAccessToken(FuncionarioDto funcionario)
         {
-            var secretKey = Encoding.UTF8.GetBytes(_configuration["Jwt:SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey não configurada"));
+            var secretKey = Encoding.UTF8.GetBytes(GetRequiredJwtSetting("SecretKey"));
             var tokenHandler = new JwtSecurityTokenHandler();
 
             var claims = new List<Claim>
@@ -254,12 +254,20 @@ namespace ControleDeAcesso.Application.Services
                 Subject = new ClaimsIdentity(claims),
                 Expires = DateTime.UtcNow.AddMinutes(int.Parse(_configuration["Jwt:ExpirationInMinutes"] ?? "60")),
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(secretKey), SecurityAlgorithms.HmacSha256Signature),
-                Issuer = _configuration["Jwt:Issuer"],
-                Audience = _configuration["Jwt:Audience"]
+                Issuer = GetRequiredJwtSetting("Issuer"),
+                Audience = GetRequiredJwtSetting("Audience")
             };
 
             var token = tokenHandler.CreateToken(tokenDescriptor);
             return tokenHandler.WriteToken(token);
+        }
+
+        private string GetRequiredJwtSetting(string settingName)
+        {
+            var value = _configuration[$"Jwt:{settingName}"];
+            return string.IsNullOrWhiteSpace(value)
+                ? throw new InvalidOperationException($"JWT {settingName} não configurado")
+                : value;
         }
 
         public string GenerateRefreshToken()

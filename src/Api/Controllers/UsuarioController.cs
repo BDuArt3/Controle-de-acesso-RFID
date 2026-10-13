@@ -108,6 +108,8 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="id">ID do usuário</param>
         /// <param name="updateUsuarioDto">Dados atualizados do usuário</param>
         /// <returns>Usuário atualizado</returns>
+        
+
         [HttpPut("{id}")]
         [Authorize(Policy = "AdminOnly")] // Apenas admins podem atualizar usuários
         public async Task<ActionResult<UsuarioDto>> Update(string id, [FromBody] CreateUsuarioDto updateUsuarioDto)
