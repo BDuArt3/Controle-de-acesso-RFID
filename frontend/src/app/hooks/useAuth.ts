@@ -1,5 +1,13 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { authService, type AuthUser } from '../services/api';
+import { authService, type AuthProfile, type AuthUser } from '../services/api';
+
+function getProfileName(profile: AuthProfile) {
+  return profile.name?.trim()
+    || profile.nomeFuncionario?.trim()
+    || profile.nome?.trim()
+    || profile.email?.split('@')[0]?.trim()
+    || '';
+}
 
 interface AuthContextType {
   user: AuthUser | null; isAuthenticated: boolean; isLoading: boolean;
@@ -20,7 +28,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!token) { setUser(null); setIsLoading(false); return; }
     try {
       const { data } = await authService.getMe();
-      if (current === generation.current) setUser({ ...data, token: data.token || token });
+      if (current === generation.current) {
+        const profile = data.usuario ?? data;
+        setUser({
+          token: data.token || token,
+          expiration: data.expiration || '',
+          role: String(profile.role ?? profile.tipo ?? data.role ?? ''),
+          name: getProfileName(profile) || getProfileName(data),
+          email: profile.email || data.email || '',
+        });
+      }
     } catch { if (current === generation.current) logout(); }
     finally { setIsLoading(false); }
   }, [logout]);
@@ -46,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token: accessToken,
         expiration: expiresAt,
         role: String(data.usuario.tipo),
-        name: data.usuario.nomeFuncionario,
+        name: getProfileName(data.usuario),
         email: data.usuario.email,
       };
       generation.current += 1;

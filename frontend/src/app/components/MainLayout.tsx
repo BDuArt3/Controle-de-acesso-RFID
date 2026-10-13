@@ -18,6 +18,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import Dashboard from './Dashboard';
@@ -38,6 +40,7 @@ export default function MainLayout() {
   const { user: currentUser, logout, isAuthenticated } = useAuth();
   const { isConnected } = useSignalR();
   const navigate = useNavigate();
+  const displayName = currentUser?.name?.trim() || currentUser?.email?.split('@')[0] || '';
   const onLogout = () => { logout(); navigate('/login', { replace: true }); };
   const [navigation, setNavigation] = useState<NavigationState>({ route: 'dashboard' });
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -84,16 +87,25 @@ export default function MainLayout() {
         </div>
         <div className="flex w-full flex-wrap items-center justify-end gap-4 sm:w-auto">
           <span className="text-sm text-muted-foreground">
-            Olá, {currentUser?.name}
+            {displayName ? `Olá, ${displayName}` : 'Olá'}
           </span>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="space-x-2">
-                <span>{currentUser?.email}</span>
+              <Button variant="ghost" size="sm" className="space-x-2" aria-label="Abrir menu da conta">
+                <span>{currentUser?.email || 'Minha conta'}</span>
                 <ChevronDown className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuLabel>
+                <div className="flex flex-col">
+                  <span>{displayName || 'Minha conta'}</span>
+                  {currentUser?.email && (
+                    <span className="text-xs font-normal text-muted-foreground">{currentUser.email}</span>
+                  )}
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={onLogout}>
                 <LogOut className="h-4 w-4 mr-2" />
                 Sair

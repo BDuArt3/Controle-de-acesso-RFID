@@ -1,15 +1,38 @@
 import axios from 'axios';
 
 export interface AuthUser { token: string; expiration: string; role: string; name: string; email: string }
+export interface AuthProfile {
+  name?: string;
+  nome?: string;
+  nomeFuncionario?: string;
+  email?: string;
+  role?: string | number;
+  tipo?: string | number;
+}
+export interface AuthMeResponse extends AuthProfile {
+  token?: string;
+  expiration?: string;
+  usuario?: AuthProfile;
+}
 export interface LoginResponse {
   success: boolean;
   message: string;
   token: { accessToken: string; refreshToken: string; expiresAt: string; tokenType: string };
-  usuario: { id: string; nomeFuncionario: string; email: string; tipo: number; isActive: boolean };
+  usuario: AuthProfile & { id: string; isActive: boolean };
 }
 export interface UsuarioDto { id: string; nome: string; email: string; documento: string; tipo: string; status: string; uid: string }
 export interface LogDto { id: string; uid: string; usuarioId: string; userName: string; dataHora: string; resultado: string; motivo?: string }
 export interface FuncionarioDto { id: string; nome: string; cpf: string; departamento: string; cargo: string; status: string }
+type FuncionarioApiDto = {
+  id: string;
+  nome?: string;
+  nomeFuncionario?: string;
+  cpf?: string;
+  departamento?: string;
+  cargo?: string;
+  status?: string;
+  isActive?: boolean;
+};
 export interface CartaoDto { id: string; uid: string; funcionarioId: string; funcionario?: { nome: string }; funcionarioNome?: string; status: string; dataRegistro: string }
 export type UsuarioInput = Omit<UsuarioDto, 'id'> & { senha?: string };
 type Payload = Record<string, unknown>;
@@ -38,7 +61,7 @@ api.interceptors.response.use(response => response, error => {
 });
 export const authService = {
   login: (email: string, senha: string) => api.post<LoginResponse>('/auth/login', { email, senha }),
-  getMe: () => api.get<AuthUser>('/auth/me'),
+  getMe: () => api.get<AuthMeResponse>('/auth/me'),
   changesenha: (currentsenha: string, newsenha: string) => api.post('/auth/change-senha', { currentsenha, newsenha })
 };
 export const usuarioService = {
@@ -58,7 +81,21 @@ export const logAcessoService = {
 };
 export const acessoService = { registrar: (data: Payload) => api.post('/acesso', data) };
 export const funcionarioService = {
-  list: () => api.get('/funcionario'), get: (id: string) => api.get(`/funcionario/${encodeURIComponent(id)}`),
+  list: async () => {
+    const response = await api.get<FuncionarioApiDto[]>('/funcionario');
+    return {
+      ...response,
+      data: response.data.map(item => ({
+        id: item.id,
+        nome: item.nome ?? item.nomeFuncionario ?? '',
+        cpf: item.cpf ?? '',
+        departamento: item.departamento ?? '',
+        cargo: item.cargo ?? '',
+        status: item.status ?? (item.isActive ? 'ativo' : 'inativo')
+      }))
+    };
+  },
+  get: (id: string) => api.get(`/funcionario/${encodeURIComponent(id)}`),
   create: (data: Payload) => api.post('/funcionario', data), update: (id: string, data: Payload) => api.put(`/funcionario/${encodeURIComponent(id)}`, data),
   delete: (id: string) => api.delete(`/funcionario/${encodeURIComponent(id)}`)
 };
