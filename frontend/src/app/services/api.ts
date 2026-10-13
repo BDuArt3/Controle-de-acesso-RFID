@@ -1,6 +1,12 @@
 import axios from 'axios';
 
 export interface AuthUser { token: string; expiration: string; role: string; name: string; email: string }
+export interface LoginResponse {
+  success: boolean;
+  message: string;
+  token: { accessToken: string; refreshToken: string; expiresAt: string; tokenType: string };
+  usuario: { id: string; nomeFuncionario: string; email: string; tipo: number; isActive: boolean };
+}
 export interface UsuarioDto { id: string; nome: string; email: string; documento: string; tipo: string; status: string; uid: string }
 export interface LogDto { id: string; uid: string; usuarioId: string; userName: string; dataHora: string; resultado: string; motivo?: string }
 export interface FuncionarioDto { id: string; nome: string; cpf: string; departamento: string; cargo: string; status: string }
@@ -31,7 +37,7 @@ api.interceptors.response.use(response => response, error => {
   return Promise.reject(error);
 });
 export const authService = {
-  login: (email: string, senha: string) => api.post<AuthUser>('/auth/login', { email, senha }),
+  login: (email: string, senha: string) => api.post<LoginResponse>('/auth/login', { email, senha }),
   getMe: () => api.get<AuthUser>('/auth/me'),
   changesenha: (currentsenha: string, newsenha: string) => api.post('/auth/change-senha', { currentsenha, newsenha })
 };

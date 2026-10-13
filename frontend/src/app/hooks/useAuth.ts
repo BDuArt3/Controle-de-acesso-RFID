@@ -39,9 +39,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, senha: string) => {
     try {
       const { data } = await authService.login(email, senha);
-      if (!data.token || !Number.isFinite(Date.parse(data.expiration)) || Date.parse(data.expiration) <= Date.now()) throw new Error('Resposta de autenticação inválida');
+      const { accessToken, expiresAt } = data.token;
+      const expiration = Date.parse(expiresAt);
+      if (!data.success || !accessToken || !Number.isFinite(expiration) || expiration <= Date.now()) throw new Error('Resposta de autenticação inválida');
+      const user: AuthUser = {
+        token: accessToken,
+        expiration: expiresAt,
+        role: String(data.usuario.tipo),
+        name: data.usuario.nomeFuncionario,
+        email: data.usuario.email,
+      };
       generation.current += 1;
-      localStorage.setItem('authToken', data.token); setUser(data);
+      localStorage.setItem('authToken', accessToken); setUser(user);
     } catch (error) { throw error; }
   };
   return createElement(AuthContext.Provider, { value: { user, isAuthenticated: !!user, isLoading, login, logout, refreshUser } }, children);
