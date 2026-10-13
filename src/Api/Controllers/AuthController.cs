@@ -33,7 +33,7 @@ namespace ControleDeAcesso.Api.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody] LoginDto loginDto)
         {
-            _logger.LogInformation("Tentativa de login para usuário: {Email}", loginDto.Email);
+            _logger.LogInformation("Tentativa de login para o email: {Email}", loginDto.Email);
 
             try
             {
@@ -46,19 +46,18 @@ namespace ControleDeAcesso.Api.Controllers
 
                 if (resultado.Success)
                 {
-                    _logger.LogInformation("Login realizado com sucesso para usuário: {Email}", loginDto.Email);
+                    _logger.LogInformation("Login realizado com sucesso para o email: {Email}", loginDto.Email);
                     return Ok(resultado);
                 }
                 else
                 {
-                    _logger.LogWarning("Falha no login para usuário: {Email} - {Message}", 
-                        loginDto.Email, resultado.Message);
+                    _logger.LogWarning("Falha no login: {Message}", resultado.Message);
                     return Unauthorized(resultado);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro inesperado durante login para usuário: {Email}", loginDto.Email);
+                _logger.LogError(ex, "Erro inesperado durante login");
                 return StatusCode(500, new LoginResponseDto 
                 { 
                     Success = false, 
@@ -152,24 +151,13 @@ namespace ControleDeAcesso.Api.Controllers
             {
                 var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
                 var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
-                var email = User.FindFirst("email")?.Value;
-
-                if (string.IsNullOrWhiteSpace(userId))
-                {
-                    return Unauthorized(new { message = "Usuário autenticado sem identificador válido." });
-                }
-
-                var funcionario = await _funcionarioService.GetByIdAsync(userId);
-                if (funcionario == null)
-                {
-                    return Unauthorized(new { message = "Funcionário autenticado não foi encontrado." });
-                }
+                var userEmail = User.FindFirst("email")?.Value;
 
                 return Ok(new
                 {
-                    id = funcionario.Id,
-                    nomeFuncionario = funcionario.NomeFuncionario,
-                    email = funcionario.Email,
+                    id = userId,
+                    nome = userName,
+                    Email = userEmail,
                     tipo = userRole,
                     isAuthenticated = true
                 });

@@ -31,16 +31,16 @@ namespace ControleDeAcesso.Application.Services
 
         public async Task<LoginResponseDto> LoginAsync(LoginDto loginDto)
         {
-            _logger.LogInformation("Tentativa de login para email: {Email}", loginDto.Email);
+            _logger.LogInformation("Tentativa de login para usuário: {Email}", loginDto.Email);
 
             try
             {
-                // Buscar funcionário por email
+                // Buscar funcionário por usuário de acesso
                 var funcionario = await _funcionarioRepository.GetByEmailAsync(loginDto.Email);
 
                 if (funcionario == null)
                 {
-                    _logger.LogWarning("Email não encontrado: {Email}", loginDto.Email);
+                    _logger.LogWarning("Usuário não encontrado: {Email}", loginDto.Email);
                     return new LoginResponseDto
                     {
                         Success = false,
@@ -51,7 +51,7 @@ namespace ControleDeAcesso.Application.Services
                 // Verificar se o funcionário está ativo
                 if (!funcionario.IsActive)
                 {
-                    _logger.LogWarning("Tentativa de login com usuário inativo: {email}", loginDto.Email);
+                    _logger.LogWarning("Tentativa de login com usuário inativo: {Email}", loginDto.Email);
                     return new LoginResponseDto
                     {
                         Success = false,

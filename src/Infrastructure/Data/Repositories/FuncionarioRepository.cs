@@ -70,18 +70,18 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             }
         }
 
-        public async Task<Funcionario?> GetByEmailAsync(string email)
+        public async Task<Funcionario?> GetByEmailAsync(string Email)
         {
-            _logger.LogInformation("Buscando funcionário por email: {Email}", email);
+            _logger.LogInformation("Buscando funcionário por email: {Email}", Email);
 
             try
             {
                 var funcionario = await _context.Funcionarios
-                                     .FirstOrDefaultAsync(f => f.Email == email);
+                                     .FirstOrDefaultAsync(f => f.Email == Email);
 
                 if (funcionario == null)
                 {
-                    _logger.LogWarning("Funcionário não encontrado para usuário de acesso: {Email}", email);
+                    _logger.LogWarning("Funcionário não encontrado para email: {Email}", Email);
                 }
                 else
                 {
@@ -93,7 +93,7 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao buscar funcionário por email: {Email}", email);
+                _logger.LogError(ex, "Erro ao buscar funcionário por usuário de acesso: {Email}", Email);
                 throw;
             }
         }
@@ -170,23 +170,23 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             }
         }
 
-        public async Task<bool> EmailExistsAsync(string email)
+        public async Task<bool> EmailExistsAsync(string Email)
         {
-            _logger.LogInformation("Verificando se email já existe: {Email}", email);
+            _logger.LogInformation("Verificando se usuário de acesso já existe: {Email}", Email);
 
             try
             {
                 var exists = await _context.Funcionarios
-                                   .AnyAsync(f => f.Email == email);
+                                   .AnyAsync(f => f.Email == Email);
 
-                _logger.LogInformation("Verificação de email concluída. Email: {Email}, Existe: {Exists}", 
-                    email, exists);
+                _logger.LogInformation("Verificação de usuário de acesso concluída. Email: {Email}, Existe: {Exists}", 
+                    Email, exists);
 
                 return exists;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao verificar se email existe: {Email}", email);
+                _logger.LogError(ex, "Erro ao verificar se usuário de acesso existe: {Email}", Email);
                 throw;
             }
         }
