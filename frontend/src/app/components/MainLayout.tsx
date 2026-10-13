@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { useAuth } from '../hooks/useAuth';
+import { useSignalR } from '../hooks/useSignalR';
 import { Button } from './ui/button';
 import {
   LayoutDashboard,
@@ -35,6 +36,7 @@ interface NavigationState {
 
 export default function MainLayout() {
   const { user: currentUser, logout, isAuthenticated } = useAuth();
+  const { isConnected } = useSignalR();
   const navigate = useNavigate();
   const onLogout = () => { logout(); navigate('/login', { replace: true }); };
   const [navigation, setNavigation] = useState<NavigationState>({ route: 'dashboard' });
@@ -68,7 +70,7 @@ export default function MainLayout() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b h-16 flex items-center justify-between px-6">
+      <header className="bg-white shadow-sm border-b min-h-16 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-6 py-2">
         <div className="flex items-center space-x-4">
           <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
             <Menu className="h-5 w-5" />
@@ -80,7 +82,7 @@ export default function MainLayout() {
             <h1>Sistema de Controle de Acesso</h1>
           </div>
         </div>
-        <div className="flex items-center space-x-4">
+        <div className="flex w-full flex-wrap items-center justify-end gap-4 sm:w-auto">
           <span className="text-sm text-muted-foreground">
             Olá, {currentUser?.name}
           </span>
@@ -98,6 +100,16 @@ export default function MainLayout() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <div className={`flex shrink-0 items-center space-x-2 rounded-lg border px-3 py-2 shadow-sm ${
+            isConnected ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
+          }`}>
+            <div className={`h-2 w-2 rounded-full ${
+              isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+            }`} />
+            <span className="text-xs font-medium">
+              {isConnected ? 'Hub Conectado' : 'Hub Desconectado'}
+            </span>
+          </div>
         </div>
       </header>
 
