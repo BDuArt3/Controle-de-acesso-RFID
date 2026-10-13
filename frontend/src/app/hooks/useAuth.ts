@@ -3,7 +3,7 @@ import { authService, type AuthUser } from '../services/api';
 
 interface AuthContextType {
   user: AuthUser | null; isAuthenticated: boolean; isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>; logout: () => void; refreshUser: () => Promise<void>;
+  login: (email: string, senha: string) => Promise<void>; logout: () => void; refreshUser: () => Promise<void>;
 }
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -36,9 +36,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const timer = window.setInterval(check, 1000);
     return () => window.clearInterval(timer);
   }, [user, logout]);
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, senha: string) => {
     try {
-      const { data } = await authService.login(email, password);
+      const { data } = await authService.login(email, senha);
       if (!data.token || !Number.isFinite(Date.parse(data.expiration)) || Date.parse(data.expiration) <= Date.now()) throw new Error('Resposta de autenticação inválida');
       generation.current += 1;
       localStorage.setItem('authToken', data.token); setUser(data);

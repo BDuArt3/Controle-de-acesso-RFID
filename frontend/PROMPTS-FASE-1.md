@@ -8,15 +8,15 @@ Backend em: C:/Github/Controle-de-acesso-RFID/
 Frontend em: C:/Github/Controle-de-acesso-RFID-Frontend/
 Documentação: C:/Github/Controle-de-acesso-RFID-Frontend/FLUXO-FRONTEND.md
 
-## API Base: http://localhost:5038/api
+## API Base: http://localhost:50514300/api
 
 ### Autenticação (AuthController)
 ```
-POST   /api/auth/login            → body: { email, password }
+POST   /api/auth/login            → body: { email, senha }
        Response: { token, expiration, role, name, email }
 GET    /api/auth/me               → header: Authorization: Bearer {token}
        Response: { token, expiration, role, name, email }
-POST   /api/auth/change-password  → body: { currentPassword, newPassword }
+POST   /api/auth/change-senha  → body: { currentsenha, newsenha }
 ```
 
 ### Usuários (UsuarioController)
@@ -24,7 +24,7 @@ POST   /api/auth/change-password  → body: { currentPassword, newPassword }
 GET    /api/usuario               → response: UsuarioDto[]
        Response: { id, nome, email, documento, tipo, status, uid }
 GET    /api/usuario/{id}          → response: UsuarioDto
-POST   /api/usuario               → body: { nome, email, password, documento, tipo, status, uid }
+POST   /api/usuario               → body: { nome, email, senha, documento, tipo, status, uid }
 PUT    /api/usuario/{id}          → body: { nome, email, documento, tipo, status, uid }
 PUT    /api/usuario/{id}/bloquear → bloqueia usuário
 PUT    /api/usuario/{id}/desbloquear → desbloqueia usuário
@@ -66,7 +66,7 @@ PUT    /api/cartao/{id}/reativar
 
 ### SignalR Hub
 ```
-Hub URL: http://localhost:5038/hubs/notificacoes
+Hub URL: http://localhost:5000/hubs/notificacoes
 Method: sendNotification(message)
 Method: sendAccessGranted(uid, userName)
 Method: sendAccessDenied(uid, reason)
@@ -119,7 +119,7 @@ Criar arquivo em `app/services/api.ts` que centraliza todas as chamadas HTTP:
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:5038/api',
+  baseURL: 'http://localhost:5143/api',
   headers: { 'Content-Type': 'application/json' }
 });
 
@@ -134,12 +134,12 @@ api.interceptors.request.use((config) => {
 
 // Auth services
 export const authService = {
-  login: (email: string, password: string) => 
-    api.post('/auth/login', { email, password }),
+  login: (email: string, senha: string) => 
+    api.post('/auth/login', { email, senha }),
   getMe: () => 
     api.get('/auth/me'),
-  changePassword: (current: string, newPw: string) => 
-    api.post('/auth/change-password', { currentPassword: current, newPassword: newPw })
+  changesenha: (current: string, newPw: string) => 
+    api.post('/auth/change-senha', { currentsenha: current, newsenha: newPw })
 };
 
 // Usuario services
@@ -205,7 +205,7 @@ interface AuthContextType {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, senha: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -243,8 +243,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const login = async (email: string, password: string) => {
-    const response = await authService.login(email, password);
+  const login = async (email: string, senha: string) => {
+    const response = await authService.login(email, senha);
     const data = response.data;
     localStorage.setItem('authToken', data.token);
     setUser(data);
@@ -281,7 +281,7 @@ export function useAuth() {
 Em `LoginScreen.tsx`, substituir:
 1. Imports: adicionar `useAuth` de `app/hooks/useAuth` e `useNavigate` de `react-router-dom`
 2. Estado: adicionar `isLoading` e `error` para feedback visual
-3. handleSubmit: chamar `auth.login(email, password)` e redirecionar para `/`
+3. handleSubmit: chamar `auth.login(email, senha)` e redirecionar para `/`
 4. Remove dados mockados — não há mais dados fixos no login
 5. Manter design visual (inputs, botão, estilos) — apenas conectar com API real
 
@@ -360,7 +360,7 @@ Em `App.tsx`:
 - Em caso de erro 401, fazer logout automático
 - Loading states: usar spinner simples ou skeleton básico
 - Não adicionar novos imports de bibliotecas além dos já instalados (axios, react-router-dom, lucide-react)
-- Tratar CORS: backend deve estar rodando em `localhost:5038`
+- Tratar CORS: backend deve estar rodando em `localhost:5000`
 
 ## Checklist de Validação
 

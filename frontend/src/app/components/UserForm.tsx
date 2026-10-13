@@ -21,7 +21,7 @@ interface UserData {
   userType: string;
   uid: string;
   email: string;
-  password: string;
+  senha: string;
   status: string;
 }
 
@@ -32,7 +32,7 @@ export default function UserForm({ editingUserId, onNavigate }: UserFormProps) {
     userType: '',
     uid: '',
     email: '',
-    password: '',
+    senha: '',
     status: 'Ativo'
   });
   const [isSaving, setIsSaving] = useState(false);
@@ -55,7 +55,7 @@ export default function UserForm({ editingUserId, onNavigate }: UserFormProps) {
           userType: data.tipo.toLowerCase(),
           uid: data.uid || '',
           email: data.email,
-          password: '',
+          senha: '',
           status: data.status
         });
       } catch (err) { if (active) setError(errorMessage(err)); }
@@ -89,7 +89,7 @@ export default function UserForm({ editingUserId, onNavigate }: UserFormProps) {
     setError('');
     setIsSaving(true);
 
-    if (!userData.name || !userData.document || !userData.userType || !userData.email || (!editingUserId && !userData.password)) {
+    if (!userData.name || !userData.document || !userData.userType || !userData.email || (!editingUserId && !userData.senha)) {
       setError('Por favor, preencha todos os campos obrigatórios.');
       setIsSaving(false);
       return;
@@ -107,7 +107,7 @@ export default function UserForm({ editingUserId, onNavigate }: UserFormProps) {
       if (editingUserId) {
         await usuarioService.update(editingUserId, data);
       } else {
-        await usuarioService.create({ ...data, password: userData.password });
+        await usuarioService.create({ ...data, senha: userData.senha });
       }
       onNavigate('users');
     } catch (err) {
@@ -185,14 +185,14 @@ export default function UserForm({ editingUserId, onNavigate }: UserFormProps) {
 
               {!editingUserId && (
                 <div className="space-y-2">
-                  <Label htmlFor="newPassword">Senha *</Label>
+                  <Label htmlFor="newsenha">Senha *</Label>
                   <Input
-                    id="newPassword"
-                    type="password"
-                    autoComplete="new-password"
+                    id="newsenha"
+                    type="senha"
+                    autoComplete="new-senha"
                     required
-                    value={userData.password}
-                    onChange={(e) => handleInputChange('password', e.target.value)}
+                    value={userData.senha}
+                    onChange={(e) => handleInputChange('senha', e.target.value)}
                     disabled={isSaving}
                     placeholder="Digite a senha"
                   />

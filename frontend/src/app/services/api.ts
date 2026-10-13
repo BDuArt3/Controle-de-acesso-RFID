@@ -5,7 +5,7 @@ export interface UsuarioDto { id: string; nome: string; email: string; documento
 export interface LogDto { id: string; uid: string; usuarioId: string; userName: string; dataHora: string; resultado: string; motivo?: string }
 export interface FuncionarioDto { id: string; nome: string; cpf: string; departamento: string; cargo: string; status: string }
 export interface CartaoDto { id: string; uid: string; funcionarioId: string; funcionario?: { nome: string }; funcionarioNome?: string; status: string; dataRegistro: string }
-export type UsuarioInput = Omit<UsuarioDto, 'id'> & { password?: string };
+export type UsuarioInput = Omit<UsuarioDto, 'id'> & { senha?: string };
 type Payload = Record<string, unknown>;
 export const isActive = (status: string) => ['ativo', 'active'].includes(String(status).toLowerCase());
 export const isGranted = (result: string) => ['permitido', 'autorizado', 'granted'].includes(String(result).toLowerCase());
@@ -17,7 +17,7 @@ export const errorMessage = (error: unknown) => {
   }
   return 'Não foi possível completar a operação.';
 };
-const api = axios.create({ baseURL: 'http://localhost:5038/api', timeout: 15000, headers: { 'Content-Type': 'application/json' } });
+const api = axios.create({ baseURL: 'http://localhost:5143/api', timeout: 15000, headers: { 'Content-Type': 'application/json' } });
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('authToken');
   if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -31,9 +31,9 @@ api.interceptors.response.use(response => response, error => {
   return Promise.reject(error);
 });
 export const authService = {
-  login: (email: string, password: string) => api.post<AuthUser>('/auth/login', { email, password }),
+  login: (email: string, senha: string) => api.post<AuthUser>('/auth/login', { email, senha }),
   getMe: () => api.get<AuthUser>('/auth/me'),
-  changePassword: (currentPassword: string, newPassword: string) => api.post('/auth/change-password', { currentPassword, newPassword })
+  changesenha: (currentsenha: string, newsenha: string) => api.post('/auth/change-senha', { currentsenha, newsenha })
 };
 export const usuarioService = {
   list: () => api.get<UsuarioDto[]>('/usuario'),

@@ -15,8 +15,8 @@ interface LoginScreenProps {
 export default function LoginScreen({ onLogin }: LoginScreenProps) {
   const auth = useAuth();
   const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [senha, setsenha] = useState('');
+  const [showsenha, setShowsenha] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -25,14 +25,14 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
     setError('');
     setIsLoading(true);
 
-    if (!username || !password) {
+    if (!username || !senha) {
       setError('Por favor, preencha todos os campos.');
       setIsLoading(false);
       return;
     }
 
     try {
-      await auth.login(username.trim(), password);
+      await auth.login(username.trim(), senha);
       onLogin(username);
     } catch (error) {
       setError(errorMessage(error));
@@ -84,16 +84,16 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
+              <Label htmlFor="senha">Senha</Label>
               <div className="relative">
                 <Input
-                  id="password"
-                  autoComplete="current-password"
+                  id="senha"
+                  autoComplete="current-senha"
                   required
-                  type={showPassword ? 'text' : 'password'}
+                  type={showsenha ? 'text' : 'senha'}
                   placeholder="Digite sua senha"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  value={senha}
+                  onChange={(e) => setsenha(e.target.value)}
                   disabled={isLoading}
                   className="w-full pr-10"
                 />
@@ -102,10 +102,10 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                   variant="ghost"
                   size="sm"
                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() => setShowsenha(!showsenha)}
                   disabled={isLoading}
                 >
-                  {showPassword ? (
+                  {showsenha ? (
                     <EyeOff className="h-4 w-4 text-muted-foreground" />
                   ) : (
                     <Eye className="h-4 w-4 text-muted-foreground" />

@@ -14,7 +14,7 @@ export const signalRService = {
     }
 
     hubConnection = new HubConnectionBuilder()
-      .withUrl('http://localhost:5038/hubs/notificacoes', {
+      .withUrl('http://localhost:5000/hubs/notificacoes', {
         accessTokenFactory: () => localStorage.getItem('authToken') || ''
       })
       .withAutomaticReconnect()
