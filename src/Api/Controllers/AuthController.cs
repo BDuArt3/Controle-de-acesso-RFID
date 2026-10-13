@@ -11,11 +11,16 @@ namespace ControleDeAcesso.Api.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
+        private readonly IFuncionarioService _funcionarioService;
         private readonly ILogger<AuthController> _logger;
 
-        public AuthController(IAuthService authService, ILogger<AuthController> logger)
+        public AuthController(
+            IAuthService authService,
+            IFuncionarioService funcionarioService,
+            ILogger<AuthController> logger)
         {
             _authService = authService;
+            _funcionarioService = funcionarioService;
             _logger = logger;
         }
 
@@ -141,20 +146,30 @@ namespace ControleDeAcesso.Api.Controllers
         /// <returns>Informações do usuário autenticado</returns>
         [HttpGet("me")]
         [Authorize]
-        public IActionResult GetCurrentUser()
+        public async Task<IActionResult> GetCurrentUser()
         {
             try
             {
                 var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-                var userName = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value;
                 var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
-                var Email = User.FindFirst("email")?.Value;
+                var email = User.FindFirst("email")?.Value;
+
+                if (string.IsNullOrWhiteSpace(userId))
+                {
+                    return Unauthorized(new { message = "Usuário autenticado sem identificador válido." });
+                }
+
+                var funcionario = await _funcionarioService.GetByIdAsync(userId);
+                if (funcionario == null)
+                {
+                    return Unauthorized(new { message = "Funcionário autenticado não foi encontrado." });
+                }
 
                 return Ok(new
                 {
-                    id = userId,
-                    nome = userName,
-                    Email = Email,
+                    id = funcionario.Id,
+                    nomeFuncionario = funcionario.NomeFuncionario,
+                    email = funcionario.Email,
                     tipo = userRole,
                     isAuthenticated = true
                 });
