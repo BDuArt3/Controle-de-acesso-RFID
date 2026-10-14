@@ -31,12 +31,30 @@ namespace ControleDeAcesso.Application.Services
 
         public async Task<LoginResponseDto> LoginAsync(LoginDto loginDto)
         {
+            if (loginDto == null)
+            {
+                return new LoginResponseDto
+                {
+                    Success = false,
+                    Message = "Dados de login são obrigatórios."
+                };
+            }
+
+            if (string.IsNullOrWhiteSpace(loginDto.Email) || string.IsNullOrWhiteSpace(loginDto.Senha))
+            {
+                return new LoginResponseDto
+                {
+                    Success = false,
+                    Message = "Email e senha são obrigatórios."
+                };
+            }
+
             _logger.LogInformation("Tentativa de login para usuário: {Email}", loginDto.Email);
 
             try
             {
                 // Buscar funcionário por usuário de acesso
-                var funcionario = await _funcionarioRepository.GetByEmailAsync(loginDto.Email);
+                var funcionario = await _funcionarioRepository.GetByEmailAsync(loginDto.Email.Trim());
 
                 if (funcionario == null)
                 {
@@ -119,6 +137,12 @@ namespace ControleDeAcesso.Application.Services
 
         public async Task<TokenDto> RefreshTokenAsync(string refreshToken)
         {
+            if (string.IsNullOrWhiteSpace(refreshToken))
+            {
+                _logger.LogWarning("Refresh token vazio ou nulo");
+                throw new SecurityTokenException("Refresh token é obrigatório");
+            }
+
             _logger.LogInformation("Tentativa de refresh token");
 
             try
@@ -185,6 +209,12 @@ namespace ControleDeAcesso.Application.Services
 
         public Task<bool> RevokeTokenAsync(string refreshToken)
         {
+            if (string.IsNullOrWhiteSpace(refreshToken))
+            {
+                _logger.LogWarning("Tentativa de revogar refresh token vazio");
+                return Task.FromResult(false);
+            }
+
             _logger.LogInformation("Revogando refresh token");
 
             try
@@ -208,6 +238,12 @@ namespace ControleDeAcesso.Application.Services
 
         public Task<bool> ValidateTokenAsync(string token)
         {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                _logger.LogWarning("Token vazio ou nulo");
+                return Task.FromResult(false);
+            }
+
             try
             {
                 var tokenHandler = new JwtSecurityTokenHandler();

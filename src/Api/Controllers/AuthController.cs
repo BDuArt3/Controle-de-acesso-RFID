@@ -33,6 +33,16 @@ namespace ControleDeAcesso.Api.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody] LoginDto loginDto)
         {
+            if (loginDto == null)
+            {
+                return BadRequest(new { message = "Dados de login são obrigatórios." });
+            }
+
+            if (string.IsNullOrWhiteSpace(loginDto.Email) || string.IsNullOrWhiteSpace(loginDto.Senha))
+            {
+                return BadRequest(new { message = "Email e senha são obrigatórios." });
+            }
+
             _logger.LogInformation("Tentativa de login para o email: {Email}", loginDto.Email);
 
             try
@@ -75,6 +85,16 @@ namespace ControleDeAcesso.Api.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenDto refreshTokenDto)
         {
+            if (refreshTokenDto == null)
+            {
+                return BadRequest(new { message = "Refresh token é obrigatório." });
+            }
+
+            if (string.IsNullOrWhiteSpace(refreshTokenDto.RefreshToken))
+            {
+                return BadRequest(new { message = "Refresh token é obrigatório." });
+            }
+
             _logger.LogInformation("Tentativa de refresh token");
 
             try
@@ -110,6 +130,16 @@ namespace ControleDeAcesso.Api.Controllers
         [Authorize]
         public async Task<IActionResult> Logout([FromBody] RefreshTokenDto refreshTokenDto)
         {
+            if (refreshTokenDto == null)
+            {
+                return BadRequest(new { message = "Refresh token é obrigatório." });
+            }
+
+            if (string.IsNullOrWhiteSpace(refreshTokenDto.RefreshToken))
+            {
+                return BadRequest(new { message = "Refresh token é obrigatório." });
+            }
+
             _logger.LogInformation("Tentativa de logout");
 
             try
@@ -153,11 +183,22 @@ namespace ControleDeAcesso.Api.Controllers
                 var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
                 var userEmail = User.FindFirst("email")?.Value;
 
+                if (string.IsNullOrWhiteSpace(userId))
+                {
+                    return Unauthorized(new { message = "Usuário autenticado sem identificador válido." });
+                }
+
+                var funcionario = await _funcionarioService.GetByIdAsync(userId);
+                if (funcionario == null)
+                {
+                    return Unauthorized(new { message = "Funcionário autenticado não foi encontrado." });
+                }
+
                 return Ok(new
                 {
-                    id = userId,
-                    nome = userName,
-                    Email = userEmail,
+                    id = funcionario.Id,
+                    nomeFuncionario = funcionario.NomeFuncionario,
+                    email = funcionario.Email ?? userEmail,
                     tipo = userRole,
                     isAuthenticated = true
                 });
