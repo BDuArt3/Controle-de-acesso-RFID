@@ -1,1 +1,6 @@
 node_modules
+.verification-build-*/
+.env
+.env.*
+!.env.api-local
+!.env.api-azure
