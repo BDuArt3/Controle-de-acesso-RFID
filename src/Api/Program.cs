@@ -49,7 +49,16 @@ namespace ControleDeAcesso.Api
 
             // Configuração JWT
             var jwtSettings = builder.Configuration.GetSection("Jwt");
-            var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey não configurada");
+            var secretKey = jwtSettings["SecretKey"];
+            var issuer = jwtSettings["Issuer"];
+            var audience = jwtSettings["Audience"];
+            if (string.IsNullOrWhiteSpace(secretKey))
+                throw new InvalidOperationException("JWT SecretKey não configurada");
+            if (string.IsNullOrWhiteSpace(issuer))
+                throw new InvalidOperationException("JWT Issuer não configurado");
+            if (string.IsNullOrWhiteSpace(audience))
+                throw new InvalidOperationException("JWT Audience não configurada");
+
             var key = Encoding.UTF8.GetBytes(secretKey);
 
             builder.Services.AddAuthentication(options =>
@@ -66,9 +75,9 @@ namespace ControleDeAcesso.Api
                     ValidateIssuerSigningKey = true,
                     IssuerSigningKey = new SymmetricSecurityKey(key),
                     ValidateIssuer = true,
-                    ValidIssuer = jwtSettings["Issuer"],
+                    ValidIssuer = issuer,
                     ValidateAudience = true,
-                    ValidAudience = jwtSettings["Audience"],
+                    ValidAudience = audience,
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.Zero
                 };
@@ -89,18 +98,28 @@ namespace ControleDeAcesso.Api
             // Add services to the container.
             builder.Services.AddControllers();
 
+            var allowedOrigins = builder.Configuration
+                .GetSection("Cors:AllowedOrigins")
+                .Get<string[]>() ?? Array.Empty<string>();
+
+            if (builder.Environment.IsDevelopment())
+            {
+                allowedOrigins = allowedOrigins
+                    .Concat(new[]
+                    {
+                        "http://localhost:5173",
+                        "http://localhost:3000",
+                        "http://localhost:4173"
+                    })
+                    .ToArray();
+            }
+
             // Configurar CORS para permitir comunicação com frontend
             builder.Services.AddCors(options =>
             {
                 options.AddPolicy("AllowFrontend", policy =>
                 {
-                    policy.WithOrigins(
-                            "http://localhost:5173",
-                            "http://localhost:3000",
-                            "http://localhost:4173",
-                            "https://*.azurestaticapps.net",  // Permitir Azure Static Web Apps (wildcard)
-                            "https://witty-mushroom-06bc22d0f.2.azurestaticapps.net",
-                            "https://delightful-plant-08df30610.3.azurestaticapps.net")  // URL específica do seu site
+                    policy.WithOrigins(allowedOrigins)
                           .AllowAnyMethod()
                           .AllowAnyHeader()
                           .AllowCredentials();
@@ -111,6 +130,57 @@ namespace ControleDeAcesso.Api
             builder.Services.AddSignalR();
 
             var app = builder.Build();
+
+            using (var scope = app.Services.CreateScope())
+            {
+                var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseBootstrap");
+
+                try
+                {
+                    if (dbContext.Database.CanConnect())
+                    {
+                        SeedData.Seed(dbContext, app.Configuration["BootstrapAdmin:Password"]);
+                    }
+                    else
+                    {
+                        logger.LogWarning("Banco de dados indisponível no momento; a aplicação foi iniciada sem executar o seed inicial.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex,
+                        "Não foi possível conectar ao banco de dados. Verifique a string de conexão e a regra de firewall do Azure SQL. A aplicação continuará em execução sem o seed inicial.");
+                }
+            }
+
+            app.MapGet("/health", (IServiceProvider serviceProvider) =>
+            {
+                try
+                {
+                    using var scope = serviceProvider.CreateScope();
+                    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                    var isConnected = dbContext.Database.CanConnect();
+
+                    return Results.Ok(new
+                    {
+                        status = isConnected ? "ok" : "degraded",
+                        database = isConnected ? "available" : "unavailable",
+                        message = isConnected
+                            ? "Banco de dados disponível."
+                            : "A aplicação está ativa, mas o banco de dados está indisponível. Verifique a string de conexão e o firewall do Azure SQL."
+                    });
+                }
+                catch (Exception ex)
+                {
+                    return Results.Ok(new
+                    {
+                        status = "degraded",
+                        database = "unavailable",
+                        message = $"Banco de dados indisponível: {ex.Message}"
+                    });
+                }
+            });
 
             // Swagger habilitado para todos os ambientes (desenvolvimento e produção)
             app.UseSwagger();
