@@ -11,6 +11,5 @@ namespace ControleDeAcesso.Application.Repositories.Interfaces
         Task<IEnumerable<Usuario>> GetAllAsync();
         Task<bool> EmailExistsAsync(string email, string? excludingUsuarioId = null);
         Task<Usuario> UpdateAsync(Usuario usuario);
-        Task<bool> DeleteAsync(string id);
     }
 }

@@ -142,33 +142,6 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             }
         }
 
-        public async Task<bool> DeleteAsync(string id)
-        {
-            _logger.LogInformation("Iniciando desativação de funcionário. ID: {Id}", id);
-
-            try
-            {
-                var funcionario = await GetByIdAsync(id);
-                if (funcionario == null)
-                {
-                    _logger.LogWarning("Tentativa de desativar funcionário inexistente. ID: {Id}", id);
-                    return false;
-                }
-
-                funcionario.IsActive = false;
-                await UpdateAsync(funcionario);
-                
-                _logger.LogInformation("Funcionário desativado com sucesso. ID: {Id}", funcionario.Id);
-                
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erro ao desativar funcionário. ID: {Id}", id);
-                throw;
-            }
-        }
-
         public async Task<bool> EmailExistsAsync(string Email)
         {
             var normalizedEmail = NormalizeEmail(Email);

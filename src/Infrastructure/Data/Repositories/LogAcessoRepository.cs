@@ -25,7 +25,7 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
 
             try
             {
-                logAcesso.DataHora = DateTime.Now;
+                logAcesso.DataHora = DateTime.UtcNow;
                 _context.LogsAcesso.Add(logAcesso);
                 await _context.SaveChangesAsync();
                 
@@ -90,28 +90,45 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             }
         }
 
-        public async Task<IEnumerable<LogAcesso>> GetByCartaoUidAsync(string cartaoUid)
+        public async Task<IEnumerable<LogAcesso>> GetByCartaoIdAsync(string cartaoId)
         {
-            _logger.LogInformation("Buscando logs de acesso por CartaoUid: {CartaoUid}", cartaoUid);
+            _logger.LogInformation("Buscando logs de acesso por CartaoId: {CartaoId}", cartaoId);
 
             try
             {
                 var logs = await _context.LogsAcesso
                                   .Include(l => l.Cartao)
                                   .Include(l => l.Usuario)
-                                  .Where(l => l.Cartao != null && l.Cartao.Uid == cartaoUid ||
-                                              l.UidInformado == cartaoUid)
+                                  .Where(l => l.CartaoId == cartaoId)
                                   .OrderByDescending(l => l.DataHora)
                                   .ToListAsync();
 
-                _logger.LogInformation("Encontrados {Count} logs para o cartão {CartaoUid}", 
-                    logs.Count, cartaoUid);
+                _logger.LogInformation("Encontrados {Count} logs para o cartão {CartaoId}",
+                    logs.Count, cartaoId);
 
                 return logs;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao buscar logs por CartaoUid: {CartaoUid}", cartaoUid);
+                _logger.LogError(ex, "Erro ao buscar logs por CartaoId: {CartaoId}", cartaoId);
+                throw;
+            }
+        }
+
+        public async Task<IEnumerable<LogAcesso>> GetByUidInformadoAsync(string uidInformado)
+        {
+            try
+            {
+                return await _context.LogsAcesso
+                    .Include(log => log.Cartao)
+                    .Include(log => log.Usuario)
+                    .Where(log => log.CartaoId == null && log.UidInformado == uidInformado)
+                    .OrderByDescending(log => log.DataHora)
+                    .ToListAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao buscar logs pela credencial desconhecida informada.");
                 throw;
             }
         }
@@ -197,7 +214,7 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
 
         public async Task<int> GetTotalAcessosHojeAsync()
         {
-            var hoje = DateTime.Today;
+            var hoje = DateTime.UtcNow.Date;
             var amanha = hoje.AddDays(1);
 
             try
@@ -218,7 +235,7 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
 
         public async Task<int> GetTotalAcessosPermitidosHojeAsync()
         {
-            var hoje = DateTime.Today;
+            var hoje = DateTime.UtcNow.Date;
             var amanha = hoje.AddDays(1);
 
             try
@@ -241,7 +258,7 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
 
         public async Task<int> GetTotalAcessosNegadosHojeAsync()
         {
-            var hoje = DateTime.Today;
+            var hoje = DateTime.UtcNow.Date;
             var amanha = hoje.AddDays(1);
 
             try

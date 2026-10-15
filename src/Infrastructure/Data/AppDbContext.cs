@@ -17,6 +17,7 @@ namespace ControleDeAcesso.Infrastructure.Data
         public DbSet<HistoricoStatusCartao> HistoricoStatusCartao => Set<HistoricoStatusCartao>();
         public DbSet<HistoricoStatusUsuario> HistoricoStatusUsuario => Set<HistoricoStatusUsuario>();
         public DbSet<HistoricoStatusFuncionario> HistoricoStatusFuncionario => Set<HistoricoStatusFuncionario>();
+        public DbSet<SolicitacaoGravacaoCartao> SolicitacoesGravacaoCartao => Set<SolicitacaoGravacaoCartao>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -240,6 +241,72 @@ namespace ControleDeAcesso.Infrastructure.Data
                     .HasDatabaseName("IX_HistoricoStatusFuncionario_FuncionarioId");
                 entity.HasIndex(historico => historico.AlteradoPorFuncionarioId)
                     .HasDatabaseName("IX_HistoricoStatusFuncionario_AlteradoPorFuncionarioId");
+            });
+
+            modelBuilder.Entity<SolicitacaoGravacaoCartao>(entity =>
+            {
+                entity.HasKey(solicitacao => solicitacao.Id);
+                entity.Property(solicitacao => solicitacao.Id).HasMaxLength(36);
+                entity.Property(solicitacao => solicitacao.ChaveIdempotencia).IsRequired().HasMaxLength(128);
+                entity.Property(solicitacao => solicitacao.Credencial).IsRequired().HasMaxLength(16);
+                entity.Property(solicitacao => solicitacao.UsuarioId).IsRequired().HasMaxLength(36);
+                entity.Property(solicitacao => solicitacao.SolicitanteFuncionarioId).IsRequired().HasMaxLength(36);
+                entity.Property(solicitacao => solicitacao.CartaoAnteriorId).HasMaxLength(36);
+                entity.Property(solicitacao => solicitacao.CartaoCriadoId).HasMaxLength(36);
+                entity.Property(solicitacao => solicitacao.Status).IsRequired();
+                entity.Property(solicitacao => solicitacao.DataSolicitacao).IsRequired();
+                entity.Property(solicitacao => solicitacao.MotivoReemissao).HasMaxLength(200);
+                entity.Property(solicitacao => solicitacao.MotivoFalha).HasMaxLength(200);
+                entity.Property(solicitacao => solicitacao.CanceladoPorFuncionarioId).HasMaxLength(36);
+
+                entity.HasIndex(solicitacao => new
+                    {
+                        solicitacao.SolicitanteFuncionarioId,
+                        solicitacao.ChaveIdempotencia
+                    })
+                    .IsUnique()
+                    .HasDatabaseName("IX_SolicitacoesGravacaoCartao_Solicitante_Chave");
+                entity.HasIndex(solicitacao => solicitacao.Credencial)
+                    .IsUnique()
+                    .HasDatabaseName("IX_SolicitacoesGravacaoCartao_Credencial");
+                entity.HasIndex(solicitacao => solicitacao.CartaoAnteriorId)
+                    .IsUnique()
+                    .HasFilter("[CartaoAnteriorId] IS NOT NULL AND [Status] IN (0, 1, 3)")
+                    .HasDatabaseName("IX_SolicitacoesGravacaoCartao_CartaoAnterior_Aberta");
+                entity.HasIndex(solicitacao => solicitacao.UsuarioId)
+                    .HasDatabaseName("IX_SolicitacoesGravacaoCartao_UsuarioId");
+                entity.HasIndex(solicitacao => solicitacao.CanceladoPorFuncionarioId)
+                    .HasDatabaseName("IX_SolicitacoesGravacaoCartao_CanceladoPorFuncionarioId");
+
+                entity.HasOne<Usuario>()
+                    .WithMany()
+                    .HasForeignKey(solicitacao => solicitacao.UsuarioId)
+                    .HasConstraintName("FK_SolicitacoesGravacaoCartao_Usuarios_UsuarioId")
+                    .OnDelete(DeleteBehavior.NoAction);
+                entity.HasOne<Funcionario>()
+                    .WithMany()
+                    .HasForeignKey(solicitacao => solicitacao.SolicitanteFuncionarioId)
+                    .HasConstraintName("FK_SolicitacoesGravacaoCartao_Funcionarios_SolicitanteFuncionarioId")
+                    .OnDelete(DeleteBehavior.NoAction);
+                entity.HasOne<Cartao>()
+                    .WithMany()
+                    .HasForeignKey(solicitacao => solicitacao.CartaoAnteriorId)
+                    .HasConstraintName("FK_SolicitacoesGravacaoCartao_Cartoes_CartaoAnteriorId")
+                    .OnDelete(DeleteBehavior.NoAction);
+                entity.HasOne<Cartao>()
+                    .WithMany()
+                    .HasForeignKey(solicitacao => solicitacao.CartaoCriadoId)
+                    .HasConstraintName("FK_SolicitacoesGravacaoCartao_Cartoes_CartaoCriadoId")
+                    .OnDelete(DeleteBehavior.NoAction);
+                entity.HasOne<Funcionario>()
+                    .WithMany()
+                    .HasForeignKey(solicitacao => solicitacao.CanceladoPorFuncionarioId)
+                    .HasConstraintName("FK_SolicitacoesGravacaoCartao_Funcionarios_CanceladoPorFuncionarioId")
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                entity.ToTable(table => table.HasCheckConstraint(
+                    "CK_SolicitacoesGravacaoCartao_Status",
+                    "[Status] IN (0, 1, 2, 3, 4)"));
             });
         }
     }

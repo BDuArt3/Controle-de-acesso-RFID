@@ -10,17 +10,20 @@ namespace ControleDeAcesso.Application.Services
     {
         private readonly IFuncionarioRepository _funcionarioRepository;
         private readonly IUsuarioRepository _usuarioRepository;
+        private readonly ICartaoRepository _cartaoRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<FuncionarioService> _logger;
 
         public FuncionarioService(
             IFuncionarioRepository funcionarioRepository,
             IUsuarioRepository usuarioRepository,
+            ICartaoRepository cartaoRepository,
             IUnitOfWork unitOfWork,
             ILogger<FuncionarioService> logger)
         {
             _funcionarioRepository = funcionarioRepository;
             _usuarioRepository = usuarioRepository;
+            _cartaoRepository = cartaoRepository;
             _unitOfWork = unitOfWork;
             _logger = logger;
         }
@@ -157,12 +160,10 @@ namespace ControleDeAcesso.Application.Services
             });
         }
 
-        public async Task<bool> DeleteAsync(string id)
+        public async Task<bool> DeleteAsync(string id, string funcionarioResponsavelId, string motivo)
         {
-            if (string.IsNullOrWhiteSpace(id))
-            {
-                throw new ArgumentException("ID do funcionário é obrigatório.", nameof(id));
-            }
+            ValidateStatusChange(id, funcionarioResponsavelId, motivo);
+            motivo = motivo.Trim();
 
             return await _unitOfWork.ExecuteInTransactionAsync(async () =>
             {
@@ -172,28 +173,57 @@ namespace ControleDeAcesso.Application.Services
                     return false;
                 }
 
+                var agora = DateTime.UtcNow;
                 if (funcionario.IsActive)
                 {
                     funcionario.IsActive = false;
                     funcionario.HistoricosStatusFuncionario.Add(new HistoricoStatusFuncionario
                     {
                         IsActive = false,
-                        DataHora = DateTime.UtcNow,
-                        Motivo = "Desativação da conta."
+                        DataHora = agora,
+                        Motivo = motivo,
+                        AlteradoPorFuncionarioId = funcionarioResponsavelId
                     });
-                    await _funcionarioRepository.UpdateAsync(funcionario);
+                }
+
+                if (funcionario.Usuario.IsActive)
+                {
+                    funcionario.Usuario.IsActive = false;
+                    funcionario.Usuario.HistoricosStatus.Add(new HistoricoStatusUsuario
+                    {
+                        IsActive = false,
+                        DataHora = agora,
+                        Motivo = motivo,
+                        AlteradoPorFuncionarioId = funcionarioResponsavelId
+                    });
+                }
+
+                await _funcionarioRepository.UpdateAsync(funcionario);
+
+                var cartoes = await _cartaoRepository.GetAllByUsuarioIdAsync(funcionario.UsuarioId);
+                foreach (var cartao in cartoes.Where(cartao => cartao.Status == StatusCartao.Ativo))
+                {
+                    cartao.AlterarStatus(StatusCartao.Bloqueado);
+                    await _cartaoRepository.UpdateStatusWithHistoryAsync(
+                        cartao,
+                        new HistoricoStatusCartao
+                        {
+                            CartaoId = cartao.Id,
+                            Status = StatusCartao.Bloqueado,
+                            DataHora = agora,
+                            Motivo = motivo,
+                            AlteradoPorFuncionarioId = funcionarioResponsavelId
+                        });
                 }
 
                 return true;
             });
         }
 
-        public async Task<bool> ActivateAsync(string id)
+        public async Task<bool> ActivateAsync(string id, string funcionarioResponsavelId, string motivo)
         {
-            if (string.IsNullOrWhiteSpace(id))
-            {
-                throw new ArgumentException("ID do funcionário é obrigatório.", nameof(id));
-            }
+            ValidateStatusChange(id, funcionarioResponsavelId, motivo);
+            motivo = motivo.Trim();
 
             return await _unitOfWork.ExecuteInTransactionAsync(async () =>
             {
@@ -213,7 +243,21 @@ namespace ControleDeAcesso.Application.Services
                     {
                         IsActive = true,
                         DataHora = now,
-                        Motivo = "Reativação da conta."
+                        Motivo = motivo,
+                        AlteradoPorFuncionarioId = funcionarioResponsavelId
+                    });
+                }
+
+                if (!funcionario.Usuario.IsActive)
+                {
+                    funcionario.Usuario.IsActive = true;
+                    changed = true;
+                    funcionario.Usuario.HistoricosStatus.Add(new HistoricoStatusUsuario
+                    {
+                        IsActive = true,
+                        DataHora = now,
+                        Motivo = motivo,
+                        AlteradoPorFuncionarioId = funcionarioResponsavelId
                     });
                 }
 
@@ -223,6 +267,24 @@ namespace ControleDeAcesso.Application.Services
                 }
                 return true;
             });
+        }
+
+        private static void ValidateStatusChange(string id, string funcionarioResponsavelId, string motivo)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                throw new ArgumentException("ID do funcionário é obrigatório.", nameof(id));
+            }
+
+            if (string.IsNullOrWhiteSpace(funcionarioResponsavelId))
+            {
+                throw new ArgumentException("Funcionário responsável é obrigatório.", nameof(funcionarioResponsavelId));
+            }
+
+            if (string.IsNullOrWhiteSpace(motivo) || motivo.Trim().Length > 200)
+            {
+                throw new ArgumentException("O motivo é obrigatório e deve ter até 200 caracteres.", nameof(motivo));
+            }
         }
 
         private static FuncionarioDto MapToDto(Funcionario funcionario) => new()

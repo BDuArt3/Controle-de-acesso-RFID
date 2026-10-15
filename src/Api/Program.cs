@@ -10,6 +10,7 @@ using ControleDeAcesso.Api.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using ControleDeAcesso.Api.Security;
 
 namespace ControleDeAcesso.Api
 {
@@ -37,6 +38,7 @@ namespace ControleDeAcesso.Api
             builder.Services.AddScoped<IFuncionarioRepository, FuncionarioRepository>();
             builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
             builder.Services.AddScoped<ICartaoRepository, CartaoRepository>();
+            builder.Services.AddScoped<ISolicitacaoGravacaoCartaoRepository, SolicitacaoGravacaoCartaoRepository>();
             builder.Services.AddScoped<ILogAcessoRepository, LogAcessoRepository>();
             builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
@@ -59,7 +61,6 @@ namespace ControleDeAcesso.Api
                 throw new InvalidOperationException("JWT Issuer não configurado");
             if (string.IsNullOrWhiteSpace(audience))
                 throw new InvalidOperationException("JWT Audience não configurada");
-
             var key = Encoding.UTF8.GetBytes(secretKey);
 
             builder.Services.AddAuthentication(options =>
@@ -82,7 +83,11 @@ namespace ControleDeAcesso.Api
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.Zero
                 };
-            });
+            })
+            .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions,
+                WorkerApiKeyAuthenticationHandler>(
+                WorkerApiKeyAuthenticationHandler.SchemeName,
+                _ => { });
 
             builder.Services.AddAuthorization(options =>
             {
@@ -94,6 +99,12 @@ namespace ControleDeAcesso.Api
                 
                 // Política para todos os funcionários - pode pelo menos visualizar
                 options.AddPolicy("TodosFuncionarios", policy => policy.RequireRole("Admin", "Operador", "Visualizador"));
+                options.AddPolicy("WorkerCallback", policy =>
+                {
+                    policy.AddAuthenticationSchemes(WorkerApiKeyAuthenticationHandler.SchemeName);
+                    policy.RequireAuthenticatedUser();
+                    policy.RequireClaim("machine_type", "rfid-worker");
+                });
             });
 
             // Add services to the container.

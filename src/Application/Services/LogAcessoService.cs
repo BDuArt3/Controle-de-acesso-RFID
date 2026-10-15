@@ -34,6 +34,7 @@ namespace ControleDeAcesso.Application.Services
                 string? cartaoId = null;
                 string? usuarioId = null;
                 string? uidInformado = null;
+                Cartao? cartaoParaLog = null;
 
                 if (!string.IsNullOrWhiteSpace(createLogAcessoDto.CartaoId) ||
                     !string.IsNullOrWhiteSpace(createLogAcessoDto.UsuarioId))
@@ -44,29 +45,33 @@ namespace ControleDeAcesso.Application.Services
                         throw new ArgumentException("CartaoId e UsuarioId devem ser informados juntos.");
                     }
 
-                    var cartao = await _cartaoRepository.GetByIdAsync(createLogAcessoDto.CartaoId);
-                    if (cartao is null || cartao.UsuarioId != createLogAcessoDto.UsuarioId)
+                    cartaoParaLog = await _cartaoRepository.GetByIdAsync(createLogAcessoDto.CartaoId);
+                    if (cartaoParaLog is null || cartaoParaLog.UsuarioId != createLogAcessoDto.UsuarioId)
                     {
                         throw new ArgumentException("Cartão e usuário do log não correspondem.");
                     }
 
-                    cartaoId = cartao.Id;
-                    usuarioId = cartao.UsuarioId;
+                    cartaoId = cartaoParaLog.Id;
+                    usuarioId = cartaoParaLog.UsuarioId;
+                }
+                else if (!string.IsNullOrWhiteSpace(createLogAcessoDto.UidInformado))
+                {
+                    uidInformado = createLogAcessoDto.UidInformado.Trim();
                 }
                 else
                 {
-                    var uid = createLogAcessoDto.UidInformado ?? createLogAcessoDto.CartaoUid;
+                    var uid = createLogAcessoDto.CartaoUid;
                     if (!string.IsNullOrWhiteSpace(uid))
                     {
-                        var cartao = await _cartaoRepository.GetByUidAsync(uid.Trim());
-                        if (cartao is null)
+                        cartaoParaLog = await _cartaoRepository.GetByUidAsync(uid.Trim());
+                        if (cartaoParaLog is null)
                         {
                             uidInformado = uid.Trim();
                         }
                         else
                         {
-                            cartaoId = cartao.Id;
-                            usuarioId = cartao.UsuarioId;
+                            cartaoId = cartaoParaLog.Id;
+                            usuarioId = cartaoParaLog.UsuarioId;
                         }
                     }
                 }
@@ -74,12 +79,14 @@ namespace ControleDeAcesso.Application.Services
                 var logAcesso = new LogAcesso
                 {
                     CartaoId = cartaoId,
+                    Cartao = cartaoParaLog,
                     UsuarioId = usuarioId,
+                    Usuario = cartaoParaLog?.Usuario,
                     UidInformado = uidInformado,
                     AcessoPermitido = createLogAcessoDto.AcessoPermitido,
                     Motivo = createLogAcessoDto.Motivo?.Trim() ?? string.Empty,
                     MotivoTipo = createLogAcessoDto.MotivoTipo,
-                    DataHora = DateTime.Now
+                    DataHora = DateTime.UtcNow
                 };
 
                 var logCriado = await _logAcessoRepository.CreateAsync(logAcesso);
@@ -159,7 +166,10 @@ namespace ControleDeAcesso.Application.Services
                     throw new ArgumentException("UID do cartão é obrigatório", nameof(cartaoUid));
                 }
 
-                var logs = await _logAcessoRepository.GetByCartaoUidAsync(cartaoUid);
+                var cartao = await _cartaoRepository.GetByUidAsync(cartaoUid.Trim());
+                var logs = cartao is null
+                    ? await _logAcessoRepository.GetByUidInformadoAsync(cartaoUid.Trim())
+                    : await _logAcessoRepository.GetByCartaoIdAsync(cartao.Id);
                 var result = new List<LogAcessoDto>();
 
                 foreach (var log in logs)
@@ -187,7 +197,8 @@ namespace ControleDeAcesso.Application.Services
                     throw new ArgumentException("Data início deve ser menor ou igual à data fim");
                 }
 
-                var logs = await _logAcessoRepository.GetByDataPeriodoAsync(dataInicio, dataFim);
+                var logs = await _logAcessoRepository.GetByDataPeriodoAsync(
+                    ToUtc(dataInicio), ToUtc(dataFim));
                 var result = new List<LogAcessoDto>();
 
                 foreach (var log in logs)
@@ -210,7 +221,8 @@ namespace ControleDeAcesso.Application.Services
 
             try
             {
-                var logs = await _logAcessoRepository.GetByDataPeriodoAndStatusAsync(dataInicio, dataFim, true);
+                var logs = await _logAcessoRepository.GetByDataPeriodoAndStatusAsync(
+                    ToUtc(dataInicio), ToUtc(dataFim), true);
                 var result = new List<LogAcessoDto>();
 
                 foreach (var log in logs)
@@ -233,7 +245,8 @@ namespace ControleDeAcesso.Application.Services
 
             try
             {
-                var logs = await _logAcessoRepository.GetByDataPeriodoAndStatusAsync(dataInicio, dataFim, false);
+                var logs = await _logAcessoRepository.GetByDataPeriodoAndStatusAsync(
+                    ToUtc(dataInicio), ToUtc(dataFim), false);
                 var result = new List<LogAcessoDto>();
 
                 foreach (var log in logs)
@@ -290,7 +303,7 @@ namespace ControleDeAcesso.Application.Services
 
                 var estatisticas = new
                 {
-                    Data = DateTime.Today,
+                    Data = DateTime.UtcNow.Date,
                     TotalTentativas = totalHoje,
                     AcessosPermitidos = permitidosHoje,
                     AcessosNegados = negadosHoje,
@@ -316,16 +329,16 @@ namespace ControleDeAcesso.Application.Services
 
             try
             {
-                var dataInicio = data.Date;
-                var dataFim = dataInicio.AddDays(1).AddTicks(-1);
+                var dataInicio = ToUtc(data).Date;
+                var dataFim = dataInicio.AddDays(1);
 
-                var logs = await _logAcessoRepository.GetByDataPeriodoAsync(dataInicio, dataFim);
+                var logs = (await _logAcessoRepository.GetByDataPeriodoAsync(dataInicio, dataFim.AddTicks(-1))).ToList();
                 var permitidos = logs.Count(l => l.AcessoPermitido);
                 var negados = logs.Count(l => !l.AcessoPermitido);
 
                 var relatorio = new
                 {
-                    Data = data.Date,
+                    Data = dataInicio,
                     TotalTentativas = logs.Count(),
                     AcessosPermitidos = permitidos,
                     AcessosNegados = negados,
@@ -333,8 +346,13 @@ namespace ControleDeAcesso.Application.Services
                     HorarioPico = logs.GroupBy(l => l.DataHora.Hour)
                                      .OrderByDescending(g => g.Count())
                                      .FirstOrDefault()?.Key ?? 0,
-                    CartoesMaisUsados = logs.GroupBy(l => l.Cartao?.Uid ?? l.UidInformado ?? "UID vazio")
-                                          .Select(g => new { CartaoUid = g.Key, Tentativas = g.Count() })
+                    CartoesMaisUsados = logs.GroupBy(l => l.CartaoId ?? $"unknown:{l.UidInformado ?? "empty"}")
+                                          .Select(g => new
+                                          {
+                                              CartaoId = g.First().CartaoId,
+                                              CartaoUid = g.First().Cartao?.Uid ?? g.First().UidInformado ?? string.Empty,
+                                              Tentativas = g.Count()
+                                          })
                                           .OrderByDescending(x => x.Tentativas)
                                           .Take(5)
                                           .ToList()
@@ -354,8 +372,13 @@ namespace ControleDeAcesso.Application.Services
             var dto = new LogAcessoDto
             {
                 Id = logAcesso.Id,
-                DataHora = logAcesso.DataHora,
-                CartaoUid = logAcesso.Cartao?.Uid ?? logAcesso.UidInformado ?? string.Empty,
+                DataHora = DateTime.SpecifyKind(logAcesso.DataHora, DateTimeKind.Utc),
+                CartaoId = logAcesso.CartaoId,
+                UsuarioId = logAcesso.UsuarioId,
+                UidInformado = logAcesso.UidInformado,
+                CartaoUid = logAcesso.CartaoId is not null
+                    ? logAcesso.Cartao?.Uid ?? string.Empty
+                    : logAcesso.UidInformado ?? string.Empty,
                 AcessoPermitido = logAcesso.AcessoPermitido,
                 Motivo = logAcesso.Motivo,
                 MotivoTipo = logAcesso.MotivoTipo,
@@ -365,5 +388,12 @@ namespace ControleDeAcesso.Application.Services
 
             return await Task.FromResult(dto);
         }
+
+        private static DateTime ToUtc(DateTime value) => value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
     }
 }

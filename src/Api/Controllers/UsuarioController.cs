@@ -3,6 +3,7 @@ using ControleDeAcesso.Application.Services.Interfaces;
 using ControleDeAcesso.Application.DTOs;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace ControleDeAcesso.Api.Controllers
 {
@@ -152,13 +153,20 @@ namespace ControleDeAcesso.Api.Controllers
         /// <returns>Resultado da operação</returns>
         [HttpDelete("{id}")]
         [Authorize(Policy = "AdminOnly")] // Apenas admins podem desativar usuários
-        public async Task<ActionResult> Delete(string id)
+        public async Task<ActionResult> Delete(string id, [FromBody] AlterarStatusUsuarioDto request)
         {
             _logger.LogInformation("Requisição para desativar usuário. ID: {Id}", id);
 
             try
             {
-                var resultado = await _usuarioService.DeleteAsync(id);
+                var funcionarioResponsavelId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrWhiteSpace(funcionarioResponsavelId))
+                {
+                    return Unauthorized(new { message = "Funcionário autenticado sem identificador válido." });
+                }
+
+                var resultado = await _usuarioService.DeleteAsync(
+                    id, funcionarioResponsavelId, request.Motivo);
                 
                 if (!resultado)
                 {
@@ -185,13 +193,22 @@ namespace ControleDeAcesso.Api.Controllers
         /// <returns>Resultado da operação</returns>
         [HttpPut("{id}/ativar")]
         [Authorize(Policy = "AdminOnly")] // Apenas admins podem ativar usuários
-        public async Task<ActionResult> Activate(string id)
+        public async Task<ActionResult> Activate(
+            string id,
+            [FromBody] AlterarStatusUsuarioDto request)
         {
             _logger.LogInformation("Requisição para ativar usuário. ID: {Id}", id);
 
             try
             {
-                var resultado = await _usuarioService.ActivateAsync(id);
+                var funcionarioResponsavelId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrWhiteSpace(funcionarioResponsavelId))
+                {
+                    return Unauthorized(new { message = "Funcionário autenticado sem identificador válido." });
+                }
+
+                var resultado = await _usuarioService.ActivateAsync(
+                    id, funcionarioResponsavelId, request.Motivo);
                 
                 if (!resultado)
                 {

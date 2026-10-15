@@ -9,7 +9,6 @@ namespace ControleDeAcesso.Application.Repositories.Interfaces
         Task<Funcionario?> GetByIdAsync(string id);
         Task<IEnumerable<Funcionario>> GetAllAsync();
         Task<Funcionario> UpdateAsync(Funcionario funcionario);
-        Task<bool> DeleteAsync(string id);
         Task<bool> EmailExistsAsync(string usuarioAcesso);
 
         Task<Funcionario?> GetByEmailAsync(string login);

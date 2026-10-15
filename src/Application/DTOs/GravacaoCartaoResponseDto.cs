@@ -1,39 +1,22 @@
 namespace ControleDeAcesso.Application.DTOs
 {
-    /// <summary>
-    /// DTO de resposta para operações de gravação de cartão
-    /// Não expõe o GUID completo por segurança
-    /// </summary>
-    public class GravacaoCartaoResponseDto
-    {
-        /// <summary>
-        /// Identificador parcial do cartão (apenas para referência)
-        /// </summary>
-        public string CartaoRef { get; set; } = string.Empty;
-        
-        /// <summary>
-        /// Status da solicitação de gravação
-        /// </summary>
-        public string Status { get; set; } = string.Empty;
-        
-        /// <summary>
-        /// Mensagem descritiva do resultado
-        /// </summary>
-        public string Mensagem { get; set; } = string.Empty;
-        
-        /// <summary>
-        /// ID do usuário associado
-        /// </summary>
-        public string UsuarioId { get; set; } = string.Empty;
-        
-        /// <summary>
-        /// Nome do usuário associado
-        /// </summary>
-        public string NomeUsuario { get; set; } = string.Empty;
-        
-        /// <summary>
-        /// Timestamp da solicitação
-        /// </summary>
-        public DateTime DataSolicitacao { get; set; }
-    }
+    /// <summary>Estado de uma operação de gravação de cartão RFID.</summary>
+    public sealed record GravacaoCartaoResponseDto(
+        string SolicitacaoId,
+        string Status,
+        string Mensagem,
+        string UsuarioId,
+        string NomeUsuario,
+        DateTimeOffset DataSolicitacao,
+        string? CartaoId);
+
+    /// <summary>Resultado interno que mantém a credencial fora da resposta HTTP.</summary>
+    public sealed record GravacaoSolicitadaResult(
+        GravacaoCartaoResponseDto Response,
+        GravacaoCartaoCommandDto? Command);
+
+    /// <summary>Comando privado enviado pelo SignalR ao Worker RFID.</summary>
+    public sealed record GravacaoCartaoCommandDto(
+        string SolicitacaoId,
+        string Credencial);
 }

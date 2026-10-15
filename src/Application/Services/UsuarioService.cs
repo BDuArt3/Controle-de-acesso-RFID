@@ -170,16 +170,13 @@ namespace ControleDeAcesso.Application.Services
             }
         }
 
-        public async Task<bool> DeleteAsync(string id)
+        public async Task<bool> DeleteAsync(string id, string funcionarioResponsavelId, string motivo)
         {
             _logger.LogInformation("Iniciando desativação de usuário. ID: {Id}", id);
 
             try
             {
-                if (string.IsNullOrWhiteSpace(id))
-                {
-                    throw new ArgumentException("ID é obrigatório", nameof(id));
-                }
+                ValidateStatusChange(id, funcionarioResponsavelId, motivo);
 
                 var usuario = await _usuarioRepository.GetByIdAsync(id);
                 if (usuario is null)
@@ -195,7 +192,8 @@ namespace ControleDeAcesso.Application.Services
                     {
                         IsActive = false,
                         DataHora = DateTime.UtcNow,
-                        Motivo = "Desativação da conta."
+                        Motivo = motivo.Trim(),
+                        AlteradoPorFuncionarioId = funcionarioResponsavelId
                     });
                     await _usuarioRepository.UpdateAsync(usuario);
                 }
@@ -210,16 +208,13 @@ namespace ControleDeAcesso.Application.Services
             }
         }
 
-        public async Task<bool> ActivateAsync(string id)
+        public async Task<bool> ActivateAsync(string id, string funcionarioResponsavelId, string motivo)
         {
             _logger.LogInformation("Iniciando ativação de usuário. ID: {Id}", id);
 
             try
             {
-                if (string.IsNullOrWhiteSpace(id))
-                {
-                    throw new ArgumentException("ID é obrigatório", nameof(id));
-                }
+                ValidateStatusChange(id, funcionarioResponsavelId, motivo);
 
                 var usuario = await _usuarioRepository.GetByIdAsync(id);
                 if (usuario == null)
@@ -235,7 +230,8 @@ namespace ControleDeAcesso.Application.Services
                     {
                         IsActive = true,
                         DataHora = DateTime.UtcNow,
-                        Motivo = "Reativação da conta."
+                        Motivo = motivo.Trim(),
+                        AlteradoPorFuncionarioId = funcionarioResponsavelId
                     });
                     await _usuarioRepository.UpdateAsync(usuario);
                 }
@@ -252,6 +248,24 @@ namespace ControleDeAcesso.Application.Services
             }
         }
 
+        private static void ValidateStatusChange(string id, string funcionarioResponsavelId, string motivo)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                throw new ArgumentException("ID é obrigatório.", nameof(id));
+            }
+
+            if (string.IsNullOrWhiteSpace(funcionarioResponsavelId))
+            {
+                throw new ArgumentException("Funcionário responsável é obrigatório.", nameof(funcionarioResponsavelId));
+            }
+
+            if (string.IsNullOrWhiteSpace(motivo) || motivo.Trim().Length > 200)
+            {
+                throw new ArgumentException("O motivo é obrigatório e deve ter até 200 caracteres.", nameof(motivo));
+            }
+        }
+
         private static UsuarioDto MapToDto(Usuario usuario)
         {
             return new UsuarioDto
@@ -264,6 +278,7 @@ namespace ControleDeAcesso.Application.Services
                 {
                     Id = c.Id,
                     Uid = c.Uid,
+                    Status = c.Status,
                     IsActive = c.Status == StatusCartao.Ativo,
                     UsuarioId = c.UsuarioId
                 }).ToList() ?? new List<CartaoDto>()

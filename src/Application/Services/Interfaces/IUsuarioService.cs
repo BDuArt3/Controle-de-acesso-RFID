@@ -9,7 +9,7 @@ namespace ControleDeAcesso.Application.Services.Interfaces
         Task<UsuarioDto?> GetByIdAsync(string id);
         Task<IEnumerable<UsuarioDto>> GetAllAsync();
         Task<UsuarioDto> UpdateAsync(string id, CreateUsuarioDto updateUsuarioDto);
-        Task<bool> DeleteAsync(string id);
-        Task<bool> ActivateAsync(string id);
+        Task<bool> DeleteAsync(string id, string funcionarioResponsavelId, string motivo);
+        Task<bool> ActivateAsync(string id, string funcionarioResponsavelId, string motivo);
     }
 }

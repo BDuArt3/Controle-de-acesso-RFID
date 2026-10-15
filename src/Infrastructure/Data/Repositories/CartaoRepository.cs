@@ -54,6 +54,7 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             {
                 var cartao = await _context.Cartoes
                                     .Include(c => c.Usuario)
+                                    .Include(c => c.HistoricoAssociacaoCartao)
                                     .FirstOrDefaultAsync(c => c.Id == id);
 
                 if (cartao == null)

@@ -8,7 +8,6 @@ namespace ControleDeAcesso.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize] // Requer autenticação para todos os endpoints
     public class AcessoController : ControllerBase
     {
         private readonly IAcessoService _acessoService;
@@ -26,6 +25,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="request">Dados do cartão para verificação</param>
         /// <returns>Resultado da verificação de acesso</returns>
         [HttpPost("verificar")]
+        [Authorize(Policy = "WorkerCallback")]
         public async Task<ActionResult<AccessCheckResponseDto>> VerificarAcesso([FromBody] VerificarAcessoRequestDto request)
         {
             _logger.LogInformation("Solicitação de verificação de acesso - UID: {uid}, GUID: {guid}", request.Uid, request.Guid);

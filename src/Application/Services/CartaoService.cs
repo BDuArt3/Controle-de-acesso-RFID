@@ -12,103 +12,506 @@ namespace ControleDeAcesso.Application.Services
     {
         private readonly ICartaoRepository _cartaoRepository;
         private readonly IUsuarioRepository _usuarioRepository;
+        private readonly IFuncionarioRepository _funcionarioRepository;
+        private readonly ISolicitacaoGravacaoCartaoRepository _solicitacaoRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<CartaoService> _logger;
 
         public CartaoService(
             ICartaoRepository cartaoRepository,
             IUsuarioRepository usuarioRepository,
+            IFuncionarioRepository funcionarioRepository,
+            ISolicitacaoGravacaoCartaoRepository solicitacaoRepository,
             IUnitOfWork unitOfWork,
             ILogger<CartaoService> logger)
         {
             _cartaoRepository = cartaoRepository;
             _usuarioRepository = usuarioRepository;
+            _funcionarioRepository = funcionarioRepository;
+            _solicitacaoRepository = solicitacaoRepository;
             _unitOfWork = unitOfWork;
             _logger = logger;
         }
 
-        public async Task<CartaoDto> CreateAsync(CreateCartaoDto createCartaoDto)
+        public async Task<GravacaoSolicitadaResult> SolicitarGravacaoAsync(
+            GravarCartaoDto request,
+            string funcionarioId,
+            string idempotencyKey,
+            CancellationToken cancellationToken)
         {
-            _logger.LogInformation("Iniciando criação de cartão. UID: {Uid}, UsuarioId: {UsuarioId}", 
-                createCartaoDto.Uid, createCartaoDto.UsuarioId);
+            ArgumentNullException.ThrowIfNull(request);
+            cancellationToken.ThrowIfCancellationRequested();
 
-            try
+            var usuarioId = request.UsuarioId?.Trim();
+            var solicitanteId = funcionarioId?.Trim();
+            var chave = idempotencyKey?.Trim();
+            var cartaoAnteriorId = request.CartaoAnteriorId?.Trim();
+            var motivoReemissao = request.MotivoReemissao?.Trim();
+
+            if (string.IsNullOrWhiteSpace(usuarioId))
             {
-                if (string.IsNullOrWhiteSpace(createCartaoDto.Uid))
-                {
-                    throw new ArgumentException("UID do cartão é obrigatório", nameof(createCartaoDto.Uid));
-                }
+                throw new ArgumentException("ID do usuário é obrigatório.", nameof(request));
+            }
 
-                if (string.IsNullOrWhiteSpace(createCartaoDto.UsuarioId))
-                {
-                    throw new ArgumentException("ID do usuário é obrigatório", nameof(createCartaoDto.UsuarioId));
-                }
+            if (string.IsNullOrWhiteSpace(solicitanteId))
+            {
+                throw new ArgumentException("Funcionário solicitante inválido.", nameof(funcionarioId));
+            }
 
-                return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+            if (string.IsNullOrWhiteSpace(chave) || chave.Length > 128)
+            {
+                throw new ArgumentException("O header Idempotency-Key é obrigatório e deve ter até 128 caracteres.", nameof(idempotencyKey));
+            }
+
+            if (cartaoAnteriorId != null && string.IsNullOrWhiteSpace(motivoReemissao))
+            {
+                throw new ArgumentException("Informe o motivo da reemissão.", nameof(request));
+            }
+
+            if (motivoReemissao?.Length > 200)
+            {
+                throw new ArgumentException("O motivo da reemissão deve ter até 200 caracteres.", nameof(request));
+            }
+
+            return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var solicitacaoExistente = await _solicitacaoRepository.GetByIdempotencyKeyAsync(
+                    solicitanteId, chave, cancellationToken);
+                if (solicitacaoExistente != null)
                 {
-                    var usuarioId = createCartaoDto.UsuarioId.Trim();
-                    var uid = createCartaoDto.Uid.Trim();
-                    var usuario = await _usuarioRepository.GetByIdAsync(usuarioId);
-                    if (usuario == null)
+                    if (solicitacaoExistente.UsuarioId != usuarioId ||
+                        solicitacaoExistente.CartaoAnteriorId != cartaoAnteriorId ||
+                        solicitacaoExistente.MotivoReemissao != motivoReemissao)
                     {
-                        throw new InvalidOperationException($"Usuário com ID {usuarioId} não encontrado");
+                        throw new InvalidOperationException(
+                            "A chave Idempotency-Key já foi usada com dados diferentes.");
                     }
 
-                    if (!usuario.IsActive)
+                    var usuarioRepetido = await _usuarioRepository.GetByIdAsync(usuarioId);
+                    return new GravacaoSolicitadaResult(
+                        await MapSolicitacaoAsync(solicitacaoExistente, usuarioRepetido?.Nome),
+                        CriarComando(solicitacaoExistente));
+                }
+
+                var solicitante = await _funcionarioRepository.GetByIdAsync(solicitanteId);
+                if (solicitante == null || !solicitante.IsActive)
+                {
+                    throw new InvalidOperationException("O funcionário solicitante não existe ou está inativo.");
+                }
+
+                var usuario = await _usuarioRepository.GetByIdAsync(usuarioId);
+                if (usuario == null)
+                {
+                    throw new KeyNotFoundException($"Usuário com ID {usuarioId} não encontrado.");
+                }
+
+                if (!usuario.IsActive)
+                {
+                    throw new InvalidOperationException($"Usuário com ID {usuarioId} está inativo.");
+                }
+
+                Cartao? cartaoAnterior = null;
+                if (cartaoAnteriorId != null)
+                {
+                    cartaoAnterior = await _cartaoRepository.GetByIdAsync(cartaoAnteriorId);
+                    if (cartaoAnterior == null)
                     {
-                        throw new InvalidOperationException($"Usuário com ID {usuarioId} está inativo");
+                        throw new KeyNotFoundException($"Cartão anterior com ID {cartaoAnteriorId} não encontrado.");
                     }
 
-                    var cartaoExistente = await _cartaoRepository.GetByUidAsync(uid);
-                    if (cartaoExistente != null)
+                    if (cartaoAnterior.Status != StatusCartao.Ativo)
                     {
-                        if (cartaoExistente.UsuarioId == usuarioId)
+                        throw new InvalidOperationException("Somente um cartão ativo pode iniciar uma reemissão.");
+                    }
+
+                    if (await _solicitacaoRepository.HasOpenRequestForCardAsync(cartaoAnteriorId, cancellationToken))
+                    {
+                        throw new InvalidOperationException("Já existe uma reemissão pendente para este cartão.");
+                    }
+                }
+
+                var credencial = await GerarCredencialUnicaAsync(cancellationToken);
+                var agora = DateTime.UtcNow;
+                var solicitacao = new SolicitacaoGravacaoCartao
+                {
+                    ChaveIdempotencia = chave,
+                    Credencial = credencial,
+                    UsuarioId = usuarioId,
+                    SolicitanteFuncionarioId = solicitanteId,
+                    CartaoAnteriorId = cartaoAnteriorId,
+                    MotivoReemissao = motivoReemissao,
+                    DataSolicitacao = agora
+                };
+
+                if (cartaoAnterior != null)
+                {
+                    if (!cartaoAnterior.AlterarStatus(StatusCartao.Bloqueado))
+                    {
+                        throw new InvalidOperationException("O cartão anterior já não está ativo.");
+                    }
+
+                    await _cartaoRepository.UpdateStatusWithHistoryAsync(
+                        cartaoAnterior,
+                        new HistoricoStatusCartao
                         {
-                            return MapToDto(cartaoExistente);
-                        }
+                            CartaoId = cartaoAnterior.Id,
+                            Status = StatusCartao.Bloqueado,
+                            DataHora = agora,
+                            Motivo = TruncarMotivo($"Bloqueado para reemissão: {motivoReemissao}"),
+                            AlteradoPorFuncionarioId = solicitanteId
+                        });
+                }
 
-                        throw new InvalidOperationException($"UID {uid} já está em uso");
+                await _solicitacaoRepository.AddAsync(solicitacao, cancellationToken);
+                _logger.LogInformation(
+                    "Solicitação de gravação persistida. Solicitação: {SolicitacaoId}, Usuário: {UsuarioId}, Reemissão: {Reemissao}",
+                    solicitacao.Id, usuarioId, cartaoAnteriorId != null);
+
+                return new GravacaoSolicitadaResult(
+                    await MapSolicitacaoAsync(solicitacao, usuario.Nome),
+                    CriarComando(solicitacao));
+            });
+        }
+
+        public async Task<GravacaoCartaoResponseDto?> GetSolicitacaoAsync(
+            string id,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                throw new ArgumentException("ID da solicitação é obrigatório.", nameof(id));
+            }
+
+            var solicitacao = await _solicitacaoRepository.GetByIdAsync(id, cancellationToken);
+            if (solicitacao == null)
+            {
+                return null;
+            }
+
+            var usuario = await _usuarioRepository.GetByIdAsync(solicitacao.UsuarioId);
+            return await MapSolicitacaoAsync(solicitacao, usuario?.Nome);
+        }
+
+        public async Task<GravacaoCartaoCommandDto?> PrepararRetentativaAsync(
+            string id,
+            CancellationToken cancellationToken)
+        {
+            return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+            {
+                var solicitacao = await _solicitacaoRepository.GetByIdAsync(id, cancellationToken);
+                if (solicitacao == null)
+                {
+                    return null;
+                }
+
+                if (!solicitacao.PrepararRetentativa(DateTime.UtcNow, TimeSpan.FromMinutes(1)))
+                {
+                    throw new InvalidOperationException(
+                        "A solicitação não pode ser reenviada agora. Aguarde a falha do Worker ou pelo menos um minuto após o último despacho.");
+                }
+
+                await _solicitacaoRepository.SaveChangesAsync(cancellationToken);
+                return CriarComando(solicitacao);
+            });
+        }
+
+        public async Task<bool> RegistrarDespachoAsync(string id, CancellationToken cancellationToken)
+        {
+            return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+            {
+                var solicitacao = await _solicitacaoRepository.GetByIdAsync(id, cancellationToken);
+                if (solicitacao == null)
+                {
+                    return false;
+                }
+
+                if (!solicitacao.MarcarEnviada(DateTime.UtcNow))
+                {
+                    return false;
+                }
+
+                await _solicitacaoRepository.SaveChangesAsync(cancellationToken);
+                return true;
+            });
+        }
+
+        public async Task<GravacaoCartaoResponseDto?> ConfirmarGravacaoAsync(
+            ConfirmarGravacaoCartaoDto request,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            var solicitacaoId = request.SolicitacaoId?.Trim();
+            var credencial = request.CredencialGravada?.Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(solicitacaoId) ||
+                string.IsNullOrWhiteSpace(credencial) ||
+                credencial.Length != 16 ||
+                credencial.Any(character => !Uri.IsHexDigit(character)))
+            {
+                throw new ArgumentException("Solicitação e credencial hexadecimal de 16 caracteres são obrigatórias.");
+            }
+
+            return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+            {
+                var solicitacao = await _solicitacaoRepository.GetByIdAsync(solicitacaoId, cancellationToken);
+                if (solicitacao == null)
+                {
+                    return null;
+                }
+
+                if (!string.Equals(solicitacao.Credencial, credencial, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException("A credencial confirmada não corresponde à solicitação.");
+                }
+
+                var usuario = await _usuarioRepository.GetByIdAsync(solicitacao.UsuarioId);
+                if (solicitacao.Status == StatusSolicitacaoGravacao.Concluida)
+                {
+                    return await MapSolicitacaoAsync(solicitacao, usuario?.Nome);
+                }
+
+                if (solicitacao.Status == StatusSolicitacaoGravacao.Cancelada)
+                {
+                    throw new InvalidOperationException("A solicitação foi cancelada e não pode ser confirmada.");
+                }
+
+                if (usuario == null || !usuario.IsActive)
+                {
+                    solicitacao.MarcarFalha("Usuário destinatário inexistente ou inativo na confirmação.");
+                    await _solicitacaoRepository.SaveChangesAsync(cancellationToken);
+                    return await MapSolicitacaoAsync(solicitacao, usuario?.Nome);
+                }
+
+                var cartaoExistente = await _cartaoRepository.GetByUidAsync(credencial);
+                if (cartaoExistente != null)
+                {
+                    if (cartaoExistente.Id == solicitacao.CartaoCriadoId &&
+                        solicitacao.Status == StatusSolicitacaoGravacao.Concluida)
+                    {
+                        return await MapSolicitacaoAsync(solicitacao, usuario.Nome);
+                    }
+
+                    throw new InvalidOperationException("A credencial já pertence a outro cartão lógico.");
+                }
+
+                Cartao? cartaoAnterior = null;
+                if (solicitacao.CartaoAnteriorId != null)
+                {
+                    cartaoAnterior = await _cartaoRepository.GetByIdAsync(solicitacao.CartaoAnteriorId);
+                    if (cartaoAnterior == null || cartaoAnterior.Status != StatusCartao.Bloqueado)
+                    {
+                        throw new InvalidOperationException(
+                            "O cartão anterior não está no estado bloqueado esperado para concluir a reemissão.");
+                    }
+
+                    if (cartaoAnterior.HistoricoAssociacaoCartao == null ||
+                        cartaoAnterior.HistoricoAssociacaoCartao.DataDesassociacao != null)
+                    {
+                        throw new InvalidOperationException(
+                            "O histórico de associação do cartão anterior está ausente ou já encerrado.");
+                    }
+                }
+
+                var agora = DateTime.UtcNow;
+                var novoCartao = new Cartao
+                {
+                    Uid = credencial,
+                    UsuarioId = usuario.Id,
+                    DataRegistro = agora
+                };
+                var associacao = new HistoricoAssociacoesCartao
+                {
+                    CartaoId = novoCartao.Id,
+                    DataAssociacao = agora,
+                    AssociadoPorFuncionarioId = solicitacao.SolicitanteFuncionarioId
+                };
+                var statusInicial = new HistoricoStatusCartao
+                {
+                    CartaoId = novoCartao.Id,
+                    Status = StatusCartao.Ativo,
+                    DataHora = agora,
+                    Motivo = solicitacao.CartaoAnteriorId == null
+                        ? "Emissão inicial do cartão."
+                        : "Nova emissão após regravação do cartão físico.",
+                    AlteradoPorFuncionarioId = solicitacao.SolicitanteFuncionarioId
+                };
+
+                await _cartaoRepository.CreateWithAuditAsync(novoCartao, associacao, statusInicial);
+
+                if (cartaoAnterior != null)
+                {
+                    cartaoAnterior.AlterarStatus(StatusCartao.Cancelado);
+                    cartaoAnterior.HistoricoAssociacaoCartao!.DataDesassociacao = agora;
+                    cartaoAnterior.HistoricoAssociacaoCartao.DesassociadoPorFuncionarioId =
+                        solicitacao.SolicitanteFuncionarioId;
+
+                    await _cartaoRepository.UpdateStatusWithHistoryAsync(
+                        cartaoAnterior,
+                        new HistoricoStatusCartao
+                        {
+                            CartaoId = cartaoAnterior.Id,
+                            Status = StatusCartao.Cancelado,
+                            DataHora = agora,
+                            Motivo = "Emissão cancelada após confirmação da nova gravação.",
+                            AlteradoPorFuncionarioId = solicitacao.SolicitanteFuncionarioId
+                        });
+                }
+
+                solicitacao.MarcarConcluida(novoCartao.Id, agora);
+                await _solicitacaoRepository.SaveChangesAsync(cancellationToken);
+
+                _logger.LogInformation(
+                    "Gravação confirmada. Solicitação: {SolicitacaoId}, Cartão criado: {CartaoId}, Cartão anterior: {CartaoAnteriorId}",
+                    solicitacao.Id, novoCartao.Id, solicitacao.CartaoAnteriorId);
+
+                return await MapSolicitacaoAsync(solicitacao, usuario.Nome);
+            });
+        }
+
+        public async Task<GravacaoCartaoResponseDto?> RegistrarFalhaGravacaoAsync(
+            FalharGravacaoCartaoDto request,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            var motivo = request.Motivo?.Trim();
+            if (string.IsNullOrWhiteSpace(request.SolicitacaoId) ||
+                string.IsNullOrWhiteSpace(motivo) ||
+                motivo.Length > 200)
+            {
+                throw new ArgumentException("Solicitação e motivo de falha válidos são obrigatórios.");
+            }
+
+            return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+            {
+                var solicitacao = await _solicitacaoRepository.GetByIdAsync(
+                    request.SolicitacaoId.Trim(), cancellationToken);
+                if (solicitacao == null)
+                {
+                    return null;
+                }
+
+                if (solicitacao.Status == StatusSolicitacaoGravacao.Cancelada)
+                {
+                    throw new InvalidOperationException("A solicitação foi cancelada.");
+                }
+
+                if (solicitacao.MarcarFalha(motivo))
+                {
+                    await _solicitacaoRepository.SaveChangesAsync(cancellationToken);
+                }
+
+                var usuario = await _usuarioRepository.GetByIdAsync(solicitacao.UsuarioId);
+                return await MapSolicitacaoAsync(solicitacao, usuario?.Nome);
+            });
+        }
+
+        public async Task<GravacaoCartaoResponseDto?> CancelarSolicitacaoAsync(
+            string id,
+            string funcionarioId,
+            string motivo,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(id) ||
+                string.IsNullOrWhiteSpace(funcionarioId) ||
+                string.IsNullOrWhiteSpace(motivo) ||
+                motivo.Trim().Length > 200)
+            {
+                throw new ArgumentException("Solicitação, funcionário e motivo são obrigatórios.");
+            }
+
+            return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+            {
+                var solicitacao = await _solicitacaoRepository.GetByIdAsync(id, cancellationToken);
+                if (solicitacao == null)
+                {
+                    return null;
+                }
+
+                if (solicitacao.QuantidadeEnvios > 0 ||
+                    solicitacao.Status == StatusSolicitacaoGravacao.Enviada)
+                {
+                    throw new InvalidOperationException(
+                        "Uma gravação já foi despachada; aguarde a confirmação ou use a recuperação por retentativa.");
+                }
+
+                if (solicitacao.CartaoAnteriorId != null)
+                {
+                    var cartaoAnterior = await _cartaoRepository.GetByIdAsync(solicitacao.CartaoAnteriorId);
+                    if (cartaoAnterior == null ||
+                        cartaoAnterior.Status != StatusCartao.Bloqueado ||
+                        cartaoAnterior.HistoricoAssociacaoCartao?.DataDesassociacao != null)
+                    {
+                        throw new InvalidOperationException(
+                            "O cartão anterior não está no estado esperado para restauração explícita.");
                     }
 
                     var agora = DateTime.UtcNow;
-                    var cartao = new Cartao
-                    {
-                        Uid = uid,
-                        UsuarioId = usuarioId,
-                        DataRegistro = agora
-                    };
-                    var historicoAssociacao = new HistoricoAssociacoesCartao
-                    {
-                        CartaoId = cartao.Id,
-                        DataAssociacao = agora
-                    };
-                    var historicoStatus = new HistoricoStatusCartao
-                    {
-                        CartaoId = cartao.Id,
-                        Status = StatusCartao.Ativo,
-                        DataHora = agora,
-                        Motivo = "Emissão inicial do cartão."
-                    };
+                    cartaoAnterior.AlterarStatus(StatusCartao.Ativo);
+                    var motivoRestauracao = $"Reemissão cancelada antes do envio: {motivo.Trim()}";
+                    await _cartaoRepository.UpdateStatusWithHistoryAsync(
+                        cartaoAnterior,
+                        new HistoricoStatusCartao
+                        {
+                            CartaoId = cartaoAnterior.Id,
+                            Status = StatusCartao.Ativo,
+                            DataHora = agora,
+                            Motivo = TruncarMotivo(motivoRestauracao),
+                            AlteradoPorFuncionarioId = funcionarioId
+                        });
+                }
 
-                    var cartaoCriado = await _cartaoRepository.CreateWithAuditAsync(
-                        cartao,
-                        historicoAssociacao,
-                        historicoStatus);
+                if (!solicitacao.Cancelar(motivo.Trim(), funcionarioId, DateTime.UtcNow))
+                {
+                    throw new InvalidOperationException(
+                        "A solicitação concluída ou cancelada não pode ser cancelada novamente.");
+                }
 
-                    _logger.LogInformation(
-                        "Cartão criado com seus históricos iniciais. ID: {Id}, UsuarioId: {UsuarioId}",
-                        cartaoCriado.Id,
-                        cartaoCriado.UsuarioId);
+                await _solicitacaoRepository.SaveChangesAsync(cancellationToken);
+                var usuario = await _usuarioRepository.GetByIdAsync(solicitacao.UsuarioId);
+                return await MapSolicitacaoAsync(solicitacao, usuario?.Nome);
+            });
+        }
 
-                    return MapToDto(cartaoCriado, usuario.Nome);
-                });
-            }
-            catch (Exception ex)
+        private async Task<string> GerarCredencialUnicaAsync(CancellationToken cancellationToken)
+        {
+            for (var tentativa = 0; tentativa < 10; tentativa++)
             {
-                _logger.LogError(ex, "Erro ao criar cartão. UID: {Uid}, UsuarioId: {UsuarioId}", 
-                    createCartaoDto.Uid, createCartaoDto.UsuarioId);
-                throw;
+                var credencial = Guid.NewGuid().ToString("N")[..16].ToUpperInvariant();
+                if (!await _solicitacaoRepository.CredentialExistsAsync(credencial, cancellationToken) &&
+                    await _cartaoRepository.GetByUidAsync(credencial) == null)
+                {
+                    return credencial;
+                }
             }
+
+            throw new InvalidOperationException(
+                "Não foi possível gerar uma credencial RFID única após várias tentativas.");
+        }
+
+        private static string TruncarMotivo(string motivo) =>
+            motivo.Length <= 200 ? motivo : motivo[..200];
+
+        private static GravacaoCartaoCommandDto? CriarComando(SolicitacaoGravacaoCartao solicitacao)
+        {
+            return solicitacao.Status is StatusSolicitacaoGravacao.Concluida or StatusSolicitacaoGravacao.Cancelada
+                ? null
+                : new GravacaoCartaoCommandDto(solicitacao.Id, solicitacao.Credencial);
+        }
+
+        private static Task<GravacaoCartaoResponseDto> MapSolicitacaoAsync(
+            SolicitacaoGravacaoCartao solicitacao,
+            string? nomeUsuario)
+        {
+            var dataSolicitacao = DateTime.SpecifyKind(solicitacao.DataSolicitacao, DateTimeKind.Utc);
+            return Task.FromResult(new GravacaoCartaoResponseDto(
+                solicitacao.Id,
+                solicitacao.Status.ToString(),
+                solicitacao.MotivoFalha ?? "Solicitação de gravação registrada.",
+                solicitacao.UsuarioId,
+                nomeUsuario ?? "Usuário não encontrado",
+                new DateTimeOffset(dataSolicitacao),
+                solicitacao.CartaoCriadoId));
         }
 
         public async Task<CartaoDto?> GetByIdAsync(string id)
@@ -258,65 +661,37 @@ namespace ControleDeAcesso.Application.Services
             }
         }
 
-        public async Task<bool> DeleteAsync(string id)
+        public Task<bool> BlockAsync(string id, string funcionarioId, string motivo) =>
+            ChangeStatusAsync(id, StatusCartao.Bloqueado, funcionarioId, motivo);
+
+        public Task<bool> UnblockAsync(string id, string funcionarioId, string motivo) =>
+            ChangeStatusAsync(id, StatusCartao.Ativo, funcionarioId, motivo);
+
+        public Task<bool> CancelAsync(string id, string funcionarioId, string motivo) =>
+            ChangeStatusAsync(id, StatusCartao.Cancelado, funcionarioId, motivo);
+
+        private async Task<bool> ChangeStatusAsync(
+            string id,
+            StatusCartao novoStatus,
+            string funcionarioId,
+            string motivo)
         {
-            _logger.LogInformation("Iniciando desativação de cartão. ID: {Id}", id);
-
-            try
+            if (string.IsNullOrWhiteSpace(id))
             {
-                if (string.IsNullOrWhiteSpace(id))
-                {
-                    throw new ArgumentException("ID é obrigatório", nameof(id));
-                }
-
-                var resultado = await ChangeStatusAsync(
-                    id,
-                    StatusCartao.Bloqueado,
-                    "Cartão bloqueado pela operação de exclusão lógica.");
-
-                if (resultado)
-                {
-                    _logger.LogInformation("Cartão desativado com sucesso. ID: {Id}", id);
-                }
-                else
-                {
-                    _logger.LogWarning("Cartão não encontrado para desativação. ID: {Id}", id);
-                }
-
-                return resultado;
+                throw new ArgumentException("ID é obrigatório.", nameof(id));
             }
-            catch (Exception ex)
+
+            if (string.IsNullOrWhiteSpace(funcionarioId))
             {
-                _logger.LogError(ex, "Erro ao desativar cartão. ID: {Id}", id);
-                throw;
+                throw new ArgumentException("Funcionário responsável é obrigatório.", nameof(funcionarioId));
             }
-        }
 
-        public async Task<bool> ActivateAsync(string id)
-        {
-            _logger.LogInformation("Iniciando ativação de cartão. ID: {Id}", id);
-
-            try
+            motivo = motivo?.Trim() ?? string.Empty;
+            if (motivo.Length is 0 or > 200)
             {
-                if (string.IsNullOrWhiteSpace(id))
-                {
-                    throw new ArgumentException("ID é obrigatório", nameof(id));
-                }
-
-                return await ChangeStatusAsync(
-                    id,
-                    StatusCartao.Ativo,
-                    "Cartão ativado explicitamente.");
+                throw new ArgumentException("O motivo é obrigatório e deve ter até 200 caracteres.", nameof(motivo));
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erro ao ativar cartão. ID: {Id}", id);
-                throw;
-            }
-        }
 
-        private async Task<bool> ChangeStatusAsync(string id, StatusCartao novoStatus, string motivo)
-        {
             return await _unitOfWork.ExecuteInTransactionAsync(async () =>
             {
                 var cartao = await _cartaoRepository.GetByIdAsync(id);
@@ -325,9 +700,33 @@ namespace ControleDeAcesso.Application.Services
                     return false;
                 }
 
-                if (!cartao.AlterarStatus(novoStatus))
+                if (cartao.Status == novoStatus)
                 {
                     return true;
+                }
+
+                if (novoStatus == StatusCartao.Ativo)
+                {
+                    if (cartao.Status != StatusCartao.Bloqueado)
+                    {
+                        throw new InvalidOperationException("Somente um cartão bloqueado pode ser ativado.");
+                    }
+
+                    if (cartao.Usuario == null || !cartao.Usuario.IsActive)
+                    {
+                        throw new InvalidOperationException(
+                            "O cartão não pode ser ativado enquanto seu titular estiver inativo.");
+                    }
+                }
+
+                cartao.AlterarStatus(novoStatus);
+                var agora = DateTime.UtcNow;
+
+                if (novoStatus == StatusCartao.Cancelado &&
+                    cartao.HistoricoAssociacaoCartao is { DataDesassociacao: null } associacao)
+                {
+                    associacao.DataDesassociacao = agora;
+                    associacao.DesassociadoPorFuncionarioId = funcionarioId;
                 }
 
                 await _cartaoRepository.UpdateStatusWithHistoryAsync(
@@ -336,8 +735,9 @@ namespace ControleDeAcesso.Application.Services
                     {
                         CartaoId = cartao.Id,
                         Status = novoStatus,
-                        DataHora = DateTime.UtcNow,
-                        Motivo = motivo
+                        DataHora = agora,
+                        Motivo = motivo,
+                        AlteradoPorFuncionarioId = funcionarioId
                     });
 
                 return true;
@@ -350,6 +750,7 @@ namespace ControleDeAcesso.Application.Services
             {
                 Id = cartao.Id,
                 Uid = cartao.Uid,
+                Status = cartao.Status,
                 IsActive = cartao.Status == StatusCartao.Ativo,
                 UsuarioId = cartao.UsuarioId,
                 NomeUsuario = nomeUsuario ?? cartao.Usuario?.Nome ?? "Usuário não encontrado"

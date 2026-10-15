@@ -46,6 +46,7 @@ namespace ControleDeAcesso.Application.Services
                     };
                 }
 
+                cardUid = cardUid.Trim();
                 // Buscar cartão no banco de dados
                 cartao = await _cartaoRepository.GetByUidAsync(cardUid);
 
@@ -128,6 +129,19 @@ namespace ControleDeAcesso.Application.Services
                     UsuarioTipo = cartao.Usuario.Tipo.ToString()
                 };
             }
+            catch (FalhaAuditoriaException ex)
+            {
+                _logger.LogCritical(
+                    ex.InnerException,
+                    "Acesso negado porque não foi possível persistir a auditoria. CartaoId: {CartaoId}",
+                    cartao?.Id);
+
+                return new AccessCheckResponseDto
+                {
+                    Allowed = false,
+                    Message = "Acesso negado: não foi possível registrar a auditoria."
+                };
+            }
             catch (Exception ex)
             {
                 var motivoErroInterno = "Erro interno do sistema.";
@@ -138,9 +152,14 @@ namespace ControleDeAcesso.Application.Services
                 {
                     await RegistrarTentativaAcessoAsync(cardUid, false, TipoMotivoAcesso.ErroInterno, "Erro interno ao verificar o acesso.", cartao);
                 }
-                catch (Exception logEx)
+                catch (FalhaAuditoriaException logEx)
                 {
-                    _logger.LogError(logEx, "Erro ao registrar log de acesso após falha");
+                    _logger.LogCritical(
+                        logEx.InnerException,
+                        "Acesso negado e auditoria indisponível após erro de verificação. CartaoId: {CartaoId}",
+                        cartao?.Id);
+
+                    motivoErroInterno = "Acesso negado: não foi possível registrar a auditoria.";
                 }
                 
                 return new AccessCheckResponseDto 
@@ -162,7 +181,9 @@ namespace ControleDeAcesso.Application.Services
             {
                 CartaoId = cartao?.Id,
                 UsuarioId = cartao?.UsuarioId,
-                UidInformado = cartao is null ? cardUid?.Trim() : null,
+                UidInformado = cartao is null && !string.IsNullOrWhiteSpace(cardUid)
+                    ? cardUid.Trim()
+                    : null,
                 AcessoPermitido = acessoPermitido,
                 MotivoTipo = motivoTipo,
                 Motivo = motivo
@@ -175,7 +196,15 @@ namespace ControleDeAcesso.Application.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erro ao registrar tentativa de acesso no log. CartaoUid: {CardUid}", cardUid);
-                throw;
+                throw new FalhaAuditoriaException(ex);
+            }
+        }
+
+        private sealed class FalhaAuditoriaException : Exception
+        {
+            public FalhaAuditoriaException(Exception innerException)
+                : base("Não foi possível persistir o log de acesso.", innerException)
+            {
             }
         }
     }

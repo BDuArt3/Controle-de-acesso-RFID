@@ -1,20 +1,18 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace ControleDeAcesso.Application.DTOs
 {
-    /// <summary>
-    /// DTO para solicitação de gravação de novo cartão RFID
-    /// O GUID é gerado automaticamente pelo sistema para segurança
-    /// </summary>
-    public class GravarCartaoDto
+    /// <summary>Dados para emitir um cartão novo ou reemitir uma credencial existente.</summary>
+    public sealed record GravarCartaoDto
     {
-        /// <summary>
-        /// ID do usuário que receberá o cartão
-        /// </summary>
-        public string UsuarioId { get; set; } = string.Empty;
-        
-        /// <summary>
-        /// Descrição opcional do cartão (ex: "Cartão principal", "Cartão backup", "Cartão temporário")
-        /// Útil para diferenciar quando o usuário possui múltiplos cartões
-        /// </summary>
-        public string? Descricao { get; set; }
+        [Required]
+        [StringLength(36)]
+        public required string UsuarioId { get; init; }
+
+        [StringLength(36)]
+        public string? CartaoAnteriorId { get; init; }
+
+        [StringLength(200)]
+        public string? MotivoReemissao { get; init; }
     }
 }
