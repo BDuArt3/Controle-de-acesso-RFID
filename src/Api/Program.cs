@@ -40,6 +40,7 @@ namespace ControleDeAcesso.Api
             builder.Services.AddScoped<ICartaoRepository, CartaoRepository>();
             builder.Services.AddScoped<ISolicitacaoGravacaoCartaoRepository, SolicitacaoGravacaoCartaoRepository>();
             builder.Services.AddScoped<ILogAcessoRepository, LogAcessoRepository>();
+            builder.Services.AddScoped<IHistoricoRepository, HistoricoRepository>();
             builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
             // Registrar serviços
@@ -48,6 +49,7 @@ namespace ControleDeAcesso.Api
             builder.Services.AddScoped<ICartaoService, CartaoService>();
             builder.Services.AddScoped<ILogAcessoService, LogAcessoService>();
             builder.Services.AddScoped<IAcessoService, AcessoService>();
+            builder.Services.AddScoped<IHistoricoService, HistoricoService>();
             builder.Services.AddScoped<IAuthService, AuthService>();
 
             // Configuração JWT
