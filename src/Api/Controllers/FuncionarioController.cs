@@ -35,6 +35,10 @@ namespace ControleDeAcesso.Api.Controllers
             {
                 return Conflict(new { message = ex.Message });
             }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = "Erro interno do servidor", details = ex.Message });
@@ -110,9 +114,17 @@ namespace ControleDeAcesso.Api.Controllers
                 var funcionario = await _funcionarioService.UpdateAsync(id, funcionarioDto);
                 return Ok(funcionario);
             }
-            catch (InvalidOperationException ex)
+            catch (KeyNotFoundException ex)
             {
                 return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -167,24 +179,14 @@ namespace ControleDeAcesso.Api.Controllers
                     return BadRequest(new { message = "ID do funcionário é obrigatório" });
                 }
 
-                var funcionario = await _funcionarioService.GetByIdAsync(id);
-                
-                if (funcionario == null)
+                var activated = await _funcionarioService.ActivateAsync(id);
+                if (!activated)
                 {
                     return NotFound(new { message = "Funcionário não encontrado" });
                 }
 
-                // Criar um DTO temporário para ativar o funcionário
-                var updateDto = new CreateFuncionarioDto
-                {
-                    NomeFuncionario = funcionario.NomeFuncionario,
-                    Email = funcionario.Email,
-                    Senha = "", // Senha vazia para não alterar
-                    Tipo = funcionario.Tipo
-                };
-
-                var funcionarioAtualizado = await _funcionarioService.UpdateAsync(id, updateDto);
-                return Ok(new { message = "Funcionário ativado com sucesso", funcionario = funcionarioAtualizado });
+                var funcionario = await _funcionarioService.GetByIdAsync(id);
+                return Ok(new { message = "Funcionário ativado com sucesso", funcionario });
             }
             catch (Exception ex)
             {

@@ -141,7 +141,10 @@ namespace ControleDeAcesso.Api
                 {
                     if (dbContext.Database.CanConnect())
                     {
-                        SeedData.Seed(dbContext, app.Configuration["BootstrapAdmin:Password"]);
+                        SeedData.Seed(
+                            dbContext,
+                            app.Configuration["BootstrapAdmin:Password"],
+                            app.Configuration["BootstrapAdmin:Document"]);
                     }
                     else
                     {

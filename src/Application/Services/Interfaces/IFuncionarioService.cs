@@ -10,5 +10,6 @@ namespace ControleDeAcesso.Application.Services.Interfaces
         Task<IEnumerable<FuncionarioDto>> GetAllAsync();
         Task<FuncionarioDto> UpdateAsync(string id, CreateFuncionarioDto funcionarioDto);
         Task<bool> DeleteAsync(string id);
+        Task<bool> ActivateAsync(string id);
     }
 }

@@ -123,6 +123,14 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             }
         }
 
+        public async Task<bool> EmailExistsAsync(string email, string? excludingUsuarioId = null)
+        {
+            var normalizedEmail = email.Trim().ToLowerInvariant();
+            return await _context.Usuarios.AnyAsync(usuario =>
+                usuario.Email == normalizedEmail &&
+                (excludingUsuarioId == null || usuario.Id != excludingUsuarioId));
+        }
+
         public async Task<Usuario> UpdateAsync(Usuario usuario)
         {
             _logger.LogInformation("Atualizando usuário. ID: {Id}, Nome: {Nome}", 

@@ -12,6 +12,6 @@ namespace ControleDeAcesso.Application.Repositories.Interfaces
         Task<bool> DeleteAsync(string id);
         Task<bool> EmailExistsAsync(string usuarioAcesso);
 
-        Task<Funcionario> GetByEmailAsync(string login); 
+        Task<Funcionario?> GetByEmailAsync(string login);
     }
 }

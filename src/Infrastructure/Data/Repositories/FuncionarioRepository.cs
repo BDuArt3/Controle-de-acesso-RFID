@@ -20,8 +20,7 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
 
         public async Task<Funcionario> CreateAsync(Funcionario funcionario)
         {
-            _logger.LogInformation("Iniciando criação de funcionário. Nome: {Nome}, Email: {Email}", 
-                funcionario.NomeFuncionario, funcionario.Email);
+            _logger.LogInformation("Iniciando criação de funcionário vinculado ao usuário {UsuarioId}", funcionario.UsuarioId);
 
             try
             {
@@ -29,15 +28,14 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
                 _context.Funcionarios.Add(funcionario);
                 await _context.SaveChangesAsync();
                 
-                _logger.LogInformation("Funcionário criado com sucesso. ID: {Id}, Nome: {Nome}", 
-                    funcionario.Id, funcionario.NomeFuncionario);
+                _logger.LogInformation("Funcionário criado com sucesso. ID: {Id}, UsuarioId: {UsuarioId}",
+                    funcionario.Id, funcionario.UsuarioId);
                 
                 return funcionario;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao criar funcionário. Nome: {Nome}, Email: {Email}", 
-                    funcionario.NomeFuncionario, funcionario.Email);
+                _logger.LogError(ex, "Erro ao criar funcionário. UsuarioId: {UsuarioId}", funcionario.UsuarioId);
                 throw;
             }
         }
@@ -49,6 +47,7 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             try
             {
                 var funcionario = await _context.Funcionarios
+                                     .Include(f => f.Usuario)
                                      .FirstOrDefaultAsync(f => f.Id == id);
 
                 if (funcionario == null)
@@ -57,8 +56,8 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
                 }
                 else
                 {
-                    _logger.LogInformation("Funcionário encontrado. ID: {Id}, Nome: {Nome}, Ativo: {IsActive}", 
-                        funcionario.Id, funcionario.NomeFuncionario, funcionario.IsActive);
+                    _logger.LogInformation("Funcionário encontrado. ID: {Id}, Ativo: {IsActive}",
+                        funcionario.Id, funcionario.IsActive);
                 }
 
                 return funcionario;
@@ -72,28 +71,30 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
 
         public async Task<Funcionario?> GetByEmailAsync(string Email)
         {
-            _logger.LogInformation("Buscando funcionário por email: {Email}", Email);
+            var normalizedEmail = NormalizeEmail(Email);
+            _logger.LogInformation("Buscando funcionário por email");
 
             try
             {
                 var funcionario = await _context.Funcionarios
-                                     .FirstOrDefaultAsync(f => f.Email == Email);
+                                     .Include(f => f.Usuario)
+                                     .FirstOrDefaultAsync(f => f.Usuario.Email == normalizedEmail);
 
                 if (funcionario == null)
                 {
-                    _logger.LogWarning("Funcionário não encontrado para email: {Email}", Email);
+                    _logger.LogWarning("Funcionário não encontrado para o email informado");
                 }
                 else
                 {
-                    _logger.LogInformation("Funcionário encontrado por email. ID: {Id}, Nome: {Nome}, Ativo: {IsActive}", 
-                        funcionario.Id, funcionario.NomeFuncionario, funcionario.IsActive);
+                    _logger.LogInformation("Funcionário encontrado por email. ID: {Id}, Ativo: {IsActive}",
+                        funcionario.Id, funcionario.IsActive);
                 }
 
                 return funcionario;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao buscar funcionário por usuário de acesso: {Email}", Email);
+                _logger.LogError(ex, "Erro ao buscar funcionário por email");
                 throw;
             }
         }
@@ -105,6 +106,7 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             try
             {
                 var funcionarios = await _context.Funcionarios
+                                     .Include(f => f.Usuario)
                                      .Where(f => f.IsActive)
                                      .ToListAsync();
 
@@ -121,23 +123,21 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
 
         public async Task<Funcionario> UpdateAsync(Funcionario funcionario)
         {
-            _logger.LogInformation("Atualizando funcionário. ID: {Id}, Nome: {Nome}", 
-                funcionario.Id, funcionario.NomeFuncionario);
+            _logger.LogInformation("Atualizando funcionário. ID: {Id}", funcionario.Id);
 
             try
             {
                 _context.Funcionarios.Update(funcionario);
                 await _context.SaveChangesAsync();
                 
-                _logger.LogInformation("Funcionário atualizado com sucesso. ID: {Id}, Nome: {Nome}, Ativo: {IsActive}", 
-                    funcionario.Id, funcionario.NomeFuncionario, funcionario.IsActive);
+                _logger.LogInformation("Funcionário atualizado com sucesso. ID: {Id}, Ativo: {IsActive}",
+                    funcionario.Id, funcionario.IsActive);
                 
                 return funcionario;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao atualizar funcionário. ID: {Id}, Nome: {Nome}", 
-                    funcionario.Id, funcionario.NomeFuncionario);
+                _logger.LogError(ex, "Erro ao atualizar funcionário. ID: {Id}", funcionario.Id);
                 throw;
             }
         }
@@ -158,8 +158,7 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
                 funcionario.IsActive = false;
                 await UpdateAsync(funcionario);
                 
-                _logger.LogInformation("Funcionário desativado com sucesso. ID: {Id}, Nome: {Nome}", 
-                    funcionario.Id, funcionario.NomeFuncionario);
+                _logger.LogInformation("Funcionário desativado com sucesso. ID: {Id}", funcionario.Id);
                 
                 return true;
             }
@@ -172,23 +171,25 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
 
         public async Task<bool> EmailExistsAsync(string Email)
         {
-            _logger.LogInformation("Verificando se usuário de acesso já existe: {Email}", Email);
+            var normalizedEmail = NormalizeEmail(Email);
+            _logger.LogInformation("Verificando se o email de acesso já existe");
 
             try
             {
                 var exists = await _context.Funcionarios
-                                   .AnyAsync(f => f.Email == Email);
+                                   .AnyAsync(f => f.Usuario.Email == normalizedEmail);
 
-                _logger.LogInformation("Verificação de usuário de acesso concluída. Email: {Email}, Existe: {Exists}", 
-                    Email, exists);
+                _logger.LogInformation("Verificação de email concluída. Existe: {Exists}", exists);
 
                 return exists;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao verificar se usuário de acesso existe: {Email}", Email);
+                _logger.LogError(ex, "Erro ao verificar se o email de acesso existe");
                 throw;
             }
         }
+
+        private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
     }
 }

@@ -3,6 +3,7 @@ using ControleDeAcesso.Application.Services.Interfaces;
 using ControleDeAcesso.Application.Repositories.Interfaces;
 using ControleDeAcesso.Core.Entities;
 using Microsoft.Extensions.Logging;
+using System.ComponentModel.DataAnnotations;
 using System;
 using System.Threading.Tasks;
 
@@ -34,9 +35,26 @@ namespace ControleDeAcesso.Application.Services
                 var usuario = new Usuario
                 {
                     Nome = createUsuarioDto.Nome.Trim(),
+                    Email = NormalizeEmail(createUsuarioDto.Email),
+                    Documento = RequiredTrimmed(createUsuarioDto.Documento, nameof(createUsuarioDto.Documento)),
                     Tipo = createUsuarioDto.Tipo,
                     IsActive = true
                 };
+                usuario.HistoricosStatus.Add(new HistoricoStatusUsuario
+                {
+                    IsActive = true,
+                    DataHora = DateTime.UtcNow,
+                    Motivo = "Cadastro inicial."
+                });
+
+                if (usuario.Email is not null)
+                {
+                    ValidateEmail(usuario.Email);
+                    if (await _usuarioRepository.EmailExistsAsync(usuario.Email))
+                    {
+                        throw new InvalidOperationException("Email já está em uso.");
+                    }
+                }
 
                 var usuarioCriado = await _usuarioRepository.CreateAsync(usuario);
 
@@ -121,11 +139,22 @@ namespace ControleDeAcesso.Application.Services
                 var usuarioExistente = await _usuarioRepository.GetByIdAsync(id);
                 if (usuarioExistente == null)
                 {
-                    throw new InvalidOperationException($"Usuário com ID {id} não encontrado");
+                    throw new KeyNotFoundException($"Usuário com ID {id} não encontrado");
                 }
 
                 usuarioExistente.Nome = updateUsuarioDto.Nome.Trim();
+                usuarioExistente.Email = NormalizeEmail(updateUsuarioDto.Email);
+                usuarioExistente.Documento = RequiredTrimmed(updateUsuarioDto.Documento, nameof(updateUsuarioDto.Documento));
                 usuarioExistente.Tipo = updateUsuarioDto.Tipo;
+
+                if (usuarioExistente.Email is not null)
+                {
+                    ValidateEmail(usuarioExistente.Email);
+                    if (await _usuarioRepository.EmailExistsAsync(usuarioExistente.Email, id))
+                    {
+                        throw new InvalidOperationException("Email já está em uso.");
+                    }
+                }
 
                 var usuarioAtualizado = await _usuarioRepository.UpdateAsync(usuarioExistente);
 
@@ -152,18 +181,27 @@ namespace ControleDeAcesso.Application.Services
                     throw new ArgumentException("ID é obrigatório", nameof(id));
                 }
 
-                var resultado = await _usuarioRepository.DeleteAsync(id);
-
-                if (resultado)
-                {
-                    _logger.LogInformation("Usuário desativado com sucesso. ID: {Id}", id);
-                }
-                else
+                var usuario = await _usuarioRepository.GetByIdAsync(id);
+                if (usuario is null)
                 {
                     _logger.LogWarning("Usuário não encontrado para desativação. ID: {Id}", id);
+                    return false;
                 }
 
-                return resultado;
+                if (usuario.IsActive)
+                {
+                    usuario.IsActive = false;
+                    usuario.HistoricosStatus.Add(new HistoricoStatusUsuario
+                    {
+                        IsActive = false,
+                        DataHora = DateTime.UtcNow,
+                        Motivo = "Desativação da conta."
+                    });
+                    await _usuarioRepository.UpdateAsync(usuario);
+                }
+
+                _logger.LogInformation("Usuário desativado com sucesso. ID: {Id}", id);
+                return true;
             }
             catch (Exception ex)
             {
@@ -190,8 +228,17 @@ namespace ControleDeAcesso.Application.Services
                     return false;
                 }
 
-                usuario.IsActive = true;
-                await _usuarioRepository.UpdateAsync(usuario);
+                if (!usuario.IsActive)
+                {
+                    usuario.IsActive = true;
+                    usuario.HistoricosStatus.Add(new HistoricoStatusUsuario
+                    {
+                        IsActive = true,
+                        DataHora = DateTime.UtcNow,
+                        Motivo = "Reativação da conta."
+                    });
+                    await _usuarioRepository.UpdateAsync(usuario);
+                }
 
                 _logger.LogInformation("Usuário ativado com sucesso. ID: {Id}, Nome: {Nome}", 
                     usuario.Id, usuario.Nome);
@@ -217,10 +264,31 @@ namespace ControleDeAcesso.Application.Services
                 {
                     Id = c.Id,
                     Uid = c.Uid,
-                    IsActive = c.IsActive,
+                    IsActive = c.Status == StatusCartao.Ativo,
                     UsuarioId = c.UsuarioId
                 }).ToList() ?? new List<CartaoDto>()
             };
+        }
+
+        private static string RequiredTrimmed(string? value, string parameterName)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                throw new ArgumentException("Campo obrigatório.", parameterName);
+            }
+
+            return value.Trim();
+        }
+
+        private static string? NormalizeEmail(string? email) =>
+            string.IsNullOrWhiteSpace(email) ? null : email.Trim().ToLowerInvariant();
+
+        private static void ValidateEmail(string email)
+        {
+            if (email.Length > 254 || !new EmailAddressAttribute().IsValid(email))
+            {
+                throw new ArgumentException("Email inválido ou maior que 254 caracteres.", nameof(email));
+            }
         }
     }
 }

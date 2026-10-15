@@ -26,19 +26,56 @@ namespace ControleDeAcesso.Application.Services
 
         public async Task<LogAcessoDto> RegistrarTentativaAsync(CreateLogAcessoDto createLogAcessoDto)
         {
-            _logger.LogInformation("Registrando tentativa de acesso. CartaoUid: {CartaoUid}, Permitido: {AcessoPermitido}", 
-                createLogAcessoDto.CartaoUid, createLogAcessoDto.AcessoPermitido);
+            _logger.LogInformation("Registrando tentativa de acesso. Permitido: {AcessoPermitido}",
+                createLogAcessoDto.AcessoPermitido);
 
             try
             {
-                if (string.IsNullOrWhiteSpace(createLogAcessoDto.CartaoUid))
+                string? cartaoId = null;
+                string? usuarioId = null;
+                string? uidInformado = null;
+
+                if (!string.IsNullOrWhiteSpace(createLogAcessoDto.CartaoId) ||
+                    !string.IsNullOrWhiteSpace(createLogAcessoDto.UsuarioId))
                 {
-                    throw new ArgumentException("UID do cartão é obrigatório", nameof(createLogAcessoDto.CartaoUid));
+                    if (string.IsNullOrWhiteSpace(createLogAcessoDto.CartaoId) ||
+                        string.IsNullOrWhiteSpace(createLogAcessoDto.UsuarioId))
+                    {
+                        throw new ArgumentException("CartaoId e UsuarioId devem ser informados juntos.");
+                    }
+
+                    var cartao = await _cartaoRepository.GetByIdAsync(createLogAcessoDto.CartaoId);
+                    if (cartao is null || cartao.UsuarioId != createLogAcessoDto.UsuarioId)
+                    {
+                        throw new ArgumentException("Cartão e usuário do log não correspondem.");
+                    }
+
+                    cartaoId = cartao.Id;
+                    usuarioId = cartao.UsuarioId;
+                }
+                else
+                {
+                    var uid = createLogAcessoDto.UidInformado ?? createLogAcessoDto.CartaoUid;
+                    if (!string.IsNullOrWhiteSpace(uid))
+                    {
+                        var cartao = await _cartaoRepository.GetByUidAsync(uid.Trim());
+                        if (cartao is null)
+                        {
+                            uidInformado = uid.Trim();
+                        }
+                        else
+                        {
+                            cartaoId = cartao.Id;
+                            usuarioId = cartao.UsuarioId;
+                        }
+                    }
                 }
 
                 var logAcesso = new LogAcesso
                 {
-                    CartaoUid = createLogAcessoDto.CartaoUid.Trim(),
+                    CartaoId = cartaoId,
+                    UsuarioId = usuarioId,
+                    UidInformado = uidInformado,
                     AcessoPermitido = createLogAcessoDto.AcessoPermitido,
                     Motivo = createLogAcessoDto.Motivo?.Trim() ?? string.Empty,
                     MotivoTipo = createLogAcessoDto.MotivoTipo,
@@ -53,8 +90,7 @@ namespace ControleDeAcesso.Application.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao registrar tentativa de acesso. CartaoUid: {CartaoUid}", 
-                    createLogAcessoDto.CartaoUid);
+                _logger.LogError(ex, "Erro ao registrar tentativa de acesso.");
                 throw;
             }
         }
@@ -297,7 +333,7 @@ namespace ControleDeAcesso.Application.Services
                     HorarioPico = logs.GroupBy(l => l.DataHora.Hour)
                                      .OrderByDescending(g => g.Count())
                                      .FirstOrDefault()?.Key ?? 0,
-                    CartoesMaisUsados = logs.GroupBy(l => l.CartaoUid)
+                    CartoesMaisUsados = logs.GroupBy(l => l.Cartao?.Uid ?? l.UidInformado ?? "UID vazio")
                                           .Select(g => new { CartaoUid = g.Key, Tentativas = g.Count() })
                                           .OrderByDescending(x => x.Tentativas)
                                           .Take(5)
@@ -319,28 +355,15 @@ namespace ControleDeAcesso.Application.Services
             {
                 Id = logAcesso.Id,
                 DataHora = logAcesso.DataHora,
-                CartaoUid = logAcesso.CartaoUid,
+                CartaoUid = logAcesso.Cartao?.Uid ?? logAcesso.UidInformado ?? string.Empty,
                 AcessoPermitido = logAcesso.AcessoPermitido,
                 Motivo = logAcesso.Motivo,
-                MotivoTipo = logAcesso.MotivoTipo
+                MotivoTipo = logAcesso.MotivoTipo,
+                UsuarioNome = logAcesso.Usuario?.Nome,
+                UsuarioTipo = logAcesso.Usuario?.Tipo.ToString()
             };
 
-            // Tentar obter informações do usuário através do cartão
-            try
-            {
-                var cartao = await _cartaoRepository.GetByUidAsync(logAcesso.CartaoUid);
-                if (cartao?.Usuario != null)
-                {
-                    dto.UsuarioNome = cartao.Usuario.Nome;
-                    dto.UsuarioTipo = cartao.Usuario.Tipo.ToString();
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Erro ao buscar informações do usuário para o cartão {CartaoUid}", logAcesso.CartaoUid);
-            }
-
-            return dto;
+            return await Task.FromResult(dto);
         }
     }
 }

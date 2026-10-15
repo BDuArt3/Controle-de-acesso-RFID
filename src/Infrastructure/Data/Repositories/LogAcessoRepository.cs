@@ -20,8 +20,8 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
 
         public async Task<LogAcesso> CreateAsync(LogAcesso logAcesso)
         {
-            _logger.LogInformation("Registrando log de acesso. CartaoUid: {CartaoUid}, AcessoPermitido: {AcessoPermitido}", 
-                logAcesso.CartaoUid, logAcesso.AcessoPermitido);
+            _logger.LogInformation("Registrando log de acesso. CartaoId: {CartaoId}, AcessoPermitido: {AcessoPermitido}",
+                logAcesso.CartaoId, logAcesso.AcessoPermitido);
 
             try
             {
@@ -29,15 +29,15 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
                 _context.LogsAcesso.Add(logAcesso);
                 await _context.SaveChangesAsync();
                 
-                _logger.LogInformation("Log de acesso registrado com sucesso. ID: {Id}, CartaoUid: {CartaoUid}", 
-                    logAcesso.Id, logAcesso.CartaoUid);
+                _logger.LogInformation("Log de acesso registrado com sucesso. ID: {Id}, CartaoId: {CartaoId}",
+                    logAcesso.Id, logAcesso.CartaoId);
                 
                 return logAcesso;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao registrar log de acesso. CartaoUid: {CartaoUid}", 
-                    logAcesso.CartaoUid);
+                _logger.LogError(ex, "Erro ao registrar log de acesso. CartaoId: {CartaoId}",
+                    logAcesso.CartaoId);
                 throw;
             }
         }
@@ -49,6 +49,8 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             try
             {
                 var log = await _context.LogsAcesso
+                                 .Include(l => l.Cartao)
+                                 .Include(l => l.Usuario)
                                  .FirstOrDefaultAsync(l => l.Id == id);
 
                 if (log == null)
@@ -72,6 +74,8 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             try
             {
                 var logs = await _context.LogsAcesso
+                                  .Include(l => l.Cartao)
+                                  .Include(l => l.Usuario)
                                   .OrderByDescending(l => l.DataHora)
                                   .ToListAsync();
 
@@ -93,7 +97,10 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             try
             {
                 var logs = await _context.LogsAcesso
-                                  .Where(l => l.CartaoUid == cartaoUid)
+                                  .Include(l => l.Cartao)
+                                  .Include(l => l.Usuario)
+                                  .Where(l => l.Cartao != null && l.Cartao.Uid == cartaoUid ||
+                                              l.UidInformado == cartaoUid)
                                   .OrderByDescending(l => l.DataHora)
                                   .ToListAsync();
 
@@ -117,6 +124,8 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             try
             {
                 var logs = await _context.LogsAcesso
+                                  .Include(l => l.Cartao)
+                                  .Include(l => l.Usuario)
                                   .Where(l => l.DataHora >= dataInicio && l.DataHora <= dataFim)
                                   .OrderByDescending(l => l.DataHora)
                                   .ToListAsync();
@@ -142,6 +151,8 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             try
             {
                 var logs = await _context.LogsAcesso
+                                  .Include(l => l.Cartao)
+                                  .Include(l => l.Usuario)
                                   .Where(l => l.DataHora >= dataInicio && 
                                              l.DataHora <= dataFim && 
                                              l.AcessoPermitido == acessoPermitido)
@@ -167,6 +178,8 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             try
             {
                 var logs = await _context.LogsAcesso
+                                  .Include(l => l.Cartao)
+                                  .Include(l => l.Usuario)
                                   .OrderByDescending(l => l.DataHora)
                                   .Take(quantidade)
                                   .ToListAsync();
