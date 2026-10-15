@@ -9,6 +9,7 @@ namespace ControleDeAcesso.Application.DTOs
         [StringLength(100)]
         public string Nome { get; set; } = string.Empty;
 
+        [Required(ErrorMessage = "Email é obrigatório.")]
         [EmailAddress]
         [StringLength(254)]
         public string? Email { get; set; }

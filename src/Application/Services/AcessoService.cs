@@ -125,6 +125,8 @@ namespace ControleDeAcesso.Application.Services
                 { 
                     Allowed = true, 
                     Message = motivoAcessoPermitido,
+                    UsuarioId = cartao.Usuario.Id,
+                    NomeUsuario = cartao.Usuario.Nome,
                     UsuarioNome = cartao.Usuario.Nome,
                     UsuarioTipo = cartao.Usuario.Tipo.ToString()
                 };

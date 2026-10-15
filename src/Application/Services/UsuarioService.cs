@@ -47,13 +47,15 @@ namespace ControleDeAcesso.Application.Services
                     Motivo = "Cadastro inicial."
                 });
 
-                if (usuario.Email is not null)
+                if (usuario.Email is null)
                 {
-                    ValidateEmail(usuario.Email);
-                    if (await _usuarioRepository.EmailExistsAsync(usuario.Email))
-                    {
-                        throw new InvalidOperationException("Email já está em uso.");
-                    }
+                    throw new ArgumentException("Email é obrigatório.", nameof(createUsuarioDto.Email));
+                }
+
+                ValidateEmail(usuario.Email);
+                if (await _usuarioRepository.EmailExistsAsync(usuario.Email))
+                {
+                    throw new InvalidOperationException("Email já está em uso.");
                 }
 
                 var usuarioCriado = await _usuarioRepository.CreateAsync(usuario);
@@ -147,13 +149,15 @@ namespace ControleDeAcesso.Application.Services
                 usuarioExistente.Documento = RequiredTrimmed(updateUsuarioDto.Documento, nameof(updateUsuarioDto.Documento));
                 usuarioExistente.Tipo = updateUsuarioDto.Tipo;
 
-                if (usuarioExistente.Email is not null)
+                if (usuarioExistente.Email is null)
                 {
-                    ValidateEmail(usuarioExistente.Email);
-                    if (await _usuarioRepository.EmailExistsAsync(usuarioExistente.Email, id))
-                    {
-                        throw new InvalidOperationException("Email já está em uso.");
-                    }
+                    throw new ArgumentException("Email é obrigatório.", nameof(updateUsuarioDto.Email));
+                }
+
+                ValidateEmail(usuarioExistente.Email);
+                if (await _usuarioRepository.EmailExistsAsync(usuarioExistente.Email, id))
+                {
+                    throw new InvalidOperationException("Email já está em uso.");
                 }
 
                 var usuarioAtualizado = await _usuarioRepository.UpdateAsync(usuarioExistente);
@@ -272,6 +276,8 @@ namespace ControleDeAcesso.Application.Services
             {
                 Id = usuario.Id,
                 Nome = usuario.Nome,
+                Email = usuario.Email,
+                Documento = usuario.Documento,
                 Tipo = usuario.Tipo,
                 IsActive = usuario.IsActive,
                 Cartoes = usuario.Cartoes?.Select(c => new CartaoDto

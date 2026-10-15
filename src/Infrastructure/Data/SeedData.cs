@@ -32,7 +32,7 @@ namespace ControleDeAcesso.Infrastructure.Data
                 Nome = "Administrador",
                 Email = adminEmail,
                 Documento = adminDocument.Trim(),
-                Tipo = TipoUsuario.Funcionario,
+                Tipo = TipoUsuario.Colaborador,
                 IsActive = true
             };
             var admin = new Funcionario

@@ -121,6 +121,11 @@ namespace ControleDeAcesso.Application.Services
                         throw new KeyNotFoundException($"Cartão anterior com ID {cartaoAnteriorId} não encontrado.");
                     }
 
+                    if (cartaoAnterior.UsuarioId != usuarioId)
+                    {
+                        throw new InvalidOperationException("O cartão anterior não pertence ao usuário selecionado.");
+                    }
+
                     if (cartaoAnterior.Status != StatusCartao.Ativo)
                     {
                         throw new InvalidOperationException("Somente um cartão ativo pode iniciar uma reemissão.");

@@ -5,7 +5,7 @@ namespace ControleDeAcesso.Core.Entities
         Aluno = 0,
         Professor = 1,
         Visitante = 2,
-        Funcionario = 3
+        Colaborador = 3
     }
 
     public class Usuario

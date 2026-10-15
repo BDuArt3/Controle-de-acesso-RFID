@@ -57,7 +57,7 @@ namespace ControleDeAcesso.Application.Services
                         Nome = nome,
                         Email = email,
                         Documento = documento,
-                        Tipo = TipoUsuario.Funcionario,
+                        Tipo = TipoUsuario.Colaborador,
                         IsActive = true
                     });
 
@@ -292,6 +292,7 @@ namespace ControleDeAcesso.Application.Services
             Id = funcionario.Id,
             NomeFuncionario = funcionario.Usuario.Nome,
             Email = funcionario.Usuario.Email ?? string.Empty,
+            Cpf = funcionario.Usuario.Documento,
             Tipo = funcionario.Tipo,
             IsActive = funcionario.IsActive
         };
