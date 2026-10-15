@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Briefcase, Loader2, Pencil, Plus, Search, Trash2, Unlock, Lock } from 'lucide-react';
+import { Briefcase, History, Loader2, Pencil, Plus, Search, Trash2, Unlock, Lock } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import {
   errorMessage,
@@ -18,6 +18,7 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Textarea } from './ui/textarea';
 import { showToast } from './Toast';
+import { FuncionarioHistoryDialog } from './HistoryDialogs';
 
 type FormState = {
   nomeFuncionario: string;
@@ -58,6 +59,7 @@ export default function FuncionarioList() {
     mode: null,
   });
   const [reason, setReason] = useState('');
+  const [historyTarget, setHistoryTarget] = useState<FuncionarioDto | null>(null);
 
   const canAccess = currentUser?.role === 'Admin';
 
@@ -304,6 +306,15 @@ export default function FuncionarioList() {
                             <Button variant="ghost" size="icon" aria-label={`Excluir ${item.nomeFuncionario}`} disabled={saving || busyId !== null} onClick={() => openReasonDialog(item, 'delete')}>
                               <Trash2 className="size-4 text-red-600" />
                             </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Histórico de ${item.nomeFuncionario}`}
+                              disabled={saving || busyId !== null}
+                              onClick={() => setHistoryTarget(item)}
+                            >
+                              <History className="size-4" />
+                            </Button>
                           </div>
                         </td>
                       </tr>
@@ -395,6 +406,19 @@ export default function FuncionarioList() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {historyTarget && (
+        <FuncionarioHistoryDialog
+          open={historyTarget !== null}
+          onOpenChange={(value) => {
+            if (!value) {
+              setHistoryTarget(null);
+            }
+          }}
+          funcionarioId={historyTarget.id}
+          funcionarioNome={historyTarget.nomeFuncionario}
+        />
+      )}
     </div>
   );
 }

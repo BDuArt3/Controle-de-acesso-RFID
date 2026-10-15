@@ -153,6 +153,57 @@ export interface RequestErrorBody {
   detail?: string;
 }
 
+export interface HistoricoPaginado<TItem> {
+  items: TItem[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+}
+
+export interface StatusHistoricoItem {
+  id: number;
+  isActive: boolean;
+  dataHora: string;
+  motivo: string;
+  alteradoPorFuncionarioId: string | null;
+  alteradoPorNome: string | null;
+}
+
+export interface CartaoStatusHistoricoItem {
+  id: number;
+  status: CartaoStatus;
+  statusNome: string;
+  dataHora: string;
+  motivo: string;
+  alteradoPorFuncionarioId: string | null;
+  alteradoPorNome: string | null;
+}
+
+export interface CartaoAssociacaoHistorico {
+  id: number;
+  dataAssociacao: string;
+  dataDesassociacao: string | null;
+  associadoPorFuncionarioId: string | null;
+  associadoPorNome: string | null;
+  desassociadoPorFuncionarioId: string | null;
+  desassociadoPorNome: string | null;
+}
+
+export type UsuarioHistoricoResponse = HistoricoPaginado<StatusHistoricoItem>;
+export type FuncionarioHistoricoResponse = HistoricoPaginado<StatusHistoricoItem>;
+
+export interface CartaoHistoricoResponse {
+  cartaoId: string;
+  uid: string;
+  associacao: CartaoAssociacaoHistorico | null;
+  status: HistoricoPaginado<CartaoStatusHistoricoItem>;
+}
+
+export interface HistoricoQueryParams {
+  page?: number;
+  pageSize?: number;
+}
+
 const ACCESS_TOKEN_KEY = 'authToken';
 const REFRESH_TOKEN_KEY = 'authRefreshToken';
 const EXPIRES_AT_KEY = 'authExpiresAt';
@@ -369,6 +420,11 @@ export const usuarioService = {
   ativar: (id: string, motivo: string) => api.put<{ message: string }>(`/usuario/${encodeURIComponent(id)}/ativar`, { motivo }),
 };
 
+export const usuarioHistoricoService = {
+  listByUsuarioId: (id: string, params?: HistoricoQueryParams) =>
+    api.get<UsuarioHistoricoResponse>(`/usuario/${encodeURIComponent(id)}/historico`, { params }),
+};
+
 export const funcionarioService = {
   list: () => api.get<FuncionarioDto[]>('/funcionario'),
   get: (id: string) => api.get<FuncionarioDto>(`/funcionario/${encodeURIComponent(id)}`),
@@ -376,6 +432,11 @@ export const funcionarioService = {
   update: (id: string, data: UpdateFuncionarioDto) => api.put<FuncionarioDto>(`/funcionario/${encodeURIComponent(id)}`, data),
   delete: (id: string, motivo: string) => api.delete<{ message: string }>(`/funcionario/${encodeURIComponent(id)}`, { data: { motivo } }),
   ativar: (id: string, motivo: string) => api.patch<{ message: string }>(`/funcionario/${encodeURIComponent(id)}/ativar`, { motivo }),
+};
+
+export const funcionarioHistoricoService = {
+  listByFuncionarioId: (id: string, params?: HistoricoQueryParams) =>
+    api.get<FuncionarioHistoricoResponse>(`/funcionario/${encodeURIComponent(id)}/historico`, { params }),
 };
 
 export const cartaoService = {
@@ -392,6 +453,11 @@ export const cartaoService = {
   bloquear: (id: string, motivo: string) => api.delete<{ message: string }>(`/cartao/${encodeURIComponent(id)}`, { data: { motivo } }),
   ativar: (id: string, motivo: string) => api.put<{ message: string }>(`/cartao/${encodeURIComponent(id)}/ativar`, { motivo }),
   cancelar: (id: string, motivo: string) => api.post<{ message: string }>(`/cartao/${encodeURIComponent(id)}/cancelar`, { motivo }),
+};
+
+export const cartaoHistoricoService = {
+  listByCartaoId: (id: string, params?: HistoricoQueryParams) =>
+    api.get<CartaoHistoricoResponse>(`/cartao/${encodeURIComponent(id)}/historico`, { params }),
 };
 
 export const logAcessoService = {

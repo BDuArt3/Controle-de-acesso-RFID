@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Edit, Lock, MoreHorizontal, Plus, Search, Unlock } from 'lucide-react';
+import { Edit, History, Lock, MoreHorizontal, Plus, Search, Unlock } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import {
   errorMessage,
@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
+import { UsuarioHistoryDialog } from './HistoryDialogs';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,6 +51,7 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
     mode: null,
   });
   const [reason, setReason] = useState('');
+  const [historyTarget, setHistoryTarget] = useState<UsuarioDto | null>(null);
 
   const canCreate = currentUser?.role === 'Admin' || currentUser?.role === 'Operador';
   const canAdminister = currentUser?.role === 'Admin';
@@ -228,6 +230,12 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                             Reativar
                           </DropdownMenuItem>
                         )}
+                        {canAdminister && (
+                          <DropdownMenuItem onClick={() => setHistoryTarget(user)} disabled={pendingId !== null}>
+                            <History className="mr-2 h-4 w-4" />
+                            Histórico
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -277,6 +285,19 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {historyTarget && (
+        <UsuarioHistoryDialog
+          open={historyTarget !== null}
+          onOpenChange={(value) => {
+            if (!value) {
+              setHistoryTarget(null);
+            }
+          }}
+          usuarioId={historyTarget.id}
+          usuarioNome={historyTarget.nome}
+        />
+      )}
     </div>
   );
 }

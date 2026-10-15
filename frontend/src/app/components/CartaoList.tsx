@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, CreditCard, Loader2, Plus, RefreshCw, Search, ShieldAlert } from 'lucide-react';
+import { AlertCircle, CheckCircle2, CreditCard, History, Loader2, Lock, MoreHorizontal, Plus, RefreshCw, Search, ShieldAlert, Unlock } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import {
   cartaoService,
@@ -21,6 +21,13 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Textarea } from './ui/textarea';
 import { showToast } from './Toast';
+import { CartaoHistoryDialog } from './HistoryDialogs';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
 
 type IssueMode = 'new' | 'reissue';
 type CardActionMode = 'block' | 'activate' | 'cancel';
@@ -58,6 +65,9 @@ export default function CartaoList() {
   const [selectedUserId, setSelectedUserId] = useState('');
   const [previousCardId, setPreviousCardId] = useState('');
   const [reemissionReason, setReemissionReason] = useState('');
+  const [userCards, setUserCards] = useState<CartaoDto[]>([]);
+  const [userCardsLoading, setUserCardsLoading] = useState(false);
+  const [requestError, setRequestError] = useState('');
   const [requestCancelReason, setRequestCancelReason] = useState('');
   const [request, setRequest] = useState<SolicitacaoCartaoDto | null>(null);
   const [actionTarget, setActionTarget] = useState<CartaoDto | null>(null);
@@ -67,10 +77,12 @@ export default function CartaoList() {
   const [pollingError, setPollingError] = useState('');
   const [timedOut, setTimedOut] = useState(false);
   const [pollNonce, setPollNonce] = useState(0);
+  const [historyTarget, setHistoryTarget] = useState<CartaoDto | null>(null);
   const requestId = request?.solicitacaoId ?? null;
   const idempotencyKeyRef = useRef<string>('');
 
   const canManage = currentUser?.role === 'Admin' || currentUser?.role === 'Operador';
+  const canViewHistory = currentUser?.role === 'Admin';
 
   const load = async () => {
     setLoading(true);
@@ -107,10 +119,43 @@ export default function CartaoList() {
     });
   }, [items, search, users]);
 
+  useEffect(() => {
+    setPreviousCardId('');
+    setUserCards([]);
+    if (!requestOpen || issueMode !== 'reissue' || !selectedUserId) {
+      return;
+    }
+    let cancelled = false;
+    setUserCardsLoading(true);
+    cartaoService.getByUsuario(selectedUserId)
+      .then(({ data }) => {
+        if (!cancelled) {
+          setUserCards(data.filter(card => card.status === 0));
+        }
+      })
+      .catch(failure => {
+        if (!cancelled) {
+          setRequestError(errorMessage(failure));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setUserCardsLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+      setUserCardsLoading(false);
+    };
+  }, [requestOpen, issueMode, selectedUserId]);
+
+  const noActiveCard = issueMode === 'reissue' && !!selectedUserId && !userCardsLoading && userCards.length === 0;
+
   const resetRequestForm = () => {
     setIssueMode('new');
     setSelectedUserId('');
     setPreviousCardId('');
+    setRequestError('');
     setReemissionReason('');
     setRequestCancelReason('');
     setRequest(null);
@@ -147,17 +192,17 @@ export default function CartaoList() {
 
   const submitRequest = async () => {
     if (!selectedUserId) {
-      setError('Selecione um usuário.');
+      setRequestError('Selecione um usuário.');
       return;
     }
 
     if (issueMode === 'reissue' && (!previousCardId || !reemissionReason.trim())) {
-      setError('Informe o cartão anterior e o motivo da reemissão.');
+      setRequestError('Informe o cartão anterior e o motivo da reemissão.');
       return;
     }
 
     setBusy(true);
-    setError('');
+    setRequestError('');
     try {
       if (!idempotencyKeyRef.current) {
         idempotencyKeyRef.current = createIdempotencyKey();
@@ -176,7 +221,7 @@ export default function CartaoList() {
       setRequest(data);
       showToast('Solicitação de cartão registrada.', 'success');
     } catch (failure) {
-      setError(errorMessage(failure));
+      setRequestError(errorMessage(failure));
     } finally {
       setBusy(false);
     }
@@ -430,6 +475,7 @@ export default function CartaoList() {
                 <tbody>
                   {filtered.map((item) => {
                     const active = isActive(item.status);
+                    const cancelled = item.status === 2;
                     return (
                       <tr key={item.id} className="border-t hover:bg-muted/30">
                         <td className="px-5 py-5 font-mono">{item.uid}</td>
@@ -443,24 +489,42 @@ export default function CartaoList() {
                           {item.dataCadastro || item.dataSolicitacao || '—'}
                         </td>
                         <td className="px-5">
-                          <div className="flex flex-wrap gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={!canManage}
-                              onClick={() => openActionDialog(item, active ? 'block' : 'activate')}
-                            >
-                              {active ? 'Bloquear' : 'Reativar'}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={!canManage}
-                              onClick={() => openActionDialog(item, 'cancel')}
-                            >
-                              Cancelar
-                            </Button>
-                          </div>
+                          {(canViewHistory || (canManage && !cancelled)) && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label={`Ações do cartão ${item.uid}`}
+                                  disabled={busy}
+                                >
+                                  <MoreHorizontal className="size-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {canManage && !cancelled && (
+                                  <DropdownMenuItem onClick={() => openActionDialog(item, active ? 'block' : 'activate')} disabled={busy}>
+                                    {active
+                                      ? <Lock className="mr-2 size-4" />
+                                      : <Unlock className="mr-2 size-4" />}
+                                    {active ? 'Bloquear' : 'Reativar'}
+                                  </DropdownMenuItem>
+                                )}
+                                {canManage && !cancelled && (
+                                  <DropdownMenuItem onClick={() => openActionDialog(item, 'cancel')} disabled={busy}>
+                                    <ShieldAlert className="mr-2 size-4" />
+                                    Cancelar
+                                  </DropdownMenuItem>
+                                )}
+                                {canViewHistory && (
+                                  <DropdownMenuItem onClick={() => setHistoryTarget(item)} disabled={busy}>
+                                    <History className="mr-2 size-4" />
+                                    Histórico
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </td>
                       </tr>
                     );
@@ -496,7 +560,7 @@ export default function CartaoList() {
 
             <div className="space-y-2">
               <Label htmlFor="userId">Usuário</Label>
-              <Select value={selectedUserId} onValueChange={setSelectedUserId} disabled={busy}>
+              <Select value={selectedUserId} onValueChange={value => { setSelectedUserId(value); setRequestError(''); }} disabled={busy}>
                 <SelectTrigger id="userId">
                   <SelectValue placeholder="Selecione um usuário ativo" />
                 </SelectTrigger>
@@ -514,18 +578,31 @@ export default function CartaoList() {
               <>
                 <div className="space-y-2">
                   <Label htmlFor="previousCardId">Cartão anterior *</Label>
-                  <Select value={previousCardId} onValueChange={setPreviousCardId} disabled={busy}>
+                  <Select
+                    value={previousCardId}
+                    onValueChange={setPreviousCardId}
+                    disabled={busy || !selectedUserId || userCardsLoading || userCards.length === 0}
+                  >
                     <SelectTrigger id="previousCardId">
-                      <SelectValue placeholder="Selecione o cartão que será bloqueado" />
+                      <SelectValue
+                        placeholder={
+                          !selectedUserId ? 'Selecione um usuário primeiro'
+                            : userCardsLoading ? 'Carregando cartões...'
+                              : 'Selecione o cartão que será bloqueado'
+                        }
+                      />
                     </SelectTrigger>
                     <SelectContent>
-                      {items.map(card => (
+                      {userCards.map(card => (
                         <SelectItem key={card.id} value={card.id}>
-                          {card.uid} · {cardOwner(card, users)}
+                          {card.uid} · {cardStatusLabel(card.status)}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {noActiveCard && (
+                    <p className="text-sm text-muted-foreground">Este usuário não tem cartão ativo. Use Emissão.</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="reemissionReason">Motivo da reemissão *</Label>
@@ -541,6 +618,10 @@ export default function CartaoList() {
               </>
             )}
           </div>
+
+          {requestError && (
+            <p role="alert" className="text-sm text-destructive">{requestError}</p>
+          )}
 
           <div className="flex justify-end gap-2">
             <Button variant="outline" disabled={busy} onClick={closeRequestDialog}>Cancelar</Button>
@@ -582,6 +663,19 @@ export default function CartaoList() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {historyTarget && (
+        <CartaoHistoryDialog
+          open={historyTarget !== null}
+          onOpenChange={(value) => {
+            if (!value) {
+              setHistoryTarget(null);
+            }
+          }}
+          cartaoId={historyTarget.id}
+          cartaoUid={historyTarget.uid}
+        />
+      )}
     </div>
   );
 }
