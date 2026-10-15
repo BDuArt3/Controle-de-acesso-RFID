@@ -1,84 +1,220 @@
-import React, { useEffect, useState } from 'react';
-import { Briefcase, Plus, Search, Pencil, Trash2, Loader2 } from 'lucide-react';
-import { funcionarioService, errorMessage, isActive, type FuncionarioDto } from '../services/api';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Switch } from './ui/switch';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Briefcase, Loader2, Pencil, Plus, Search, Trash2, Unlock, Lock } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import {
+  errorMessage,
+  isActive,
+  type CreateFuncionarioDto,
+  type FuncionarioDto,
+  funcionarioService,
+} from '../services/api';
+import { Alert, AlertDescription } from './ui/alert';
 import { Badge } from './ui/badge';
+import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Textarea } from './ui/textarea';
 import { showToast } from './Toast';
 
-const formatCpf = (value: string) =>
-  value.replace(/\D/g, '').slice(0, 11).replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+type FormState = {
+  nomeFuncionario: string;
+  email: string;
+  cpf: string;
+  senha: string;
+  tipo: string;
+};
 
-const emptyForm = { nome: '', cpf: '', departamento: 'TI', cargo: '', status: 'ativo' };
+const emptyForm: FormState = {
+  nomeFuncionario: '',
+  email: '',
+  cpf: '',
+  senha: '',
+  tipo: '1',
+};
+
+const tipoLabels: Record<number, string> = {
+  0: 'Visualizador',
+  1: 'Operador',
+  2: 'Admin',
+};
 
 export default function FuncionarioList() {
+  const { user: currentUser } = useAuth();
   const [items, setItems] = useState<FuncionarioDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [form, setForm] = useState(emptyForm);
-  const [pending, setPending] = useState(false);
-  const [deleting, setDeleting] = useState<FuncionarioDto | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<FuncionarioDto | null>(null);
+  const [form, setForm] = useState<FormState>(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [reasonDialog, setReasonDialog] = useState<{ open: boolean; funcionario: FuncionarioDto | null; mode: 'delete' | 'activate' | null }>({
+    open: false,
+    funcionario: null,
+    mode: null,
+  });
+  const [reason, setReason] = useState('');
+
+  const canAccess = currentUser?.role === 'Admin';
 
   const load = async () => {
     setLoading(true);
     setError('');
-    try { setItems((await funcionarioService.list()).data); }
-    catch (failure) { setError(errorMessage(failure)); }
-    finally { setLoading(false); }
+    try {
+      const { data } = await funcionarioService.list();
+      setItems(data);
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { void load(); }, []);
-
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (form.cpf.replace(/\D/g, '').length !== 11 || !form.nome.trim()) {
-      showToast('Informe o nome e um CPF com 11 dígitos.', 'error');
+  useEffect(() => {
+    if (!canAccess) {
+      setLoading(false);
       return;
     }
-    setPending(true);
-    try {
-      const payload = { ...form, nome: form.nome.trim(), cpf: form.cpf.replace(/\D/g, '') };
-      if (editing) await funcionarioService.update(editing, payload);
-      else await funcionarioService.create(payload);
-      showToast(editing ? 'Funcionário atualizado com sucesso.' : 'Funcionário criado com sucesso.', 'success');
-      setOpen(false);
-      await load();
-    } catch (failure) { showToast(errorMessage(failure), 'error'); }
-    finally { setPending(false); }
+    void load();
+  }, [canAccess]);
+
+  const filtered = useMemo(() => {
+    const normalized = search.trim().toLowerCase();
+    if (!normalized) {
+      return items;
+    }
+    return items.filter(item =>
+      item.nomeFuncionario.toLowerCase().includes(normalized)
+      || item.cpf.toLowerCase().includes(normalized)
+      || item.email.toLowerCase().includes(normalized),
+    );
+  }, [items, search]);
+
+  const openForm = (funcionario?: FuncionarioDto) => {
+    if (funcionario) {
+      setEditing(funcionario);
+      setForm({
+        nomeFuncionario: funcionario.nomeFuncionario,
+        email: funcionario.email,
+        cpf: funcionario.cpf,
+        senha: '',
+        tipo: String(funcionario.tipo),
+      });
+    } else {
+      setEditing(null);
+      setForm(emptyForm);
+    }
+    setFormOpen(true);
   };
 
-  const toggle = async (item: FuncionarioDto) => {
-    setPending(true);
-    try {
-      await funcionarioService.update(item.id, { ...item, status: isActive(item.status) ? 'inativo' : 'ativo' });
-      showToast('Status atualizado.', 'success');
-      await load();
-    } catch (failure) { showToast(errorMessage(failure), 'error'); }
-    finally { setPending(false); }
+  const closeForm = () => {
+    if (saving) {
+      return;
+    }
+    setFormOpen(false);
+    setEditing(null);
+    setForm(emptyForm);
   };
 
-  const remove = async () => {
-    if (!deleting) return;
-    setPending(true);
-    try {
-      await funcionarioService.delete(deleting.id);
-      setDeleting(null);
-      showToast('Funcionário excluído.', 'success');
-      await load();
-    } catch (failure) { showToast(errorMessage(failure), 'error'); }
-    finally { setPending(false); }
+  const updateForm = (field: keyof FormState, value: string) => {
+    setForm(previous => ({ ...previous, [field]: value }));
+    setError('');
   };
 
-  const filtered = items.filter(item =>
-    item.nome.toLowerCase().includes(search.toLowerCase()) ||
-    (search.replace(/\D/g, '').length > 0 && item.cpf.replace(/\D/g, '').includes(search.replace(/\D/g, '')))
-  );
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+
+    if (!form.nomeFuncionario.trim() || !form.email.trim() || !form.cpf.trim() || !form.tipo) {
+      setError('Informe nome, email, CPF e tipo.');
+      return;
+    }
+
+    if (!editing && !form.senha.trim()) {
+      setError('A senha é obrigatória no cadastro.');
+      return;
+    }
+
+    const payload: CreateFuncionarioDto = {
+      nomeFuncionario: form.nomeFuncionario.trim(),
+      email: form.email.trim(),
+      cpf: form.cpf.replace(/\D/g, ''),
+      senha: form.senha.trim(),
+      tipo: Number(form.tipo) as CreateFuncionarioDto['tipo'],
+    };
+
+    setSaving(true);
+    try {
+      if (editing) {
+        await funcionarioService.update(editing.id, payload);
+        showToast('Funcionário atualizado com sucesso.', 'success');
+      } else {
+        await funcionarioService.create(payload);
+        showToast('Funcionário criado com sucesso.', 'success');
+      }
+      closeForm();
+      await load();
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openReasonDialog = (funcionario: FuncionarioDto, mode: 'delete' | 'activate') => {
+    setReason('');
+    setReasonDialog({ open: true, funcionario, mode });
+  };
+
+  const closeReasonDialog = () => {
+    if (busyId) {
+      return;
+    }
+    setReasonDialog({ open: false, funcionario: null, mode: null });
+    setReason('');
+  };
+
+  const submitReason = async () => {
+    if (!reasonDialog.funcionario || !reasonDialog.mode) {
+      return;
+    }
+    if (!reason.trim()) {
+      setError('Informe um motivo.');
+      return;
+    }
+
+    setBusyId(reasonDialog.funcionario.id);
+    setError('');
+    try {
+      if (reasonDialog.mode === 'delete') {
+        await funcionarioService.delete(reasonDialog.funcionario.id, reason.trim());
+      } else {
+        await funcionarioService.ativar(reasonDialog.funcionario.id, reason.trim());
+      }
+      showToast('Status do funcionário atualizado.', 'success');
+      await load();
+      closeReasonDialog();
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  if (!canAccess) {
+    return (
+      <div className="space-y-4">
+        <h1>Funcionários</h1>
+        <Alert>
+          <AlertDescription>Esta área é restrita para administradores.</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -86,10 +222,11 @@ export default function FuncionarioList() {
         <div>
           <p className="mb-2 text-xs font-medium uppercase tracking-[0.15em] text-muted-foreground">Gestão de acesso / Pessoas</p>
           <h2 className="text-3xl font-semibold">Funcionários</h2>
-          <p className="mt-2 text-sm text-muted-foreground">Organize sua equipe e gerencie quem tem acesso.</p>
+          <p className="mt-2 text-sm text-muted-foreground">Cadastre, atualize e mantenha contas administrativas e operacionais.</p>
         </div>
-        <Button onClick={() => { setEditing(null); setForm(emptyForm); setOpen(true); }}>
-          <Plus className="mr-2 size-4" />Adicionar Funcionário
+        <Button onClick={() => openForm()}>
+          <Plus className="mr-2 size-4" />
+          Adicionar Funcionário
         </Button>
       </div>
 
@@ -103,55 +240,75 @@ export default function FuncionarioList() {
             </div>
             <div className="relative w-full sm:w-72">
               <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
-              <Input aria-label="Buscar funcionário" placeholder="Buscar por nome ou CPF..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+              <Input
+                aria-label="Buscar funcionário"
+                placeholder="Buscar por nome, email ou CPF..."
+                className="pl-9"
+                value={search}
+                onChange={event => setSearch(event.target.value)}
+              />
             </div>
           </div>
 
           {loading ? (
             <p role="status" className="flex items-center justify-center gap-2 p-12 text-muted-foreground">
-              <Loader2 className="size-5 animate-spin" />Carregando funcionários...
+              <Loader2 className="size-5 animate-spin" />
+              Carregando funcionários...
             </p>
           ) : error ? (
             <div role="alert" className="p-6 text-red-700">
               {error}
-              <Button variant="outline" className="ml-3" onClick={load}>Tentar novamente</Button>
+              <Button variant="outline" className="ml-3" onClick={() => void load()}>Tentar novamente</Button>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="bg-muted/40 text-muted-foreground">
                   <tr>
-                    {['Nome', 'CPF', 'Departamento', 'Cargo', 'Status', 'Ações'].map(label => (
+                    {['Nome', 'Email', 'CPF', 'Tipo', 'Status', 'Ações'].map(label => (
                       <th key={label} className="px-5 py-4 font-medium">{label}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(item => (
-                    <tr key={item.id} className="border-t transition-colors hover:bg-muted/30">
-                      <td className="whitespace-nowrap px-5 py-5 font-medium">{item.nome}</td>
-                      <td className="whitespace-nowrap px-5 font-mono text-xs">{formatCpf(item.cpf)}</td>
-                      <td className="px-5">{item.departamento || '—'}</td>
-                      <td className="px-5">{item.cargo || '—'}</td>
-                      <td className="px-5">
-                        <div className="flex items-center gap-2">
-                          <Switch aria-label={`Alterar status de ${item.nome}`} checked={isActive(item.status)} disabled={pending} onCheckedChange={() => toggle(item)} />
-                          <span>{isActive(item.status) ? 'Ativo' : 'Inativo'}</span>
-                        </div>
-                      </td>
-                      <td className="px-5">
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" aria-label={`Editar ${item.nome}`} disabled={pending}
-                            onClick={() => { setEditing(item.id); setForm({ nome: item.nome, cpf: formatCpf(item.cpf), departamento: item.departamento || 'Outros', cargo: item.cargo || '', status: isActive(item.status) ? 'ativo' : 'inativo' }); setOpen(true); }}>
-                            <Pencil className="size-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" aria-label={`Excluir ${item.nome}`} disabled={pending} onClick={() => setDeleting(item)}>
-                            <Trash2 className="size-4 text-red-600" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {filtered.map((item) => {
+                    const active = isActive(item.isActive);
+                    return (
+                      <tr key={item.id} className="border-t transition-colors hover:bg-muted/30">
+                        <td className="whitespace-nowrap px-5 py-5 font-medium">{item.nomeFuncionario}</td>
+                        <td className="whitespace-nowrap px-5">{item.email}</td>
+                        <td className="whitespace-nowrap px-5 font-mono text-xs">{item.cpf}</td>
+                        <td className="px-5">{tipoLabels[item.tipo] ?? item.tipo}</td>
+                        <td className="px-5">
+                          <Badge
+                            variant={active ? 'default' : 'destructive'}
+                            className={active ? 'bg-green-100 text-green-800' : ''}
+                          >
+                            {active ? 'Ativo' : 'Inativo'}
+                          </Badge>
+                        </td>
+                        <td className="px-5">
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" aria-label={`Editar ${item.nomeFuncionario}`} disabled={saving || busyId !== null} onClick={() => openForm(item)}>
+                              <Pencil className="size-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={active ? `Desativar ${item.nomeFuncionario}` : `Reativar ${item.nomeFuncionario}`}
+                              disabled={saving || busyId !== null}
+                              onClick={() => openReasonDialog(item, active ? 'delete' : 'activate')}
+                            >
+                              {active ? <Lock className="size-4 text-red-600" /> : <Unlock className="size-4 text-green-600" />}
+                            </Button>
+                            <Button variant="ghost" size="icon" aria-label={`Excluir ${item.nomeFuncionario}`} disabled={saving || busyId !== null} onClick={() => openReasonDialog(item, 'delete')}>
+                              <Trash2 className="size-4 text-red-600" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               {!filtered.length && <p className="p-12 text-center text-muted-foreground">Nenhum funcionário encontrado.</p>}
@@ -160,7 +317,7 @@ export default function FuncionarioList() {
         </CardContent>
       </Card>
 
-      <Dialog open={open} onOpenChange={value => { if (!pending) setOpen(value); }}>
+      <Dialog open={formOpen} onOpenChange={value => { if (!value) closeForm(); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editing ? 'Editar funcionário' : 'Adicionar funcionário'}</DialogTitle>
@@ -168,44 +325,73 @@ export default function FuncionarioList() {
           </DialogHeader>
           <form onSubmit={save} className="space-y-4">
             <label className="block space-y-2">
-              <span className="text-sm">Nome *</span>
-              <Input required value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} />
+              <span className="text-sm">Nome completo *</span>
+              <Input value={form.nomeFuncionario} onChange={event => updateForm('nomeFuncionario', event.target.value)} />
+            </label>
+            <label className="block space-y-2">
+              <span className="text-sm">Email *</span>
+              <Input type="email" value={form.email} onChange={event => updateForm('email', event.target.value)} />
             </label>
             <label className="block space-y-2">
               <span className="text-sm">CPF *</span>
-              <Input required inputMode="numeric" placeholder="000.000.000-00" value={form.cpf} onChange={e => setForm({ ...form, cpf: formatCpf(e.target.value) })} />
+              <Input value={form.cpf} onChange={event => updateForm('cpf', event.target.value)} />
             </label>
             <label className="block space-y-2">
-              <span className="text-sm">Departamento</span>
-              <select className="h-10 w-full rounded-md border bg-card px-3 text-sm" value={form.departamento} onChange={e => setForm({ ...form, departamento: e.target.value })}>
-                {['TI', 'RH', 'Operacional', 'Administrativo', 'Outros'].map(v => <option key={v}>{v}</option>)}
-              </select>
+              <span className="text-sm">Tipo *</span>
+              <Select value={form.tipo} onValueChange={value => updateForm('tipo', value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">Visualizador</SelectItem>
+                  <SelectItem value="1">Operador</SelectItem>
+                  <SelectItem value="2">Admin</SelectItem>
+                </SelectContent>
+              </Select>
             </label>
             <label className="block space-y-2">
-              <span className="text-sm">Cargo</span>
-              <Input value={form.cargo} onChange={e => setForm({ ...form, cargo: e.target.value })} />
+              <span className="text-sm">{editing ? 'Nova senha (opcional)' : 'Senha inicial *'}</span>
+              <Input
+                type="password"
+                value={form.senha}
+                onChange={event => updateForm('senha', event.target.value)}
+                placeholder={editing ? 'Deixe em branco para manter a senha atual' : 'Senha inicial'}
+              />
             </label>
-            <div className="flex items-center justify-between rounded-md border p-3">
-              <span className="text-sm">Funcionário ativo</span>
-              <Switch aria-label="Funcionário ativo" checked={isActive(form.status)} onCheckedChange={value => setForm({ ...form, status: value ? 'ativo' : 'inativo' })} />
-            </div>
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" disabled={pending} onClick={() => setOpen(false)}>Cancelar</Button>
-              <Button disabled={pending} type="submit">{pending ? 'Salvando...' : 'Salvar funcionário'}</Button>
+              <Button type="button" variant="outline" disabled={saving} onClick={closeForm}>Cancelar</Button>
+              <Button disabled={saving} type="submit">
+                {saving ? 'Salvando...' : 'Salvar funcionário'}
+              </Button>
             </div>
           </form>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!deleting} onOpenChange={value => { if (!value && !pending) setDeleting(null); }}>
+      <Dialog open={reasonDialog.open} onOpenChange={value => { if (!value) closeReasonDialog(); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Excluir funcionário?</DialogTitle>
-            <DialogDescription>Você está prestes a excluir {deleting?.nome}. Esta ação não pode ser desfeita.</DialogDescription>
+            <DialogTitle>
+              {reasonDialog.mode === 'activate' ? 'Reativar funcionário' : 'Desativar funcionário'}
+            </DialogTitle>
+            <DialogDescription>Informe um motivo para registrar a alteração de status.</DialogDescription>
           </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="reason">Motivo *</Label>
+            <Textarea
+              id="reason"
+              value={reason}
+              onChange={event => setReason(event.target.value)}
+              rows={4}
+              placeholder="Descreva o motivo..."
+              disabled={busyId !== null}
+            />
+          </div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" disabled={pending} onClick={() => setDeleting(null)}>Cancelar</Button>
-            <Button variant="destructive" disabled={pending} onClick={remove}>{pending ? 'Excluindo...' : 'Confirmar exclusão'}</Button>
+            <Button variant="outline" disabled={busyId !== null} onClick={closeReasonDialog}>Cancelar</Button>
+            <Button onClick={() => void submitReason()} disabled={busyId !== null}>
+              {busyId !== null ? 'Processando...' : 'Confirmar'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

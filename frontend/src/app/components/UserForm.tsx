@@ -1,113 +1,145 @@
-import React, { useState, useEffect } from 'react';
-import { usuarioService, errorMessage } from '../services/api';
-import { useSignalR } from '../hooks/useSignalR';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { errorMessage, normalizeEmail, type UsuarioDto, usuarioService } from '../services/api';
+import { Alert, AlertDescription } from './ui/alert';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Alert, AlertDescription } from './ui/alert';
-import { Badge } from './ui/badge';
-import { ArrowLeft, CreditCard, Loader2 } from 'lucide-react';
 
 interface UserFormProps {
   editingUserId?: string;
   onNavigate: (route: any) => void;
 }
 
-interface UserData {
-  name: string;
-  document: string;
-  userType: string;
-  uid: string;
+interface UserFormState {
+  nome: string;
   email: string;
-  senha: string;
-  status: string;
+  documento: string;
+  tipo: string;
+}
+
+const emptyForm: UserFormState = {
+  nome: '',
+  email: '',
+  documento: '',
+  tipo: '',
+};
+
+const userTypeOptions = [
+  { value: '0', label: 'Aluno' },
+  { value: '1', label: 'Professor' },
+  { value: '2', label: 'Visitante' },
+  { value: '3', label: 'Colaborador' },
+];
+
+function mapUserType(value: UsuarioDto['tipo']) {
+  const option = userTypeOptions.find(item => Number(item.value) === Number(value));
+  return option?.label ?? '—';
 }
 
 export default function UserForm({ editingUserId, onNavigate }: UserFormProps) {
-  const [userData, setUserData] = useState<UserData>({
-    name: '',
-    document: '',
-    userType: '',
-    uid: '',
-    email: '',
-    senha: '',
-    status: 'Ativo'
-  });
+  const { user: currentUser } = useAuth();
+  const [form, setForm] = useState<UserFormState>(emptyForm);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [existingUser, setExistingUser] = useState<UsuarioDto | null>(null);
 
-  const { isReading, lastReadUID, startReading, stopReading } = useSignalR();
+  const canEdit = useMemo(() => currentUser?.role === 'Admin', [currentUser?.role]);
+  const canCreate = useMemo(() => currentUser?.role === 'Admin' || currentUser?.role === 'Operador', [currentUser?.role]);
 
   useEffect(() => {
     let active = true;
-    if (!editingUserId) return;
+
+    if (!editingUserId) {
+      setExistingUser(null);
+      setForm(emptyForm);
+      return () => {
+        active = false;
+      };
+    }
+
     setIsLoading(true);
     const load = async () => {
       try {
         const { data } = await usuarioService.get(editingUserId);
-        if (active) setUserData({
-          name: data.nome,
-          document: data.documento,
-          userType: data.tipo.toLowerCase(),
-          uid: data.uid || '',
-          email: data.email,
-          senha: '',
-          status: data.status
+        if (!active) {
+          return;
+        }
+        setExistingUser(data);
+        setForm({
+          nome: data.nome,
+          email: data.email || '',
+          documento: data.documento,
+          tipo: String(data.tipo),
         });
-      } catch (err) { if (active) setError(errorMessage(err)); }
-      finally { if (active) setIsLoading(false); }
+      } catch (err) {
+        if (active) {
+          setError(errorMessage(err));
+        }
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
     };
+
     void load();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [editingUserId]);
 
-  useEffect(() => {
-    if (!lastReadUID) return;
-    setUserData(prev => ({ ...prev, uid: lastReadUID }));
-    setSuccess('Cartão lido com sucesso!');
-    stopReading();
-    const timer = setTimeout(() => setSuccess(''), 3000);
-    return () => clearTimeout(timer);
-  }, [lastReadUID]);
-
-  const handleInputChange = (field: keyof UserData, value: string) => {
-    setUserData(prev => ({ ...prev, [field]: value }));
+  const updateField = (field: keyof UserFormState, value: string) => {
+    setForm(previous => ({ ...previous, [field]: value }));
     setError('');
+    setSuccess('');
   };
 
-  const handleReadCard = () => {
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError('');
-    startReading();
-  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setIsSaving(true);
-
-    if (!userData.name || !userData.document || !userData.userType || !userData.email || (!editingUserId && !userData.senha)) {
-      setError('Por favor, preencha todos os campos obrigatórios.');
-      setIsSaving(false);
+    if (editingUserId ? !canEdit : !canCreate) {
+      setError('Você não tem permissão para executar esta ação.');
       return;
     }
 
+    if (!form.nome.trim() || !form.documento.trim() || !form.tipo) {
+      setError('Preencha nome, documento e tipo.');
+      return;
+    }
+
+    if (!form.email.trim()) {
+      setError('Informe o email.');
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      setError('Informe um email válido.');
+      return;
+    }
+
+    const payload = {
+      nome: form.nome.trim(),
+      email: normalizeEmail(form.email),
+      documento: form.documento.trim(),
+      tipo: Number(form.tipo) as UsuarioDto['tipo'],
+    };
+
+    setIsSaving(true);
     try {
-      const data = {
-        nome: userData.name.trim(),
-        email: userData.email.trim(),
-        documento: userData.document,
-        tipo: userData.userType,
-        status: userData.status,
-        uid: userData.uid
-      };
       if (editingUserId) {
-        await usuarioService.update(editingUserId, data);
+        await usuarioService.update(editingUserId, payload);
+        setSuccess('Usuário atualizado com sucesso.');
       } else {
-        await usuarioService.create({ ...data, senha: userData.senha });
+        await usuarioService.create(payload);
+        setSuccess('Usuário cadastrado com sucesso.');
       }
       onNavigate('users');
     } catch (err) {
@@ -121,27 +153,33 @@ export default function UserForm({ editingUserId, onNavigate }: UserFormProps) {
     onNavigate('users');
   };
 
-  if (isLoading) return <p role="status" className="text-muted-foreground">Carregando...</p>;
+  if (isLoading) {
+    return <p role="status" className="text-muted-foreground">Carregando...</p>;
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-4">
         <Button variant="ghost" size="sm" onClick={handleCancel}>
-          <ArrowLeft className="h-4 w-4 mr-2" />Voltar
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Voltar
         </Button>
         <div>
-          <h1>
-            {editingUserId ? `Editar Usuário: ${userData.name}` : 'Adicionar Novo Usuário'}
-          </h1>
+          <h1>{editingUserId ? `Editar Usuário: ${form.nome}` : 'Adicionar Novo Usuário'}</h1>
           <p className="text-muted-foreground">
-            {editingUserId ? 'Atualize os dados do usuário' : 'Preencha os dados do novo usuário'}
+            {editingUserId ? 'Atualize os dados cadastrais do usuário RFID.' : 'Cadastre uma nova pessoa autorizada.'}
           </p>
         </div>
       </div>
 
       <Card className="max-w-2xl">
-        <CardHeader>
+        <CardHeader className="space-y-2">
           <CardTitle>Dados do Usuário</CardTitle>
+          {existingUser && (
+            <Badge variant={existingUser.isActive ? 'default' : 'destructive'} className={existingUser.isActive ? 'bg-green-100 text-green-800' : ''}>
+              {existingUser.isActive ? 'Ativo' : 'Inativo'}
+            </Badge>
+          )}
         </CardHeader>
         <CardContent>
           {error && (
@@ -159,13 +197,13 @@ export default function UserForm({ editingUserId, onNavigate }: UserFormProps) {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Nome Completo *</Label>
+                <Label htmlFor="nome">Nome Completo *</Label>
                 <Input
-                  id="name"
+                  id="nome"
                   type="text"
                   placeholder="Digite o nome completo"
-                  value={userData.name}
-                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  value={form.nome}
+                  onChange={(event) => updateField('nome', event.target.value)}
                   disabled={isSaving}
                 />
               </div>
@@ -175,119 +213,44 @@ export default function UserForm({ editingUserId, onNavigate }: UserFormProps) {
                 <Input
                   id="email"
                   type="email"
-                  required
-                  value={userData.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
+                                  required
+                                  placeholder="nome@dominio.com"
+                  value={form.email}
+                  onChange={(event) => updateField('email', event.target.value)}
                   disabled={isSaving}
-                  placeholder="Digite o email"
                 />
               </div>
 
-              {!editingUserId && (
-                <div className="space-y-2">
-                  <Label htmlFor="newsenha">Senha *</Label>
-                  <Input
-                    id="newsenha"
-                    type="senha"
-                    autoComplete="new-senha"
-                    required
-                    value={userData.senha}
-                    onChange={(e) => handleInputChange('senha', e.target.value)}
-                    disabled={isSaving}
-                    placeholder="Digite a senha"
-                  />
-                </div>
-              )}
-
               <div className="space-y-2">
-                <Label htmlFor="document">Documento *</Label>
+                <Label htmlFor="documento">Documento *</Label>
                 <Input
-                  id="document"
+                  id="documento"
                   type="text"
                   placeholder="CPF, RG ou outro documento"
-                  value={userData.document}
-                  onChange={(e) => handleInputChange('document', e.target.value)}
+                  value={form.documento}
+                  onChange={(event) => updateField('documento', event.target.value)}
                   disabled={isSaving}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="userType">Tipo de Usuário *</Label>
+                <Label htmlFor="tipo">Tipo *</Label>
                 <Select
-                  value={userData.userType}
-                  onValueChange={(value) => handleInputChange('userType', value)}
+                  value={form.tipo}
+                  onValueChange={(value) => updateField('tipo', value)}
                   disabled={isSaving}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o tipo de usuário" />
+                  <SelectTrigger id="tipo">
+                    <SelectValue placeholder="Selecione o tipo" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="funcionario">Funcionário</SelectItem>
-                    <SelectItem value="administrador">Administrador</SelectItem>
-                    <SelectItem value="visitante">Visitante</SelectItem>
-                    <SelectItem value="terceirizado">Terceirizado</SelectItem>
+                    {userTypeOptions.map(option => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-              </div>
-            </div>
-
-            <div className="border-t pt-6">
-              <div className="space-y-4">
-                <div>
-                  <Label>Cartão RFID</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Associe um cartão RFID ao usuário para controle de acesso
-                  </p>
-                </div>
-
-                <div className="flex items-center space-x-4">
-                  <div className="flex-1">
-                    <Label htmlFor="uid">UID do Cartão</Label>
-                    <div className="flex items-center space-x-2 mt-2">
-                      <Input
-                        id="uid"
-                        type="text"
-                        value={userData.uid}
-                        readOnly
-                        placeholder="Nenhum cartão associado"
-                        className="bg-muted"
-                      />
-                      {userData.uid && (
-                        <Badge variant="outline" className="bg-green-50 text-green-700 whitespace-nowrap">
-                          ✅ Cartão associado
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleReadCard}
-                  disabled={isReading || isSaving}
-                  className="w-full sm:w-auto"
-                >
-                  {isReading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Aguardando aproximação do cartão RFID...
-                    </>
-                  ) : (
-                    <>
-                      <CreditCard className="h-4 w-4 mr-2" />
-                      Ler Novo Cartão
-                    </>
-                  )}
-                </Button>
-
-                {isReading && (
-                  <Alert className="border-blue-200 bg-blue-50">
-                    <AlertDescription className="text-blue-800">
-                      Aproxime o cartão RFID do leitor para fazer a leitura.
-                    </AlertDescription>
-                  </Alert>
-                )}
               </div>
             </div>
 
@@ -295,10 +258,10 @@ export default function UserForm({ editingUserId, onNavigate }: UserFormProps) {
               <Button type="button" variant="outline" onClick={handleCancel} disabled={isSaving}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSaving}>
+              <Button type="submit" disabled={isSaving || (!editingUserId && !canCreate) || (editingUserId && !canEdit)}>
                 {isSaving ? (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     {editingUserId ? 'Atualizando...' : 'Salvando...'}
                   </>
                 ) : (
@@ -306,9 +269,17 @@ export default function UserForm({ editingUserId, onNavigate }: UserFormProps) {
                 )}
               </Button>
             </div>
+            {editingUserId && !canEdit && (
+              <p className="text-sm text-muted-foreground">
+                Somente administradores podem atualizar usuários existentes.
+              </p>
+            )}
           </form>
         </CardContent>
       </Card>
+      <div className="max-w-2xl text-sm text-muted-foreground">
+        Tipo atual: {editingUserId ? mapUserType(existingUser?.tipo ?? Number(form.tipo)) : 'Novo cadastro'}
+      </div>
     </div>
   );
 }

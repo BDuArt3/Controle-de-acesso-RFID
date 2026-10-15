@@ -1,10 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { usuarioService, isActive, errorMessage } from '../services/api';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Input } from './ui/input';
-import { Button } from './ui/button';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Edit, Lock, MoreHorizontal, Plus, Search, Unlock } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import {
+  errorMessage,
+  isActive,
+  type UsuarioDto,
+  usuarioService,
+} from '../services/api';
+import { Alert, AlertDescription } from './ui/alert';
 import { Badge } from './ui/badge';
-import { Plus, Search, Edit, Lock, Unlock, MoreHorizontal } from 'lucide-react';
+import { Button } from './ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Textarea } from './ui/textarea';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,78 +22,140 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 
-interface User {
-  id: string;
-  name: string;
-  document: string;
-  userType: string;
-  status: 'active' | 'blocked';
-  uid?: string;
-}
-
 interface UserManagementProps {
   onNavigate: (route: any, editingUserId?: string) => void;
 }
 
+const userTypeLabels: Record<number, string> = {
+  0: 'Aluno',
+  1: 'Professor',
+  2: 'Visitante',
+  3: 'Colaborador',
+};
+
+function userTypeLabel(value: UsuarioDto['tipo']) {
+  return userTypeLabels[value] ?? String(value);
+}
+
 export default function UserManagement({ onNavigate }: UserManagementProps) {
+  const { user: currentUser } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<UsuarioDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [reasonDialog, setReasonDialog] = useState<{ open: boolean; user: UsuarioDto | null; mode: 'delete' | 'activate' | null }>({
+    open: false,
+    user: null,
+    mode: null,
+  });
+  const [reason, setReason] = useState('');
+
+  const canCreate = currentUser?.role === 'Admin' || currentUser?.role === 'Operador';
+  const canAdminister = currentUser?.role === 'Admin';
 
   useEffect(() => {
     let active = true;
+
     const load = async () => {
       try {
         const { data } = await usuarioService.list();
-        if (active) setUsers(data.map(user => ({
-          id: String(user.id),
-          name: user.nome,
-          document: user.documento,
-          userType: user.tipo,
-          uid: user.uid,
-          status: isActive(user.status) ? 'active' : 'blocked'
-        })));
-      } catch (error) { if (active) setError(errorMessage(error)); }
-      finally { if (active) setIsLoading(false); }
+        if (active) {
+          setUsers(data);
+        }
+      } catch (failure) {
+        if (active) {
+          setError(errorMessage(failure));
+        }
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
     };
+
     void load();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const toggleUserStatus = async (userId: string) => {
-    const user = users.find(item => item.id === userId);
-    if (!user || pendingId) return;
-    setPendingId(userId); setError('');
-    try {
-      if (user.status === 'active') await usuarioService.bloquear(userId);
-      else await usuarioService.desbloquear(userId);
-      setUsers(previous => previous.map(item =>
-        item.id === userId ? { ...item, status: user.status === 'active' ? 'blocked' : 'active' } : item
-      ));
-    } catch (error) { setError(errorMessage(error)); }
-    finally { setPendingId(null); }
+  const filteredUsers = useMemo(() => {
+    const normalized = searchQuery.trim().toLowerCase();
+    if (!normalized) {
+      return users;
+    }
+    return users.filter(user =>
+      user.nome.toLowerCase().includes(normalized)
+      || user.documento.toLowerCase().includes(normalized)
+      || user.email?.toLowerCase().includes(normalized),
+    );
+  }, [searchQuery, users]);
+
+  const refresh = async () => {
+    const { data } = await usuarioService.list();
+    setUsers(data);
   };
 
-  const filteredUsers = users.filter(user =>
-    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.document.includes(searchQuery)
-  );
+  const openReasonDialog = (user: UsuarioDto, mode: 'delete' | 'activate') => {
+    setReason('');
+    setReasonDialog({ open: true, user, mode });
+  };
+
+  const closeReasonDialog = () => {
+    if (pendingId) {
+      return;
+    }
+    setReasonDialog({ open: false, user: null, mode: null });
+    setReason('');
+  };
+
+  const submitReason = async () => {
+    if (!reasonDialog.user || !reasonDialog.mode) {
+      return;
+    }
+    if (!reason.trim()) {
+      setError('Informe um motivo.');
+      return;
+    }
+
+    setPendingId(reasonDialog.user.id);
+    setError('');
+    try {
+      if (reasonDialog.mode === 'delete') {
+        await usuarioService.deletar(reasonDialog.user.id, reason.trim());
+      } else {
+        await usuarioService.ativar(reasonDialog.user.id, reason.trim());
+      }
+      await refresh();
+      closeReasonDialog();
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setPendingId(null);
+    }
+  };
+
+  const handleEdit = (user: UsuarioDto) => {
+    onNavigate('user-form', user.id);
+  };
 
   return (
     <div className="space-y-6">
       {isLoading && <p role="status" className="text-muted-foreground">Carregando...</p>}
-      {error && <p role="alert" className="text-destructive">{error}</p>}
+      {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
 
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <h1>Gerenciamento de Usuários</h1>
-          <p className="text-muted-foreground">Gerencie usuários e seus acessos ao sistema</p>
+          <p className="text-muted-foreground">Gerencie cadastros RFID e vínculos com cartões.</p>
         </div>
-        <Button onClick={() => onNavigate('user-form')}>
-          <Plus className="h-4 w-4 mr-2" />Adicionar Novo Usuário
-        </Button>
+        {canCreate && (
+          <Button onClick={() => onNavigate('user-form')}>
+            <Plus className="mr-2 h-4 w-4" />
+            Adicionar Novo Usuário
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -91,11 +163,11 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
           <CardTitle>Lista de Usuários</CardTitle>
           <div className="flex items-center space-x-2">
             <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nome ou documento..."
+                placeholder="Buscar por nome, documento ou email..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(event) => setSearchQuery(event.target.value)}
                 className="pl-10"
               />
             </div>
@@ -103,63 +175,108 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {filteredUsers.map((user) => (
-              <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/20 transition-colors">
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                    <span className="font-medium text-primary">
-                      {user.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                    </span>
-                  </div>
-                  <div>
-                    <h3 className="font-medium">{user.name}</h3>
-                    <p className="text-sm text-muted-foreground">{user.document}</p>
-                    <div className="flex items-center space-x-2 mt-1">
-                      <Badge variant="outline">{user.userType}</Badge>
-                      {user.uid && <span className="text-xs text-muted-foreground">UID: {user.uid}</span>}
+            {filteredUsers.map((user) => {
+              const active = isActive(user.isActive ?? user.cartoes?.some(card => isActive(card.isActive ?? card.status)));
+              return (
+                <div key={user.id} className="flex flex-wrap items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/20">
+                  <div className="flex items-center space-x-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                      <span className="font-medium text-primary">
+                        {user.nome.split(' ').map(part => part[0]).join('').slice(0, 2)}
+                      </span>
+                    </div>
+                    <div>
+                      <h3 className="font-medium">{user.nome}</h3>
+                      <p className="text-sm text-muted-foreground">{user.documento}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">{userTypeLabel(user.tipo)}</Badge>
+                        {user.email && <span className="text-xs text-muted-foreground">{user.email}</span>}
+                        <span className="text-xs text-muted-foreground">
+                          {user.cartoes?.length ? `${user.cartoes.length} cartão(ões)` : 'Sem cartões conhecidos'}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center space-x-2">
-                  <Badge
-                    variant={user.status === 'active' ? 'default' : 'destructive'}
-                    className={user.status === 'active' ? 'bg-green-100 text-green-800' : ''}
-                  >
-                    {user.status === 'active' ? 'Ativo' : 'Bloqueado'}
-                  </Badge>
+                  <div className="flex items-center space-x-2">
+                    <Badge
+                      variant={active ? 'default' : 'destructive'}
+                      className={active ? 'bg-green-100 text-green-800' : ''}
+                    >
+                      {active ? 'Ativo' : 'Inativo'}
+                    </Badge>
 
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => onNavigate('user-form', user.id)}>
-                        <Edit className="h-4 w-4 mr-2" />Editar
-                      </DropdownMenuItem>
-                      <DropdownMenuItem disabled={pendingId !== null} onClick={() => void toggleUserStatus(user.id)}>
-                        {user.status === 'active' ? (
-                          <><Lock className="h-4 w-4 mr-2" />Bloquear</>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" disabled={pendingId !== null}>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleEdit(user)} disabled={!canAdminister}>
+                          <Edit className="mr-2 h-4 w-4" />
+                          Editar
+                        </DropdownMenuItem>
+                        {active ? (
+                          <DropdownMenuItem onClick={() => openReasonDialog(user, 'delete')} disabled={!canAdminister || pendingId !== null}>
+                            <Lock className="mr-2 h-4 w-4" />
+                            Desativar
+                          </DropdownMenuItem>
                         ) : (
-                          <><Unlock className="h-4 w-4 mr-2" />Desbloquear</>
+                          <DropdownMenuItem onClick={() => openReasonDialog(user, 'activate')} disabled={!canAdminister || pendingId !== null}>
+                            <Unlock className="mr-2 h-4 w-4" />
+                            Reativar
+                          </DropdownMenuItem>
                         )}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {filteredUsers.length === 0 && (
-              <div className="text-center py-8">
+              <div className="py-8 text-center">
                 <p className="text-muted-foreground">Nenhum usuário encontrado.</p>
               </div>
             )}
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={reasonDialog.open} onOpenChange={value => !value && closeReasonDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {reasonDialog.mode === 'delete' ? 'Desativar usuário' : 'Reativar usuário'}
+            </DialogTitle>
+            <DialogDescription>
+              Informe um motivo para prosseguir com a alteração do status do usuário.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="reason">Motivo *</Label>
+            <Textarea
+              id="reason"
+              value={reason}
+              onChange={event => setReason(event.target.value)}
+              rows={4}
+              placeholder="Explique o motivo da alteração..."
+              disabled={pendingId !== null}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" disabled={pendingId !== null} onClick={closeReasonDialog}>
+              Cancelar
+            </Button>
+            <Button onClick={() => void submitReason()} disabled={pendingId !== null}>
+              {pendingId !== null ? 'Processando...' : 'Confirmar'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

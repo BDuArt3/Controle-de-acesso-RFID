@@ -1,108 +1,417 @@
-import axios from 'axios';
+import axios, { type AxiosError, type AxiosRequestConfig, type AxiosResponse } from 'axios';
+import { API_BASE_URL } from './apiConfig';
 
-export interface AuthUser { token: string; expiration: string; role: string; name: string; email: string }
-export interface AuthProfile {
-  name?: string;
-  nome?: string;
-  nomeFuncionario?: string;
-  email?: string;
-  role?: string | number;
-  tipo?: string | number;
+export type RoleName = 'Visualizador' | 'Operador' | 'Admin';
+export type LoginRoleIndex = 0 | 1 | 2;
+export type UsuarioTipo = 0 | 1 | 2 | 3;
+export type FuncionarioTipo = 0 | 1 | 2;
+export type CartaoStatus = 0 | 1 | 2;
+export type CartaoSolicitacaoStatus = 'Pendente' | 'Enviada' | 'Concluida' | 'Falhou' | 'Cancelada' | 'Expirada';
+export type MotivoTipo =
+  | 1
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6
+  | 7;
+
+export interface TokenDto {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: string;
+  tokenType: string;
 }
-export interface AuthMeResponse extends AuthProfile {
-  token?: string;
-  expiration?: string;
-  usuario?: AuthProfile;
+
+export interface LoginUsuarioDto {
+  id: string;
+  nomeFuncionario: string;
+  email: string;
+  tipo: LoginRoleIndex;
+  isActive: boolean;
 }
+
 export interface LoginResponse {
   success: boolean;
   message: string;
-  token: { accessToken: string; refreshToken: string; expiresAt: string; tokenType: string };
-  usuario: AuthProfile & { id: string; isActive: boolean };
+  token: TokenDto | null;
+  usuario: LoginUsuarioDto | null;
 }
-export interface UsuarioDto { id: string; nome: string; email: string; documento: string; tipo: string; status: string; uid: string }
-export interface LogDto { id: string; uid: string; usuarioId: string; userName: string; dataHora: string; resultado: string; motivo?: string }
-export interface FuncionarioDto { id: string; nome: string; cpf: string; departamento: string; cargo: string; status: string }
-type FuncionarioApiDto = {
+
+export interface AuthMeResponse {
   id: string;
-  nome?: string;
-  nomeFuncionario?: string;
-  cpf?: string;
-  departamento?: string;
-  cargo?: string;
-  status?: string;
+  nomeFuncionario: string;
+  email: string;
+  tipo: RoleName;
+  isAuthenticated: boolean;
+}
+
+export interface UsuarioCartaoResumo {
+  id: string;
+  uid?: string;
+  status?: CartaoStatus;
   isActive?: boolean;
+}
+
+export interface UsuarioDto {
+  id: string;
+  nome: string;
+  email?: string | null;
+  documento: string;
+  tipo: UsuarioTipo;
+  isActive: boolean;
+  cartoes?: UsuarioCartaoResumo[];
+}
+
+export interface CreateUsuarioDto {
+  nome: string;
+  email?: string | null;
+  documento: string;
+  tipo: UsuarioTipo;
+}
+
+export interface FuncionarioDto {
+  id: string;
+  nomeFuncionario: string;
+  email: string;
+  cpf: string;
+  tipo: FuncionarioTipo;
+  isActive: boolean;
+}
+
+export interface CreateFuncionarioDto {
+  nomeFuncionario: string;
+  email: string;
+  cpf: string;
+  senha: string;
+  tipo: FuncionarioTipo;
+}
+
+export interface UpdateFuncionarioDto extends CreateFuncionarioDto {
+  senha?: string;
+}
+
+export interface CartaoDto {
+  id: string;
+  usuarioId: string;
+  uid: string;
+  status: CartaoStatus;
+  isActive: boolean;
+  usuarioNome?: string;
+  nomeUsuario?: string;
+  cartaoAnteriorId?: string | null;
+  motivoReemissao?: string | null;
+  dataCadastro?: string;
+  dataSolicitacao?: string;
+}
+
+export interface CreateCartaoDto {
+  usuarioId: string;
+  cartaoAnteriorId?: string;
+  motivoReemissao?: string;
+}
+
+export interface SolicitacaoCartaoDto {
+  solicitacaoId: string;
+  status: CartaoSolicitacaoStatus;
+  mensagem: string;
+  usuarioId: string;
+  nomeUsuario: string;
+  dataSolicitacao: string;
+  cartaoId: string | null;
+}
+
+export interface LogAcessoDto {
+  id: string;
+  dataHora: string;
+  cartaoId?: string | null;
+  usuarioId?: string | null;
+  uidInformado?: string | null;
+  cartaoUid?: string | null;
+  acessoPermitido: boolean;
+  motivo: string;
+  motivoTipo: MotivoTipo;
+  usuarioNome?: string | null;
+  usuarioTipo?: string | null;
+}
+
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: string;
+  tokenType: string;
+}
+
+export interface LogoutResponse {
+  message: string;
+}
+
+export interface RequestErrorBody {
+  message?: string;
+  errors?: Record<string, unknown> | string[] | string;
+  title?: string;
+  detail?: string;
+}
+
+const ACCESS_TOKEN_KEY = 'authToken';
+const REFRESH_TOKEN_KEY = 'authRefreshToken';
+const EXPIRES_AT_KEY = 'authExpiresAt';
+const TOKEN_TYPE_KEY = 'authTokenType';
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 15000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+export const tokenStorage = {
+  getAccessToken() {
+    return localStorage.getItem(ACCESS_TOKEN_KEY);
+  },
+  getRefreshToken() {
+    return localStorage.getItem(REFRESH_TOKEN_KEY);
+  },
+  getExpiresAt() {
+    return localStorage.getItem(EXPIRES_AT_KEY);
+  },
+  getTokenType() {
+    return localStorage.getItem(TOKEN_TYPE_KEY) || 'Bearer';
+  },
+  set(tokens: AuthTokens) {
+    localStorage.setItem(ACCESS_TOKEN_KEY, tokens.accessToken);
+    localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
+    localStorage.setItem(EXPIRES_AT_KEY, tokens.expiresAt);
+    localStorage.setItem(TOKEN_TYPE_KEY, tokens.tokenType || 'Bearer');
+  },
+  clear() {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    localStorage.removeItem(EXPIRES_AT_KEY);
+    localStorage.removeItem(TOKEN_TYPE_KEY);
+  },
 };
-export interface CartaoDto { id: string; uid: string; funcionarioId: string; funcionario?: { nome: string }; funcionarioNome?: string; status: string; dataRegistro: string }
-export type UsuarioInput = Omit<UsuarioDto, 'id'> & { senha?: string };
-type Payload = Record<string, unknown>;
-export const isActive = (status: string) => ['ativo', 'active'].includes(String(status).toLowerCase());
-export const isGranted = (result: string) => ['permitido', 'autorizado', 'granted'].includes(String(result).toLowerCase());
-export const errorMessage = (error: unknown) => {
-  if (axios.isAxiosError(error)) {
-    if (error.response?.status === 401) return 'Sessão expirada ou credenciais inválidas. Entre novamente.';
-    const message = error.response?.data?.message;
-    return typeof message === 'string' ? message : 'Não foi possível completar a operação. Verifique a API e a configuração de CORS.';
+
+export function buildMessageFromError(error: unknown) {
+  if (!axios.isAxiosError(error)) {
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
+    return 'Não foi possível completar a operação.';
   }
-  return 'Não foi possível completar a operação.';
-};
-const api = axios.create({ baseURL: 'http://localhost:5143/api', timeout: 15000, headers: { 'Content-Type': 'application/json' } });
-api.interceptors.request.use(config => {
-  const token = localStorage.getItem('authToken');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+
+  const status = error.response?.status;
+  if (status === 401) {
+    return 'Sessão expirada ou credenciais inválidas. Entre novamente.';
+  }
+  if (status === 403) {
+    return 'Você não tem permissão para executar esta ação.';
+  }
+
+  const data = error.response?.data as RequestErrorBody | string | undefined;
+  if (typeof data === 'string' && data.trim()) {
+    return data;
+  }
+  if (data && typeof data === 'object') {
+    if (typeof data.message === 'string' && data.message.trim()) {
+      return data.message;
+    }
+    if (typeof data.detail === 'string' && data.detail.trim()) {
+      return data.detail;
+    }
+    if (typeof data.title === 'string' && data.title.trim()) {
+      return data.title;
+    }
+    if (Array.isArray(data.errors)) {
+      const messages = data.errors
+        .map(item => (typeof item === 'string' ? item : ''))
+        .filter(Boolean);
+      if (messages.length > 0) {
+        return messages.join(' ');
+      }
+    }
+    if (data.errors && typeof data.errors === 'object') {
+      const nestedMessages = Object.values(data.errors)
+        .flatMap(value => (Array.isArray(value) ? value : [value]))
+        .map(value => (typeof value === 'string' ? value : ''))
+        .filter(Boolean);
+      if (nestedMessages.length > 0) {
+        return nestedMessages.join(' ');
+      }
+    }
+  }
+
+  return 'Não foi possível completar a operação. Verifique a API e a configuração de CORS.';
+}
+
+export const errorMessage = buildMessageFromError;
+
+export function isActive(value: unknown) {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    return value === 0;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === 'ativo'
+      || normalized === 'active'
+      || normalized === 'true'
+      || normalized === 'sim'
+      || normalized === '1';
+  }
+  return false;
+}
+
+export function isGranted(value: unknown) {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  const normalized = String(value).trim().toLowerCase();
+  return normalized === 'permitido'
+    || normalized === 'autorizado'
+    || normalized === 'granted'
+    || normalized === 'true'
+    || normalized === '1';
+}
+
+export function roleFromLoginType(tipo: LoginRoleIndex | number | string | null | undefined): RoleName {
+  const text = String(tipo ?? '').trim().toLowerCase();
+  if (text.startsWith('admin')) {
+    return 'Admin';
+  }
+  if (text.startsWith('operador')) {
+    return 'Operador';
+  }
+  const numeric = typeof tipo === 'number' ? tipo : Number(tipo);
+  if (numeric === 2) {
+    return 'Admin';
+  }
+  if (numeric === 1) {
+    return 'Operador';
+  }
+  return 'Visualizador';
+}
+
+export function normalizeEmail(email: string | null | undefined) {
+  const value = email?.trim();
+  return value ? value : null;
+}
+
+export function createIdempotencyKey() {
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  return `idem-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+api.interceptors.request.use((config) => {
+  const token = tokenStorage.getAccessToken();
+  if (token) {
+    const headers = config.headers ?? {};
+    (headers as Record<string, string>).Authorization = `Bearer ${token}`;
+    config.headers = headers;
+  }
   return config;
 });
-api.interceptors.response.use(response => response, error => {
-  if (error.response?.status === 401 && error.config?.url !== '/auth/login') {
-    localStorage.removeItem('authToken');
-    window.dispatchEvent(new Event('auth:logout'));
+
+api.interceptors.response.use(
+  response => response,
+  (error: AxiosError) => {
+    const url = error.config?.url ?? '';
+    if (error.response?.status === 401 && !url.includes('/auth/login')) {
+      tokenStorage.clear();
+      window.dispatchEvent(new Event('auth:logout'));
+    }
+    return Promise.reject(error);
+  },
+);
+
+function withIdempotencyKey(config?: AxiosRequestConfig, idempotencyKey?: string): AxiosRequestConfig | undefined {
+  if (!idempotencyKey) {
+    return config;
   }
-  return Promise.reject(error);
-});
+  return {
+    ...(config ?? {}),
+    headers: {
+      ...(config?.headers ?? {}),
+      'Idempotency-Key': idempotencyKey,
+    },
+  };
+}
+
 export const authService = {
   login: (email: string, senha: string) => api.post<LoginResponse>('/auth/login', { email, senha }),
+  refreshToken: (refreshToken: string) => api.post<TokenDto>('/auth/refresh-token', { refreshToken }),
+  logout: (refreshToken: string) => api.post<LogoutResponse>('/auth/logout', { refreshToken }),
   getMe: () => api.get<AuthMeResponse>('/auth/me'),
-  changesenha: (currentsenha: string, newsenha: string) => api.post('/auth/change-senha', { currentsenha, newsenha })
+  changeSenha: (currentsenha: string, newsenha: string) => api.post('/auth/change-senha', { currentsenha, newsenha }),
 };
+
 export const usuarioService = {
   list: () => api.get<UsuarioDto[]>('/usuario'),
   get: (id: string) => api.get<UsuarioDto>(`/usuario/${encodeURIComponent(id)}`),
-  create: (data: UsuarioInput) => api.post('/usuario', data),
-  update: (id: string, data: UsuarioInput) => api.put(`/usuario/${encodeURIComponent(id)}`, data),
-  bloquear: (id: string) => api.put(`/usuario/${encodeURIComponent(id)}/bloquear`),
-  desbloquear: (id: string) => api.put(`/usuario/${encodeURIComponent(id)}/desbloquear`)
+  create: (data: CreateUsuarioDto) => api.post<UsuarioDto>('/usuario', {
+    nome: data.nome,
+    email: normalizeEmail(data.email),
+    documento: data.documento,
+    tipo: data.tipo,
+  }),
+  update: (id: string, data: CreateUsuarioDto) => api.put<UsuarioDto>(`/usuario/${encodeURIComponent(id)}`, {
+    nome: data.nome,
+    email: normalizeEmail(data.email),
+    documento: data.documento,
+    tipo: data.tipo,
+  }),
+  deletar: (id: string, motivo: string) => api.delete<{ message: string }>(`/usuario/${encodeURIComponent(id)}`, { data: { motivo } }),
+  ativar: (id: string, motivo: string) => api.put<{ message: string }>(`/usuario/${encodeURIComponent(id)}/ativar`, { motivo }),
 };
-export const logAcessoService = {
-  list: () => api.get<LogDto[]>('/logacesso'),
-  get: (id: string) => api.get<LogDto>(`/logacesso/${encodeURIComponent(id)}`),
-  create: (data: Payload) => api.post('/logacesso', data),
-  getByUser: (id: string) => api.get<LogDto[]>(`/logacesso/usuario/${encodeURIComponent(id)}`),
-  getDaily: (date: string) => api.get<LogDto[]>(`/logacesso/diario/${encodeURIComponent(date)}`)
-};
-export const acessoService = { registrar: (data: Payload) => api.post('/acesso', data) };
+
 export const funcionarioService = {
-  list: async () => {
-    const response = await api.get<FuncionarioApiDto[]>('/funcionario');
-    return {
-      ...response,
-      data: response.data.map(item => ({
-        id: item.id,
-        nome: item.nome ?? item.nomeFuncionario ?? '',
-        cpf: item.cpf ?? '',
-        departamento: item.departamento ?? '',
-        cargo: item.cargo ?? '',
-        status: item.status ?? (item.isActive ? 'ativo' : 'inativo')
-      }))
-    };
-  },
-  get: (id: string) => api.get(`/funcionario/${encodeURIComponent(id)}`),
-  create: (data: Payload) => api.post('/funcionario', data), update: (id: string, data: Payload) => api.put(`/funcionario/${encodeURIComponent(id)}`, data),
-  delete: (id: string) => api.delete(`/funcionario/${encodeURIComponent(id)}`)
+  list: () => api.get<FuncionarioDto[]>('/funcionario'),
+  get: (id: string) => api.get<FuncionarioDto>(`/funcionario/${encodeURIComponent(id)}`),
+  create: (data: CreateFuncionarioDto) => api.post<FuncionarioDto>('/funcionario', data),
+  update: (id: string, data: UpdateFuncionarioDto) => api.put<FuncionarioDto>(`/funcionario/${encodeURIComponent(id)}`, data),
+  delete: (id: string, motivo: string) => api.delete<{ message: string }>(`/funcionario/${encodeURIComponent(id)}`, { data: { motivo } }),
+  ativar: (id: string, motivo: string) => api.patch<{ message: string }>(`/funcionario/${encodeURIComponent(id)}/ativar`, { motivo }),
 };
+
 export const cartaoService = {
-  list: () => api.get('/cartao'), get: (id: string) => api.get(`/cartao/${encodeURIComponent(id)}`),
-  create: (data: { uid: string; funcionarioId: string }) => api.post('/cartao', data),
-  desativar: (id: string) => api.put(`/cartao/${encodeURIComponent(id)}/desativar`),
-  reativar: (id: string) => api.put(`/cartao/${encodeURIComponent(id)}/reativar`)
+  list: () => api.get<CartaoDto[]>('/cartao'),
+  get: (id: string) => api.get<CartaoDto>(`/cartao/${encodeURIComponent(id)}`),
+  getByUid: (uid: string) => api.get<CartaoDto>(`/cartao/uid/${encodeURIComponent(uid)}`),
+  getByUsuario: (usuarioId: string) => api.get<CartaoDto[]>(`/cartao/usuario/${encodeURIComponent(usuarioId)}`),
+  create: (data: CreateCartaoDto, idempotencyKey?: string) =>
+    api.post<SolicitacaoCartaoDto>('/cartao', data, withIdempotencyKey(undefined, idempotencyKey)),
+  getSolicitacao: (id: string) => api.get<SolicitacaoCartaoDto>(`/cartao/solicitacoes/${encodeURIComponent(id)}`),
+  retentarSolicitacao: (id: string) => api.post<SolicitacaoCartaoDto>(`/cartao/solicitacoes/${encodeURIComponent(id)}/retentar`),
+  cancelarSolicitacao: (id: string, motivo: string) => api.post<{ message: string }>(`/cartao/solicitacoes/${encodeURIComponent(id)}/cancelar`, { motivo }),
+  update: (id: string, data: Partial<CreateCartaoDto>) => api.put<CartaoDto>(`/cartao/${encodeURIComponent(id)}`, data),
+  bloquear: (id: string, motivo: string) => api.delete<{ message: string }>(`/cartao/${encodeURIComponent(id)}`, { data: { motivo } }),
+  ativar: (id: string, motivo: string) => api.put<{ message: string }>(`/cartao/${encodeURIComponent(id)}/ativar`, { motivo }),
+  cancelar: (id: string, motivo: string) => api.post<{ message: string }>(`/cartao/${encodeURIComponent(id)}/cancelar`, { motivo }),
 };
+
+export const logAcessoService = {
+  list: () => api.get<LogAcessoDto[]>('/log-acesso'),
+  get: (id: string) => api.get<LogAcessoDto>(`/log-acesso/${encodeURIComponent(id)}`),
+  getByCartaoUid: (uid: string) => api.get<LogAcessoDto[]>(`/log-acesso/cartao/${encodeURIComponent(uid)}`),
+  getByPeriodo: (dataInicio: string, dataFim: string) =>
+    api.get<LogAcessoDto[]>('/log-acesso/periodo', { params: { dataInicio, dataFim } }),
+  getPermitidosByPeriodo: (dataInicio: string, dataFim: string) =>
+    api.get<LogAcessoDto[]>('/log-acesso/periodo/permitidos', { params: { dataInicio, dataFim } }),
+  getNegadosByPeriodo: (dataInicio: string, dataFim: string) =>
+    api.get<LogAcessoDto[]>('/log-acesso/periodo/negados', { params: { dataInicio, dataFim } }),
+  getUltimos: (quantidade = 50) => api.get<LogAcessoDto[]>('/log-acesso/ultimos', { params: { quantidade } }),
+  getEstatisticasHoje: () => api.get('/log-acesso/estatisticas/hoje'),
+  getRelatorioDiario: (data: string) => api.get('/log-acesso/relatorio/diario', { params: { data } }),
+  create: (data: Record<string, unknown>) => api.post('/log-acesso', data),
+};
+
+export const acessoService = {
+  registrar: (data: Record<string, unknown>) => api.post('/acesso', data),
+};
+
 export default api;

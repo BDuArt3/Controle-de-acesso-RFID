@@ -1,27 +1,38 @@
-import React, { useState, useEffect } from 'react';
-import { logAcessoService, isGranted, errorMessage } from '../services/api';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Download, Filter, Search, UserCheck, UserX } from 'lucide-react';
+import { errorMessage, isGranted, type LogAcessoDto, logAcessoService } from '../services/api';
+import { Alert, AlertDescription } from './ui/alert';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Badge } from './ui/badge';
-import { Calendar, Search, Filter, Download, UserCheck, UserX } from 'lucide-react';
 
-interface AccessLog {
-  id: string;
-  uid: string;
-  userName: string;
-  datetime: string;
-  result: 'granted' | 'denied';
-  reason?: string;
+type ResultFilter = 'all' | 'granted' | 'denied';
+type DateFilter = 'today' | 'week' | 'month' | 'custom';
+
+function getDisplayName(log: LogAcessoDto) {
+  return log.usuarioNome || log.cartaoUid || log.uidInformado || 'Usuário desconhecido';
+}
+
+function getAccessResult(log: LogAcessoDto): ResultFilter {
+  return log.acessoPermitido ? 'granted' : 'denied';
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  return {
+    date: date.toLocaleDateString('pt-BR'),
+    time: date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+  };
 }
 
 export default function AccessLogs() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [resultFilter, setResultFilter] = useState('all');
-  const [dateFilter, setDateFilter] = useState('today');
-  const [logs, setLogs] = useState<AccessLog[]>([]);
+  const [resultFilter, setResultFilter] = useState<ResultFilter>('all');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('today');
+  const [logs, setLogs] = useState<LogAcessoDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -29,53 +40,75 @@ export default function AccessLogs() {
 
   useEffect(() => {
     let active = true;
+
     const load = async () => {
       try {
         const { data } = await logAcessoService.list();
-        if (active) setLogs([...data].sort(
-          (first, second) => Date.parse(second.dataHora) - Date.parse(first.dataHora)
-        ).map(log => ({
-          id: String(log.id),
-          uid: log.uid || '',
-          userName: log.userName || 'Usuário desconhecido',
-          datetime: log.dataHora,
-          result: isGranted(log.resultado) ? 'granted' : 'denied',
-          reason: log.motivo
-        })));
-      } catch (error) { if (active) setError(errorMessage(error)); }
-      finally { if (active) setIsLoading(false); }
+        if (active) {
+          setLogs([...data].sort((first, second) => Date.parse(second.dataHora) - Date.parse(first.dataHora)));
+        }
+      } catch (failure) {
+        if (active) {
+          setError(errorMessage(failure));
+        }
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
     };
+
     void load();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const filteredLogs = logs.filter(log => {
-    const matchesSearch =
-      log.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.uid.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredLogs = useMemo(() => {
+    const normalizedSearch = searchQuery.trim().toLowerCase();
 
-    const matchesResult = resultFilter === 'all' || log.result === resultFilter;
+    return logs.filter((log) => {
+      const result = getAccessResult(log);
+      const displayName = getDisplayName(log).toLowerCase();
+      const uid = (log.cartaoUid || log.uidInformado || '').toLowerCase();
+      const matchesSearch = !normalizedSearch || displayName.includes(normalizedSearch) || uid.includes(normalizedSearch);
+      const matchesResult = resultFilter === 'all' || result === resultFilter;
 
-    const date = new Date(log.datetime);
-    const lower = new Date();
-    lower.setHours(0, 0, 0, 0);
-    if (dateFilter === 'week') lower.setDate(lower.getDate() - 6);
-    if (dateFilter === 'month') lower.setMonth(lower.getMonth() - 1);
-    const upper = new Date();
-    upper.setHours(23, 59, 59, 999);
-    const matchesDate = dateFilter === 'custom'
-      ? (!startDate || date >= new Date(startDate + 'T00:00:00')) && (!endDate || date <= new Date(endDate + 'T23:59:59.999'))
-      : date >= lower && date <= upper;
-    return matchesSearch && matchesResult && matchesDate;
-  });
+      const date = new Date(log.dataHora);
+      const lower = new Date();
+      lower.setHours(0, 0, 0, 0);
+      if (dateFilter === 'week') {
+        lower.setDate(lower.getDate() - 6);
+      } else if (dateFilter === 'month') {
+        lower.setMonth(lower.getMonth() - 1);
+      }
+      const upper = new Date();
+      upper.setHours(23, 59, 59, 999);
+      const matchesDate = dateFilter === 'custom'
+        ? (!startDate || date >= new Date(`${startDate}T00:00:00`)) && (!endDate || date <= new Date(`${endDate}T23:59:59.999`))
+        : date >= lower && date <= upper;
+
+      return matchesSearch && matchesResult && matchesDate;
+    });
+  }, [dateFilter, endDate, logs, resultFilter, searchQuery, startDate]);
 
   const handleExport = () => {
-    const cell = (value: string) => '"' + value.replace(/^[=+@-]/, match => "'" + match).replace(/"/g, '""') + '"';
-    const rows = [['ID', 'UID', 'Usuário', 'Data e hora', 'Resultado', 'Motivo'],
-      ...filteredLogs.map(log => [log.id, log.uid, log.userName, log.datetime,
-        log.result === 'granted' ? 'Permitido' : 'Negado', log.reason || ''])];
-    const blob = new Blob(['\uFEFF' + rows.map(row => row.map(cell).join(';')).join('\r\n')],
-      { type: 'text/csv;charset=utf-8' });
+    const escapeCsv = (value: string) => `"${value.replace(/^[=+@-]/, match => `'${match}`).replace(/"/g, '""')}"`;
+    const rows = [
+      ['ID', 'Cartão', 'Usuário', 'Data e hora', 'Resultado', 'Motivo'],
+      ...filteredLogs.map(log => [
+        log.id,
+        log.cartaoUid || log.uidInformado || '',
+        getDisplayName(log),
+        log.dataHora,
+        log.acessoPermitido ? 'Permitido' : 'Negado',
+        log.motivo || '',
+      ]),
+    ];
+
+    const blob = new Blob(['\uFEFF' + rows.map(row => row.map(value => escapeCsv(String(value))).join(';')).join('\r\n')], {
+      type: 'text/csv;charset=utf-8',
+    });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -86,48 +119,40 @@ export default function AccessLogs() {
     URL.revokeObjectURL(url);
   };
 
-  const formatDateTime = (datetime: string) => {
-    const date = new Date(datetime);
-    return {
-      date: date.toLocaleDateString('pt-BR'),
-      time: date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-    };
-  };
-
   return (
     <div className="space-y-6">
       {isLoading && <p role="status" className="text-muted-foreground">Carregando...</p>}
-      {error && <p role="alert" className="text-destructive">{error}</p>}
+      {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
 
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <h1>Logs de Acesso</h1>
-          <p className="text-muted-foreground">
-            Auditoria de todas as tentativas de acesso ao sistema
-          </p>
+          <p className="text-muted-foreground">Auditoria de tentativas de acesso ao sistema.</p>
         </div>
         <Button variant="outline" onClick={handleExport} disabled={isLoading || !!error}>
-          <Download className="h-4 w-4 mr-2" />Exportar
+          <Download className="mr-2 h-4 w-4" />
+          Exportar
         </Button>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
-            <Filter className="h-5 w-5 mr-2" />Filtros
+            <Filter className="mr-2 h-5 w-5" />
+            Filtros
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="space-y-2">
               <Label htmlFor="search">Buscar</Label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id="search"
-                  placeholder="Nome ou UID do cartão..."
+                  placeholder="Nome, UID ou cartão..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(event) => setSearchQuery(event.target.value)}
                   className="pl-10"
                 />
               </div>
@@ -135,7 +160,7 @@ export default function AccessLogs() {
 
             <div className="space-y-2">
               <Label>Período</Label>
-              <Select value={dateFilter} onValueChange={setDateFilter}>
+              <Select value={dateFilter} onValueChange={(value) => setDateFilter(value as DateFilter)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -149,23 +174,23 @@ export default function AccessLogs() {
               {dateFilter === 'custom' && (
                 <div className="space-y-2">
                   <Label htmlFor="startDate">De</Label>
-                  <Input id="startDate" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                  <Input id="startDate" type="date" value={startDate} onChange={event => setStartDate(event.target.value)} />
                   <Label htmlFor="endDate">Até</Label>
-                  <Input id="endDate" type="date" min={startDate} value={endDate} onChange={e => setEndDate(e.target.value)} />
+                  <Input id="endDate" type="date" min={startDate} value={endDate} onChange={event => setEndDate(event.target.value)} />
                 </div>
               )}
             </div>
 
             <div className="space-y-2">
               <Label>Resultado</Label>
-              <Select value={resultFilter} onValueChange={setResultFilter}>
+              <Select value={resultFilter} onValueChange={(value) => setResultFilter(value as ResultFilter)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="granted">Permitido</SelectItem>
-                  <SelectItem value="denied">Negado</SelectItem>
+                  <SelectItem value="granted">Permitidos</SelectItem>
+                  <SelectItem value="denied">Negados</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -176,30 +201,29 @@ export default function AccessLogs() {
       <Card>
         <CardHeader>
           <CardTitle>Registros de Acesso</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            {filteredLogs.length} registro(s) encontrado(s)
-          </p>
+          <p className="text-sm text-muted-foreground">{filteredLogs.length} registro(s) encontrado(s)</p>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {filteredLogs.map((log) => {
-              const { date, time } = formatDateTime(log.datetime);
+              const { date, time } = formatDateTime(log.dataHora);
+              const granted = isGranted(log.acessoPermitido);
               return (
-                <div key={log.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/20 transition-colors">
+                <div key={log.id} className="flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-muted/20">
                   <div className="flex items-center space-x-4">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center bg-primary/10">
-                      {log.result === 'granted' ? (
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                      {granted ? (
                         <UserCheck className="h-5 w-5 text-green-600" />
                       ) : (
                         <UserX className="h-5 w-5 text-red-600" />
                       )}
                     </div>
                     <div>
-                      <h3 className="font-medium">{log.userName}</h3>
-                      <p className="text-sm text-muted-foreground">UID: {log.uid}</p>
-                      {log.reason && (
-                        <p className="text-sm text-red-600 mt-1">{log.reason}</p>
-                      )}
+                      <h3 className="font-medium">{getDisplayName(log)}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        UID: {log.cartaoUid || log.uidInformado || '—'}
+                      </p>
+                      {log.motivo && <p className="mt-1 text-sm text-red-600">{log.motivo}</p>}
                     </div>
                   </div>
 
@@ -210,10 +234,10 @@ export default function AccessLogs() {
                         <p className="text-muted-foreground">{date}</p>
                       </div>
                       <Badge
-                        variant={log.result === 'granted' ? 'default' : 'destructive'}
-                        className={log.result === 'granted' ? 'bg-green-100 text-green-800' : ''}
+                        variant={granted ? 'default' : 'destructive'}
+                        className={granted ? 'bg-green-100 text-green-800' : ''}
                       >
-                        {log.result === 'granted' ? 'Permitido' : 'Negado'}
+                        {granted ? 'Permitido' : 'Negado'}
                       </Badge>
                     </div>
                   </div>
@@ -222,10 +246,8 @@ export default function AccessLogs() {
             })}
 
             {filteredLogs.length === 0 && (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">
-                  Nenhum registro encontrado com os filtros aplicados.
-                </p>
+              <div className="py-8 text-center">
+                <p className="text-muted-foreground">Nenhum registro encontrado com os filtros aplicados.</p>
               </div>
             )}
           </div>

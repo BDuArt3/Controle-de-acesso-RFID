@@ -1,22 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { usuarioService, logAcessoService, isActive, isGranted, errorMessage } from '../services/api';
-import { useSignalR } from '../hooks/useSignalR';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { UserCheck, UserX, Users } from 'lucide-react';
+import { errorMessage, isActive, isGranted, logAcessoService, usuarioService } from '../services/api';
 import { Badge } from './ui/badge';
-import {
-  Users,
-  UserCheck,
-  UserX,
-  Wifi,
-  WifiOff
-} from 'lucide-react';
-import RealTimeFeed from './RealTimeFeed';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 
 interface RecentAccess {
   id: string;
   name: string;
   time: string;
-  status: string;
+  status: 'granted' | 'denied';
   uid: string;
 }
 
@@ -26,73 +18,67 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const { isConnected, recentEvents } = useSignalR();
-
   useEffect(() => {
     let active = true;
     const load = async () => {
       try {
-        const [users, logs] = await Promise.all([usuarioService.list(), logAcessoService.list()]);
-        if (!active) return;
+        const [usersResponse, logsResponse] = await Promise.all([usuarioService.list(), logAcessoService.list()]);
+        if (!active) {
+          return;
+        }
+
         const today = new Date().toDateString();
-        const daily = logs.data.filter(log => new Date(log.dataHora).toDateString() === today);
+        const daily = logsResponse.data.filter(log => new Date(log.dataHora).toDateString() === today);
         setMetrics({
-          totalUsers: users.data.filter(user => isActive(user.status)).length,
-          accessesToday: daily.filter(log => isGranted(log.resultado)).length,
-          deniedToday: daily.filter(log => !isGranted(log.resultado)).length,
+          totalUsers: usersResponse.data.filter(user => isActive(user.isActive)).length,
+          accessesToday: daily.filter(log => isGranted(log.acessoPermitido)).length,
+          deniedToday: daily.filter(log => !isGranted(log.acessoPermitido)).length,
         });
-        setRecentAccesses([...logs.data]
+
+        setRecentAccesses([...logsResponse.data]
           .sort((first, second) => Date.parse(second.dataHora) - Date.parse(first.dataHora))
           .slice(0, 5)
           .map(log => ({
             id: String(log.id),
-            name: log.userName || 'Usuário desconhecido',
-            uid: log.uid,
+            name: log.usuarioNome || log.cartaoUid || log.uidInformado || 'Usuário desconhecido',
+            uid: log.cartaoUid || log.uidInformado || '—',
             time: new Date(log.dataHora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-            status: isGranted(log.resultado) ? 'granted' : 'denied'
-          }))
+            status: log.acessoPermitido ? 'granted' : 'denied',
+          })),
         );
-      } catch (err) { if (active) setError(errorMessage(err)); }
-      finally { if (active) setIsLoading(false); }
+      } catch (failure) {
+        if (active) {
+          setError(errorMessage(failure));
+        }
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
     };
+
     void load();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
-  useEffect(() => {
-    if (recentEvents.length === 0) return;
-    const latest = recentEvents[0];
+  if (isLoading) {
+    return <p role="status" className="text-muted-foreground">Carregando...</p>;
+  }
 
-    if (latest.type === 'granted') {
-      setMetrics(prev => ({ ...prev, accessesToday: prev.accessesToday + 1 }));
-    } else {
-      setMetrics(prev => ({ ...prev, deniedToday: prev.deniedToday + 1 }));
-    }
-
-    const newAccess: RecentAccess = {
-      id: `rt-${latest.timestamp}`,
-      name: latest.userName || 'Usuário Desconhecido',
-      uid: latest.uid,
-      time: new Date(latest.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      status: latest.type === 'granted' ? 'granted' : 'denied'
-    };
-    setRecentAccesses(prev => [newAccess, ...prev].slice(0, 10));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recentEvents[0]?.timestamp]);
-
-  if (isLoading) return <p role="status" className="text-muted-foreground">Carregando...</p>;
-  if (error) return <p role="alert" className="text-destructive">{error}</p>;
+  if (error) {
+    return <p role="alert" className="text-destructive">{error}</p>;
+  }
 
   return (
     <div className="space-y-6">
       <div>
         <h1>Dashboard</h1>
-        <p className="text-muted-foreground">
-          Visão geral do sistema de controle de acesso
-        </p>
+        <p className="text-muted-foreground">Visão geral do sistema de controle de acesso.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total de Usuários Ativos</CardTitle>
@@ -126,29 +112,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Status do Leitor</CardTitle>
-            {isConnected ? (
-              <Wifi className="h-4 w-4 text-green-600" />
-            ) : (
-              <WifiOff className="h-4 w-4 text-muted-foreground" />
-            )}
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center space-x-2">
-              <Badge
-                variant={isConnected ? 'default' : 'outline'}
-                className={isConnected ? 'bg-green-100 text-green-800' : ''}
-              >
-                {isConnected ? 'Conectado ao Hub' : 'Hub desconectado'}
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {isConnected ? 'SignalR ativo — eventos em tempo real' : 'Aguardando conexão SignalR'}
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
       <Card>
@@ -161,10 +124,10 @@ export default function Dashboard() {
             {recentAccesses.map((access) => (
               <div
                 key={access.id}
-                className="flex items-center justify-between p-3 bg-muted/20 rounded-lg"
+                className="flex items-center justify-between rounded-lg bg-muted/20 p-3"
               >
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
                     {access.status === 'granted' ? (
                       <UserCheck className="h-5 w-5 text-green-600" />
                     ) : (
@@ -189,8 +152,6 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
-
-          <RealTimeFeed />
         </CardContent>
       </Card>
     </div>

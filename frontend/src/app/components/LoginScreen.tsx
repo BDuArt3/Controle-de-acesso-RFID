@@ -88,9 +88,9 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
               <div className="relative">
                 <Input
                   id="senha"
-                  autoComplete="current-senha"
+                  autoComplete="current-password"
                   required
-                  type={showsenha ? 'text' : 'senha'}
+                  type={showsenha ? 'text' : 'password'}
                   placeholder="Digite sua senha"
                   value={senha}
                   onChange={(e) => setsenha(e.target.value)}
@@ -104,6 +104,8 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                   onClick={() => setShowsenha(!showsenha)}
                   disabled={isLoading}
+                  aria-label={showsenha ? 'Ocultar senha' : 'Mostrar senha'}
+                  aria-pressed={showsenha}
                 >
                   {showsenha ? (
                     <EyeOff className="h-4 w-4 text-muted-foreground" />
