@@ -10,13 +10,17 @@ namespace ControleDeAcesso.Core.Entities
 
     public class Usuario
     {
+        private readonly List<Cartao> _cartoes = new();
+
         public string Id { get; set; } = Guid.NewGuid().ToString();
         public string Nome { get; set; } = string.Empty;
-        public string Email {get; set; } = string.Empty;
-        public string Documento {get; set; } = string.Empty;
-        public string Uid {get; set;} = string.Empty;
+        public string? Email { get; set; }
+        public string Documento { get; set; } = string.Empty;
         public TipoUsuario Tipo { get; set; }
         public bool IsActive { get; set; }
-        public ICollection<Cartao> Cartoes { get; set; } = new List<Cartao>();
+        public IReadOnlyCollection<Cartao> Cartoes => _cartoes;
+        public ICollection<LogAcesso> LogsAcesso { get; set; } = new List<LogAcesso>();
+        public ICollection<HistoricoStatusUsuario> HistoricosStatus { get; set; } = new List<HistoricoStatusUsuario>();
+        public Funcionario? Funcionario { get; set; }
     }
 }
