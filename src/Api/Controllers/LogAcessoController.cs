@@ -9,6 +9,7 @@ namespace ControleDeAcesso.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Route("api/log-acesso")]
     [Authorize] // Requer autenticação para todos os endpoints
     public class LogAcessoController : ControllerBase
     {

@@ -26,7 +26,6 @@ namespace ControleDeAcesso.Infrastructure.Data
                     "O email configurado para o administrador já está associado a um usuário sem conta de funcionário.");
             }
 
-            using var transaction = context.Database.BeginTransaction();
             var now = DateTime.UtcNow;
             var usuario = new Usuario
             {
@@ -58,8 +57,8 @@ namespace ControleDeAcesso.Infrastructure.Data
                 Motivo = "Cadastro inicial do administrador."
             });
             context.Funcionarios.Add(admin);
+            // SaveChanges já é transacional; transação manual é incompatível com a estratégia de retry.
             context.SaveChanges();
-            transaction.Commit();
         }
     }
 }
