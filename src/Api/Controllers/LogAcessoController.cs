@@ -2,6 +2,8 @@ using ControleDeAcesso.Application.DTOs;
 using ControleDeAcesso.Application.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using System.Globalization;
+using System.Text;
 
 namespace ControleDeAcesso.Api.Controllers
 {
@@ -110,6 +112,100 @@ namespace ControleDeAcesso.Api.Controllers
                 _logger.LogError(ex, "Erro ao buscar todos os logs de acesso");
                 return StatusCode(500, "Erro interno do servidor");
             }
+        }
+
+        /// <summary>
+        /// Exporta logs de acesso em CSV para o período informado.
+        /// </summary>
+        [HttpGet("exportar")]
+        [Authorize(Policy = "AdminOrOperador")]
+        [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK, "text/csv")]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> ExportarCsv(
+            [FromQuery] DateTime? dataInicio,
+            [FromQuery] DateTime? dataFim,
+            [FromQuery] bool? acessoPermitido)
+        {
+            if (!dataInicio.HasValue || !dataFim.HasValue)
+            {
+                return BadRequest("Informe dataInicio e dataFim para exportar os logs.");
+            }
+
+            try
+            {
+                var logs = await _logAcessoService.GetLogsParaExportacaoAsync(
+                    dataInicio.Value,
+                    dataFim.Value,
+                    acessoPermitido);
+                var csv = BuildCsv(logs);
+                var utf8WithBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
+                var fileContents = utf8WithBom.GetPreamble()
+                    .Concat(utf8WithBom.GetBytes(csv))
+                    .ToArray();
+                var fileName = string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"logs-acesso-{dataInicio.Value:yyyyMMdd}-{dataFim.Value:yyyyMMdd}.csv");
+
+                return File(fileContents, "text/csv; charset=utf-8", fileName);
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Parâmetros inválidos para exportação de logs");
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao exportar logs de acesso");
+                return StatusCode(500, "Erro interno do servidor");
+            }
+        }
+
+        private static string BuildCsv(IEnumerable<LogAcessoDto> logs)
+        {
+            var csv = new StringBuilder();
+            AppendCsvRow(csv,
+                "Id",
+                "DataHoraUtc",
+                "CartaoUid",
+                "UidInformado",
+                "UsuarioNome",
+                "UsuarioTipo",
+                "Resultado",
+                "Motivo",
+                "MotivoTipo");
+
+            foreach (var log in logs)
+            {
+                AppendCsvRow(csv,
+                    log.Id.ToString(CultureInfo.InvariantCulture),
+                    log.DataHora.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture),
+                    log.CartaoUid,
+                    log.UidInformado ?? string.Empty,
+                    log.UsuarioNome ?? string.Empty,
+                    log.UsuarioTipo ?? string.Empty,
+                    log.AcessoPermitido ? "Permitido" : "Negado",
+                    log.Motivo,
+                    log.MotivoTipo.ToString());
+            }
+
+            return csv.ToString();
+        }
+
+        private static void AppendCsvRow(StringBuilder csv, params string[] fields)
+        {
+            csv.AppendLine(string.Join(";", fields.Select(EscapeCsvField)));
+        }
+
+        private static string EscapeCsvField(string value)
+        {
+            var firstNonWhitespace = value.FirstOrDefault(character => !char.IsWhiteSpace(character));
+            if (firstNonWhitespace is '=' or '+' or '-' or '@')
+            {
+                value = $"'{value}";
+            }
+
+            return $"\"{value.Replace("\"", "\"\"")}\"";
         }
 
         /// <summary>

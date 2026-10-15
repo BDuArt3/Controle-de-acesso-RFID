@@ -263,6 +263,52 @@ namespace ControleDeAcesso.Application.Services
             }
         }
 
+        public async Task<IEnumerable<LogAcessoDto>> GetLogsParaExportacaoAsync(
+            DateTime dataInicio,
+            DateTime dataFim,
+            bool? acessoPermitido)
+        {
+            var inicioUtc = ToUtc(dataInicio);
+            var fimUtc = ToUtc(dataFim);
+
+            if (inicioUtc > fimUtc)
+            {
+                throw new ArgumentException("Data de início deve ser menor ou igual à data de fim");
+            }
+
+            if (fimUtc - inicioUtc > TimeSpan.FromDays(90))
+            {
+                throw new ArgumentException("O período máximo para exportação é de 90 dias");
+            }
+
+            _logger.LogInformation(
+                "Buscando logs para exportação: {DataInicio} - {DataFim}, Permitido: {AcessoPermitido}",
+                inicioUtc,
+                fimUtc,
+                acessoPermitido);
+
+            try
+            {
+                var logs = acessoPermitido.HasValue
+                    ? await _logAcessoRepository.GetByDataPeriodoAndStatusAsync(
+                        inicioUtc, fimUtc, acessoPermitido.Value)
+                    : await _logAcessoRepository.GetByDataPeriodoAsync(inicioUtc, fimUtc);
+                var result = new List<LogAcessoDto>();
+
+                foreach (var log in logs)
+                {
+                    result.Add(await MapToDtoWithUserInfoAsync(log));
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao consultar logs para exportação CSV");
+                throw;
+            }
+        }
+
         public async Task<IEnumerable<LogAcessoDto>> GetUltimosAcessosAsync(int quantidade = 50)
         {
             _logger.LogInformation("Buscando últimos {Quantidade} acessos", quantidade);

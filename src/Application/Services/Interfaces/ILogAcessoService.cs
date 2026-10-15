@@ -12,6 +12,10 @@ namespace ControleDeAcesso.Application.Services.Interfaces
         Task<IEnumerable<LogAcessoDto>> GetByDataPeriodoAsync(DateTime dataInicio, DateTime dataFim);
         Task<IEnumerable<LogAcessoDto>> GetAcessosPermitidosPorPeriodoAsync(DateTime dataInicio, DateTime dataFim);
         Task<IEnumerable<LogAcessoDto>> GetAcessosNegadosPorPeriodoAsync(DateTime dataInicio, DateTime dataFim);
+        Task<IEnumerable<LogAcessoDto>> GetLogsParaExportacaoAsync(
+            DateTime dataInicio,
+            DateTime dataFim,
+            bool? acessoPermitido);
         Task<IEnumerable<LogAcessoDto>> GetUltimosAcessosAsync(int quantidade = 50);
         Task<object> GetEstatisticasHojeAsync();
         Task<object> GetRelatorioAcessosDiarioAsync(DateTime data);
