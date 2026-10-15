@@ -12,12 +12,18 @@ namespace ControleDeAcesso.Application.Services
     {
         private readonly ICartaoRepository _cartaoRepository;
         private readonly IUsuarioRepository _usuarioRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<CartaoService> _logger;
 
-        public CartaoService(ICartaoRepository cartaoRepository, IUsuarioRepository usuarioRepository, ILogger<CartaoService> logger)
+        public CartaoService(
+            ICartaoRepository cartaoRepository,
+            IUsuarioRepository usuarioRepository,
+            IUnitOfWork unitOfWork,
+            ILogger<CartaoService> logger)
         {
             _cartaoRepository = cartaoRepository;
             _usuarioRepository = usuarioRepository;
+            _unitOfWork = unitOfWork;
             _logger = logger;
         }
 
@@ -38,44 +44,64 @@ namespace ControleDeAcesso.Application.Services
                     throw new ArgumentException("ID do usuário é obrigatório", nameof(createCartaoDto.UsuarioId));
                 }
 
-                // Verificar se o usuário existe
-                var usuario = await _usuarioRepository.GetByIdAsync(createCartaoDto.UsuarioId);
-                if (usuario == null)
+                return await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    throw new InvalidOperationException($"Usuário com ID {createCartaoDto.UsuarioId} não encontrado");
-                }
+                    var usuarioId = createCartaoDto.UsuarioId.Trim();
+                    var uid = createCartaoDto.Uid.Trim();
+                    var usuario = await _usuarioRepository.GetByIdAsync(usuarioId);
+                    if (usuario == null)
+                    {
+                        throw new InvalidOperationException($"Usuário com ID {usuarioId} não encontrado");
+                    }
 
-                // Verificar se o UID já existe
-                var uidExiste = await _cartaoRepository.UidExistsAsync(createCartaoDto.Uid);
-                if (uidExiste)
-                {
-                    throw new InvalidOperationException($"UID {createCartaoDto.Uid} já está em uso");
-                }
+                    if (!usuario.IsActive)
+                    {
+                        throw new InvalidOperationException($"Usuário com ID {usuarioId} está inativo");
+                    }
 
-                // REGRA DE NEGÓCIO: Desativar outros cartões do mesmo usuário antes de criar o novo
-                var cartoesExistentes = await _cartaoRepository.GetAllByUsuarioIdAsync(createCartaoDto.UsuarioId);
-                foreach (var cartaoExistente in cartoesExistentes.Where(c => c.IsActive))
-                {
-                    _logger.LogInformation("Desativando cartão existente. ID: {Id}, UID: {Uid}", 
-                        cartaoExistente.Id, cartaoExistente.Uid);
-                    
-                    cartaoExistente.IsActive = false;
-                    await _cartaoRepository.UpdateAsync(cartaoExistente);
-                }
+                    var cartaoExistente = await _cartaoRepository.GetByUidAsync(uid);
+                    if (cartaoExistente != null)
+                    {
+                        if (cartaoExistente.UsuarioId == usuarioId)
+                        {
+                            return MapToDto(cartaoExistente);
+                        }
 
-                var cartao = new Cartao
-                {
-                    Uid = createCartaoDto.Uid.Trim(),
-                    UsuarioId = createCartaoDto.UsuarioId.Trim(),
-                    IsActive = true // Novo cartão sempre ativo
-                };
+                        throw new InvalidOperationException($"UID {uid} já está em uso");
+                    }
 
-                var cartaoCriado = await _cartaoRepository.CreateAsync(cartao);
+                    var agora = DateTime.UtcNow;
+                    var cartao = new Cartao
+                    {
+                        Uid = uid,
+                        UsuarioId = usuarioId,
+                        DataRegistro = agora
+                    };
+                    var historicoAssociacao = new HistoricoAssociacoesCartao
+                    {
+                        CartaoId = cartao.Id,
+                        DataAssociacao = agora
+                    };
+                    var historicoStatus = new HistoricoStatusCartao
+                    {
+                        CartaoId = cartao.Id,
+                        Status = StatusCartao.Ativo,
+                        DataHora = agora,
+                        Motivo = "Emissão inicial do cartão."
+                    };
 
-                _logger.LogInformation("Cartão criado com sucesso. ID: {Id}, UID: {Uid}. Cartões anteriores foram desativados.", 
-                    cartaoCriado.Id, cartaoCriado.Uid);
+                    var cartaoCriado = await _cartaoRepository.CreateWithAuditAsync(
+                        cartao,
+                        historicoAssociacao,
+                        historicoStatus);
 
-                return MapToDto(cartaoCriado);
+                    _logger.LogInformation(
+                        "Cartão criado com seus históricos iniciais. ID: {Id}, UsuarioId: {UsuarioId}",
+                        cartaoCriado.Id,
+                        cartaoCriado.UsuarioId);
+
+                    return MapToDto(cartaoCriado, usuario.Nome);
+                });
             }
             catch (Exception ex)
             {
@@ -155,7 +181,7 @@ namespace ControleDeAcesso.Application.Services
 
                 _logger.LogInformation("Encontrados {Count} cartões", cartoes.Count());
 
-                return cartoes.Select(MapToDto);
+                return cartoes.Select(cartao => MapToDto(cartao));
             }
             catch (Exception ex)
             {
@@ -180,7 +206,7 @@ namespace ControleDeAcesso.Application.Services
                 _logger.LogInformation("Encontrados {Count} cartões ativos para o usuário {UsuarioId}", 
                     cartoes.Count(), usuarioId);
 
-                return cartoes.Select(MapToDto);
+                return cartoes.Select(cartao => MapToDto(cartao));
             }
             catch (Exception ex)
             {
@@ -213,35 +239,17 @@ namespace ControleDeAcesso.Application.Services
                 var cartaoExistente = await _cartaoRepository.GetByIdAsync(id);
                 if (cartaoExistente == null)
                 {
-                    throw new InvalidOperationException($"Cartão com ID {id} não encontrado");
+                    throw new KeyNotFoundException($"Cartão com ID {id} não encontrado");
                 }
 
-                // Verificar se o usuário existe
-                var usuario = await _usuarioRepository.GetByIdAsync(updateCartaoDto.UsuarioId);
-                if (usuario == null)
+                if (cartaoExistente.Uid != updateCartaoDto.Uid.Trim() ||
+                    cartaoExistente.UsuarioId != updateCartaoDto.UsuarioId.Trim())
                 {
-                    throw new InvalidOperationException($"Usuário com ID {updateCartaoDto.UsuarioId} não encontrado");
+                    throw new InvalidOperationException(
+                        "UID e titular são imutáveis nesta emissão. Para trocar o titular, cancele o cartão e crie uma nova emissão.");
                 }
 
-                // Verificar se o UID já existe (apenas se mudou)
-                if (cartaoExistente.Uid != updateCartaoDto.Uid)
-                {
-                    var uidExiste = await _cartaoRepository.UidExistsAsync(updateCartaoDto.Uid);
-                    if (uidExiste)
-                    {
-                        throw new InvalidOperationException($"UID {updateCartaoDto.Uid} já está em uso");
-                    }
-                }
-
-                cartaoExistente.Uid = updateCartaoDto.Uid.Trim();
-                cartaoExistente.UsuarioId = updateCartaoDto.UsuarioId.Trim();
-
-                var cartaoAtualizado = await _cartaoRepository.UpdateAsync(cartaoExistente);
-
-                _logger.LogInformation("Cartão atualizado com sucesso. ID: {Id}, UID: {Uid}", 
-                    cartaoAtualizado.Id, cartaoAtualizado.Uid);
-
-                return MapToDto(cartaoAtualizado);
+                return MapToDto(cartaoExistente);
             }
             catch (Exception ex)
             {
@@ -261,7 +269,10 @@ namespace ControleDeAcesso.Application.Services
                     throw new ArgumentException("ID é obrigatório", nameof(id));
                 }
 
-                var resultado = await _cartaoRepository.DeleteAsync(id);
+                var resultado = await ChangeStatusAsync(
+                    id,
+                    StatusCartao.Bloqueado,
+                    "Cartão bloqueado pela operação de exclusão lógica.");
 
                 if (resultado)
                 {
@@ -292,31 +303,10 @@ namespace ControleDeAcesso.Application.Services
                     throw new ArgumentException("ID é obrigatório", nameof(id));
                 }
 
-                var cartao = await _cartaoRepository.GetByIdAsync(id);
-                if (cartao == null)
-                {
-                    _logger.LogWarning("Cartão não encontrado para ativação. ID: {Id}", id);
-                    return false;
-                }
-
-                // REGRA DE NEGÓCIO: Desativar outros cartões do mesmo usuário antes de ativar este
-                var cartoesDoUsuario = await _cartaoRepository.GetAllByUsuarioIdAsync(cartao.UsuarioId);
-                foreach (var outroCartao in cartoesDoUsuario.Where(c => c.IsActive && c.Id != id))
-                {
-                    _logger.LogInformation("Desativando cartão existente antes de ativar novo. ID: {Id}, UID: {Uid}", 
-                        outroCartao.Id, outroCartao.Uid);
-                    
-                    outroCartao.IsActive = false;
-                    await _cartaoRepository.UpdateAsync(outroCartao);
-                }
-
-                cartao.IsActive = true;
-                await _cartaoRepository.UpdateAsync(cartao);
-
-                _logger.LogInformation("Cartão ativado com sucesso. ID: {Id}, UID: {Uid}. Outros cartões do usuário foram desativados.", 
-                    cartao.Id, cartao.Uid);
-
-                return true;
+                return await ChangeStatusAsync(
+                    id,
+                    StatusCartao.Ativo,
+                    "Cartão ativado explicitamente.");
             }
             catch (Exception ex)
             {
@@ -325,15 +315,44 @@ namespace ControleDeAcesso.Application.Services
             }
         }
 
-        private static CartaoDto MapToDto(Cartao cartao)
+        private async Task<bool> ChangeStatusAsync(string id, StatusCartao novoStatus, string motivo)
+        {
+            return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+            {
+                var cartao = await _cartaoRepository.GetByIdAsync(id);
+                if (cartao == null)
+                {
+                    return false;
+                }
+
+                if (!cartao.AlterarStatus(novoStatus))
+                {
+                    return true;
+                }
+
+                await _cartaoRepository.UpdateStatusWithHistoryAsync(
+                    cartao,
+                    new HistoricoStatusCartao
+                    {
+                        CartaoId = cartao.Id,
+                        Status = novoStatus,
+                        DataHora = DateTime.UtcNow,
+                        Motivo = motivo
+                    });
+
+                return true;
+            });
+        }
+
+        private static CartaoDto MapToDto(Cartao cartao, string? nomeUsuario = null)
         {
             return new CartaoDto
             {
                 Id = cartao.Id,
                 Uid = cartao.Uid,
-                IsActive = cartao.IsActive,
+                IsActive = cartao.Status == StatusCartao.Ativo,
                 UsuarioId = cartao.UsuarioId,
-                NomeUsuario = cartao.Usuario?.Nome ?? "Usuário não encontrado"
+                NomeUsuario = nomeUsuario ?? cartao.Usuario?.Nome ?? "Usuário não encontrado"
             };
         }
     }

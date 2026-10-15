@@ -18,15 +18,19 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             _logger = logger;
         }
 
-        public async Task<Cartao> CreateAsync(Cartao cartao)
+        public async Task<Cartao> CreateWithAuditAsync(
+            Cartao cartao,
+            HistoricoAssociacoesCartao historicoAssociacao,
+            HistoricoStatusCartao historicoStatus)
         {
             _logger.LogInformation("Iniciando criação de cartão. UID: {Uid}, UsuarioId: {UsuarioId}", 
                 cartao.Uid, cartao.UsuarioId);
 
             try
             {
-                cartao.Id = Guid.NewGuid().ToString();
                 _context.Cartoes.Add(cartao);
+                _context.HistoricoAssociacoesCartao.Add(historicoAssociacao);
+                _context.HistoricoStatusCartao.Add(historicoStatus);
                 await _context.SaveChangesAsync();
                 
                 _logger.LogInformation("Cartão criado com sucesso. ID: {Id}, UID: {Uid}", 
@@ -58,8 +62,8 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
                 }
                 else
                 {
-                    _logger.LogInformation("Cartão encontrado. ID: {Id}, UID: {Uid}, Ativo: {IsActive}", 
-                        cartao.Id, cartao.Uid, cartao.IsActive);
+                    _logger.LogInformation("Cartão encontrado. ID: {Id}, UID: {Uid}, Status: {Status}",
+                        cartao.Id, cartao.Uid, cartao.Status);
                 }
 
                 return cartao;
@@ -87,8 +91,8 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
                 }
                 else
                 {
-                    _logger.LogInformation("Cartão encontrado. ID: {Id}, UID: {Uid}, Ativo: {IsActive}", 
-                        cartao.Id, cartao.Uid, cartao.IsActive);
+                    _logger.LogInformation("Cartão encontrado. ID: {Id}, UID: {Uid}, Status: {Status}",
+                        cartao.Id, cartao.Uid, cartao.Status);
                 }
 
                 return cartao;
@@ -129,7 +133,7 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             {
                 var cartoes = await _context.Cartoes
                                      .Include(c => c.Usuario)
-                                     .Where(c => c.UsuarioId == usuarioId && c.IsActive)
+                                     .Where(c => c.UsuarioId == usuarioId && c.Status == StatusCartao.Ativo)
                                      .ToListAsync();
 
                 _logger.LogInformation("Encontrados {Count} cartões ativos para o usuário {UsuarioId}", 
@@ -167,53 +171,27 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             }
         }
 
-        public async Task<Cartao> UpdateAsync(Cartao cartao)
+        public async Task<Cartao> UpdateStatusWithHistoryAsync(
+            Cartao cartao,
+            HistoricoStatusCartao historicoStatus)
         {
-            _logger.LogInformation("Atualizando cartão. ID: {Id}, UID: {Uid}", 
-                cartao.Id, cartao.Uid);
+            _logger.LogInformation("Salvando mudança de status do cartão. ID: {Id}, UID: {Uid}, Status: {Status}",
+                cartao.Id, cartao.Uid, cartao.Status);
 
             try
             {
-                _context.Cartoes.Update(cartao);
+                _context.HistoricoStatusCartao.Add(historicoStatus);
                 await _context.SaveChangesAsync();
                 
-                _logger.LogInformation("Cartão atualizado com sucesso. ID: {Id}, UID: {Uid}, Ativo: {IsActive}", 
-                    cartao.Id, cartao.Uid, cartao.IsActive);
+                _logger.LogInformation("Mudança de status e evento de auditoria salvos. ID: {Id}, UID: {Uid}, Status: {Status}",
+                    cartao.Id, cartao.Uid, cartao.Status);
                 
                 return cartao;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao atualizar cartão. ID: {Id}, UID: {Uid}", 
+                _logger.LogError(ex, "Erro ao salvar status e auditoria do cartão. ID: {Id}, UID: {Uid}",
                     cartao.Id, cartao.Uid);
-                throw;
-            }
-        }
-
-        public async Task<bool> DeleteAsync(string id)
-        {
-            _logger.LogInformation("Iniciando desativação de cartão. ID: {Id}", id);
-
-            try
-            {
-                var cartao = await GetByIdAsync(id);
-                if (cartao == null)
-                {
-                    _logger.LogWarning("Tentativa de desativar cartão inexistente. ID: {Id}", id);
-                    return false;
-                }
-
-                cartao.IsActive = false;
-                await UpdateAsync(cartao);
-                
-                _logger.LogInformation("Cartão desativado com sucesso. ID: {Id}, UID: {Uid}", 
-                    cartao.Id, cartao.Uid);
-                
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erro ao desativar cartão. ID: {Id}", id);
                 throw;
             }
         }
