@@ -237,7 +237,7 @@ export default function FuncionarioList() {
           <div className="flex flex-wrap items-center justify-between gap-4 border-b p-5">
             <div className="flex items-center gap-2">
               <Briefcase className="size-5" />
-              <h3 className="font-medium">Equipe cadastrada</h3>
+              <h3 className="font-medium">Funcionários cadastrados</h3>
               <Badge variant="secondary">{items.length}</Badge>
             </div>
             <div className="relative w-full sm:w-72">
