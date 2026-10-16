@@ -1,24 +1,26 @@
 namespace ControleDeAcesso.Worker;
 
 using System.IO.Ports;
+using ControleDeAcesso.Application.DTOs;
 using Microsoft.AspNetCore.SignalR.Client;
 public class Worker : BackgroundService
 {
     private readonly ILogger<Worker> _logger;
-    private readonly HttpClient _httpClient;
+    private readonly WorkerApiClient _apiClient;
     private readonly string _apiBaseUrl;
     private readonly string _comPortName;
+    private readonly string _workerApiKey;
     private SerialPort? _serialPort;
     private HubConnection? _hubConnection;
     private bool _isDisposing = false;
+    private readonly SemaphoreSlim _recordingLock = new(1, 1);
     
     // Variáveis para controle de leitura de acesso
     private string? _ultimoUidLido = null;
     private string? _ultimoGuidLido = null;
     
-    // Controle de gravações pendentes
-    private readonly Dictionary<string, string> _gravacoesEntreAndamento = new(); // GUID -> UsuarioId
-    private string? _guidSendoGravado = null;
+    private string? _solicitacaoSendoGravada;
+    private string? _credencialSendoGravada;
     private bool _gravacaoRecenteRealizada = false;
 
     public Worker(
@@ -27,21 +29,37 @@ public class Worker : BackgroundService
         )
     {
         _logger = logger;
-        _httpClient = new HttpClient();
+        var configuredApiBaseUrl = configuration["ApiSettings:BaseUrl"];
+        if (!Uri.TryCreate(configuredApiBaseUrl, UriKind.Absolute, out var apiBaseUri) ||
+            (apiBaseUri.Scheme != Uri.UriSchemeHttp && apiBaseUri.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new InvalidOperationException(
+                "ApiSettings:BaseUrl deve conter uma URL absoluta HTTP ou HTTPS.");
+        }
 
-        _apiBaseUrl = configuration["ApiSettings:BaseUrl"] ?? "BaseUrl da API não informada";
+        _apiBaseUrl = apiBaseUri.ToString().TrimEnd('/');
         _comPortName = configuration["SerialPortSettings:ComPortName"] ?? "COM4";
+        _workerApiKey = configuration["WorkerAuth:ApiKey"]
+            ?? throw new InvalidOperationException("WorkerAuth:ApiKey não configurada para o Worker.");
+        if (_workerApiKey.Length < 32)
+        {
+            throw new InvalidOperationException("WorkerAuth:ApiKey deve ter pelo menos 32 caracteres.");
+        }
+
+        _apiClient = new WorkerApiClient(new HttpClient(), _apiBaseUrl, _workerApiKey);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("Worker service iniciando...");
 
-        // Configurar conexão SignalR primeiro
-        await ConfigurarSignalRConnection();
-        
         while (!stoppingToken.IsCancellationRequested)
         {
+            if (_hubConnection == null || _hubConnection.State == HubConnectionState.Disconnected)
+            {
+                await ConfigurarSignalRConnection(stoppingToken);
+            }
+
             // Tentar configurar porta serial se não estiver conectada
             if (_serialPort?.IsOpen != true)
             {
@@ -75,66 +93,96 @@ public class Worker : BackgroundService
             _logger.LogWarning(ex, "Não foi possível abrir a porta serial '{portName}'. O Worker continuará funcionando apenas com SignalR.", _comPortName);
         }
     }
-    private async Task ConfigurarSignalRConnection()
+    private async Task ConfigurarSignalRConnection(CancellationToken stoppingToken)
     {
         try
         {
+            if (_hubConnection != null)
+            {
+                await _hubConnection.DisposeAsync();
+            }
+
             _hubConnection = new HubConnectionBuilder()
-                .WithUrl($"{_apiBaseUrl}/gravacaoHub")
+                .WithUrl($"{_apiBaseUrl}/gravacaoHub", options =>
+                {
+                    options.Headers.Add("X-Worker-Key", _workerApiKey);
+                })
                 .WithAutomaticReconnect()
                 .Build();
 
             // Handler para receber comandos de gravação
-            _hubConnection.On<string>("ReceberComandoGravacao", async (guid) =>
+            _hubConnection.On<GravacaoCartaoCommandDto>("ReceberComandoGravacao", async (command) =>
             {
-                _logger.LogInformation(">>> Comando de gravação recebido para GUID: {guid} <<<", guid);
-                await ProcessarComandoGravacao(guid);
+                _logger.LogInformation(
+                    "Comando de gravação recebido para solicitação {SolicitacaoId}.",
+                    command.SolicitacaoId);
+                await ProcessarComandoGravacao(command);
             });
 
-            await _hubConnection.StartAsync();
+            await _hubConnection.StartAsync(stoppingToken);
             _logger.LogInformation("Conexão SignalR estabelecida com sucesso em: {url}", $"{_apiBaseUrl}/gravacaoHub");
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Erro ao estabelecer conexão SignalR com o Hub.");
+            if (_hubConnection != null)
+            {
+                await _hubConnection.DisposeAsync();
+                _hubConnection = null;
+            }
         }
     }
-    private async Task ProcessarComandoGravacao(string guid)
+    private async Task ProcessarComandoGravacao(GravacaoCartaoCommandDto command)
     {
+        await _recordingLock.WaitAsync();
         try
         {
-            if (_serialPort?.IsOpen == true)
+            if (_serialPort?.IsOpen != true)
             {
-                // Enviar apenas os primeiros 16 caracteres do GUID para o Arduino
-                string guidReduzido = guid.Replace("-", "").Substring(0, 16);
-                string comandoGravacao = $"WRITE:{guidReduzido}";
-                
-                // Armazenar o GUID sendo gravado para controle
-                _guidSendoGravado = guidReduzido;
-                
-                _serialPort.WriteLine(comandoGravacao);
-                
-                _logger.LogInformation("Comando enviado para Arduino: {comando} (GUID original: {guidOriginal})", comandoGravacao, guid);
-                
-                // Aguardar processamento do Arduino (15s timeout + margem)
-                await Task.Delay(17000);
-                
-                // Limpar GUID sendo gravado se não houve resposta
-                if (_guidSendoGravado == guidReduzido)
-                {
-                    _guidSendoGravado = null;
-                    _logger.LogWarning("Timeout na gravação - limpando GUID sendo gravado: {guid}", guidReduzido);
-                }
+                await ReportarFalhaGravacaoAsync(command.SolicitacaoId, "Porta serial não está disponível.");
+                return;
             }
-            else
+
+            if (command.Credencial.Length != 16 ||
+                command.Credencial.Any(character => !Uri.IsHexDigit(character)))
             {
-                _logger.LogWarning("Porta serial não está disponível para gravação.");
+                await ReportarFalhaGravacaoAsync(command.SolicitacaoId, "Credencial recebida possui formato inválido.");
+                return;
+            }
+
+            _solicitacaoSendoGravada = command.SolicitacaoId;
+            _credencialSendoGravada = command.Credencial;
+            _serialPort.WriteLine($"WRITE:{command.Credencial}");
+            _logger.LogInformation(
+                "Comando enviado ao Arduino para solicitação {SolicitacaoId}.",
+                command.SolicitacaoId);
+
+            await Task.Delay(TimeSpan.FromSeconds(17));
+            if (_solicitacaoSendoGravada == command.SolicitacaoId)
+            {
+                _solicitacaoSendoGravada = null;
+                _credencialSendoGravada = null;
+                await ReportarFalhaGravacaoAsync(
+                    command.SolicitacaoId,
+                    "Tempo limite excedido aguardando confirmação do Arduino.");
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Erro ao processar comando de gravação para GUID: {guid}", guid);
-            _guidSendoGravado = null;
+            _logger.LogError(
+                ex,
+                "Erro ao processar comando da solicitação {SolicitacaoId}.",
+                command.SolicitacaoId);
+            _solicitacaoSendoGravada = null;
+            _credencialSendoGravada = null;
+            await ReportarFalhaGravacaoAsync(command.SolicitacaoId, "Erro ao processar o comando no Worker.");
+        }
+        finally
+        {
+            _recordingLock.Release();
         }
     }
 
@@ -157,13 +205,16 @@ public class Worker : BackgroundService
                     _gravacaoRecenteRealizada = true;
                     
                     // Se há um GUID sendo gravado, confirmar a gravação
-                    if (!string.IsNullOrEmpty(_guidSendoGravado))
+                    if (!string.IsNullOrEmpty(_solicitacaoSendoGravada) &&
+                        !string.IsNullOrEmpty(_credencialSendoGravada))
                     {
-                        var guidParaConfirmar = _guidSendoGravado;
-                        _guidSendoGravado = null;
+                        var solicitacaoId = _solicitacaoSendoGravada;
+                        var credencial = _credencialSendoGravada;
+                        _solicitacaoSendoGravada = null;
+                        _credencialSendoGravada = null;
                         _ = Task.Run(async () => 
                         {
-                            await ConfirmarGravacaoCartao(guidParaConfirmar);
+                            await ConfirmarGravacaoCartao(solicitacaoId, credencial);
                             // Aguardar um pouco para garantir que a gravação foi processada na API
                             await Task.Delay(1000);
                             _gravacaoRecenteRealizada = false;
@@ -174,10 +225,12 @@ public class Worker : BackgroundService
                 else if (data.StartsWith("ERROR:"))
                 {
                     _logger.LogError(">>> Erro na gravação reportado pelo Arduino: {resposta} <<<", data);
+                    _ = Task.Run(() => FalharGravacaoPendenteAsync(data));
                 }
                 else if (data.StartsWith("TIMEOUT:"))
                 {
                     _logger.LogWarning(">>> Timeout na gravação reportado pelo Arduino: {resposta} <<<", data);
+                    _ = Task.Run(() => FalharGravacaoPendenteAsync(data));
                 }
                 else if (data.StartsWith("UID:"))
                 {
@@ -272,44 +325,83 @@ public class Worker : BackgroundService
         }
     }
 
-    private async Task ConfirmarGravacaoCartao(string guidGravado)
+    private async Task ConfirmarGravacaoCartao(string? solicitacaoId, string? credencial)
     {
-        try
+        if (string.IsNullOrWhiteSpace(solicitacaoId) || string.IsNullOrWhiteSpace(credencial))
         {
-            // Validar se o GUID não é nulo ou vazio
-            if (string.IsNullOrEmpty(guidGravado))
-            {
-                _logger.LogWarning(">>> Tentativa de confirmação de gravação com GUID inválido: {guid} <<<", guidGravado ?? "(null)");
-                return;
-            }
+            _logger.LogError("Confirmação de gravação sem solicitação ou credencial válidas.");
+            return;
+        }
 
-            _logger.LogInformation(">>> Confirmando gravação de cartão para GUID: {guid} <<<", guidGravado);
-            
-            // Fazer chamada para API para confirmar a gravação
-            var requestBody = new
+        var response = await _apiClient.ConfirmRecordingAsync(
+            new ConfirmarGravacaoCartaoDto
             {
-                guidGravado = guidGravado
-            };
-            
-            var json = System.Text.Json.JsonSerializer.Serialize(requestBody);
-            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-            
-            var response = await _httpClient.PostAsync($"{_apiBaseUrl}/api/cartao/confirmar-gravacao", content);
-            var responseContent = await response.Content.ReadAsStringAsync();
-            
+                SolicitacaoId = solicitacaoId,
+                CredencialGravada = credencial
+            });
+
+        if (response == null)
+        {
+            _logger.LogError(
+                "Não foi possível confirmar a solicitação {SolicitacaoId}; a solicitação permanece recuperável na API.",
+                solicitacaoId);
+            return;
+        }
+
+        using (response)
+        {
             if (response.IsSuccessStatusCode)
             {
-                _logger.LogInformation(">>> Gravação de cartão confirmada com sucesso - GUID: {guid} - Resposta: {response} <<<", guidGravado, responseContent);
+                _logger.LogInformation(
+                    "Gravação confirmada pela API para solicitação {SolicitacaoId}.",
+                    solicitacaoId);
             }
             else
             {
-                _logger.LogError(">>> Erro ao confirmar gravação de cartão - GUID: {guid} - Status: {status} - Resposta: {response} <<<", 
-                    guidGravado, response.StatusCode, responseContent);
+                var responseContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError(
+                    "A API recusou a confirmação da solicitação {SolicitacaoId}. Status: {Status}; Resposta: {Response}",
+                    solicitacaoId, response.StatusCode, responseContent);
             }
         }
-        catch (Exception ex)
+    }
+
+    private async Task FalharGravacaoPendenteAsync(string motivo)
+    {
+        var solicitacaoId = _solicitacaoSendoGravada;
+        _solicitacaoSendoGravada = null;
+        _credencialSendoGravada = null;
+        if (!string.IsNullOrWhiteSpace(solicitacaoId))
         {
-            _logger.LogError(ex, ">>> Erro inesperado ao confirmar gravação de cartão para GUID: {guid} <<<", guidGravado);
+            await ReportarFalhaGravacaoAsync(solicitacaoId, motivo);
+        }
+    }
+
+    private async Task ReportarFalhaGravacaoAsync(string solicitacaoId, string motivo)
+    {
+        var response = await _apiClient.ReportRecordingFailureAsync(
+            new FalharGravacaoCartaoDto
+            {
+                SolicitacaoId = solicitacaoId,
+                Motivo = motivo.Length > 200 ? motivo[..200] : motivo
+            });
+
+        if (response == null)
+        {
+            _logger.LogError(
+                "Não foi possível reportar falha da solicitação {SolicitacaoId}; ela permanece recuperável na API.",
+                solicitacaoId);
+            return;
+        }
+
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogError(
+                    "A API recusou a falha da solicitação {SolicitacaoId}. Status: {Status}",
+                    solicitacaoId, response.StatusCode);
+            }
         }
     }
 
@@ -332,17 +424,8 @@ public class Worker : BackgroundService
 
             _logger.LogInformation(">>> Verificando acesso para UID: {uid}, GUID: {guid} <<<", uid, guid);
             
-            // Usar o GUID gravado no cartão para verificação de acesso, não o UID físico
-            var requestBody = new
-            {
-                uid = guid, // Usar o GUID como identificador principal
-                guid = guid
-            };
-            
-            var json = System.Text.Json.JsonSerializer.Serialize(requestBody);
-            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-            
-            var response = await _httpClient.PostAsync($"{_apiBaseUrl}/api/acesso/verificar", content);
+            // A API valida a credencial gravada; o UID físico não identifica a emissão lógica.
+            using var response = await _apiClient.VerifyAccessAsync(uid: guid, guid: guid);
             var responseContent = await response.Content.ReadAsStringAsync();
             
             if (response.IsSuccessStatusCode)
@@ -386,8 +469,6 @@ public class Worker : BackgroundService
         {
             _logger.LogWarning(ex, "Erro ao fechar recursos durante o shutdown.");
         }
-
-        _httpClient?.Dispose();
 
         await base.StopAsync(stoppingToken);
     }

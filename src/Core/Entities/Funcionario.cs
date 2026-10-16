@@ -10,13 +10,18 @@ namespace ControleDeAcesso.Core.Entities
     public class Funcionario
     {
         public string Id { get; set; } = Guid.NewGuid().ToString();
-        public string NomeFuncionario { get; set; } = string.Empty;
-        public string Email { get; set; } = string.Empty;
+        public string UsuarioId { get; set; } = string.Empty;
+        public Usuario Usuario { get; set; } = null!;
         public string SenhaHash { get; set; } = string.Empty;
-        public string Cpf { get; set; } = string.Empty;
         public string Departamento { get; set; } = string.Empty;
         public string Cargo { get; set; } = string.Empty;
         public TipoFuncionario Tipo { get; set; }
         public bool IsActive { get; set; }
+        public ICollection<HistoricoAssociacoesCartao> HistoricosAssociacaoRealizadas { get; set; } = new List<HistoricoAssociacoesCartao>();
+        public ICollection<HistoricoAssociacoesCartao> HistoricosAssociacaoEncerradas { get; set; } = new List<HistoricoAssociacoesCartao>();
+        public ICollection<HistoricoStatusCartao> HistoricosStatusCartaoAlterados { get; set; } = new List<HistoricoStatusCartao>();
+        public ICollection<HistoricoStatusUsuario> HistoricosStatusUsuarioAlterados { get; set; } = new List<HistoricoStatusUsuario>();
+        public ICollection<HistoricoStatusFuncionario> HistoricosStatusFuncionario { get; set; } = new List<HistoricoStatusFuncionario>();
+        public ICollection<HistoricoStatusFuncionario> HistoricosStatusFuncionarioAlterados { get; set; } = new List<HistoricoStatusFuncionario>();
     }
 }

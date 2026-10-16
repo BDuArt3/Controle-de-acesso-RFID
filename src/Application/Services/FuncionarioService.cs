@@ -1,224 +1,328 @@
 using ControleDeAcesso.Application.DTOs;
-using ControleDeAcesso.Application.Services.Interfaces;
 using ControleDeAcesso.Application.Repositories.Interfaces;
+using ControleDeAcesso.Application.Services.Interfaces;
 using ControleDeAcesso.Core.Entities;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Threading.Tasks;
 
 namespace ControleDeAcesso.Application.Services
 {
     public class FuncionarioService : IFuncionarioService
     {
         private readonly IFuncionarioRepository _funcionarioRepository;
+        private readonly IUsuarioRepository _usuarioRepository;
+        private readonly ICartaoRepository _cartaoRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<FuncionarioService> _logger;
 
-        public FuncionarioService(IFuncionarioRepository funcionarioRepository, ILogger<FuncionarioService> logger)
+        public FuncionarioService(
+            IFuncionarioRepository funcionarioRepository,
+            IUsuarioRepository usuarioRepository,
+            ICartaoRepository cartaoRepository,
+            IUnitOfWork unitOfWork,
+            ILogger<FuncionarioService> logger)
         {
             _funcionarioRepository = funcionarioRepository;
+            _usuarioRepository = usuarioRepository;
+            _cartaoRepository = cartaoRepository;
+            _unitOfWork = unitOfWork;
             _logger = logger;
         }
 
         public async Task<FuncionarioDto> CreateAsync(CreateFuncionarioDto funcionarioDto)
         {
-            _logger.LogInformation("Iniciando criação de funcionário. Nome: {Nome}, Email: {Email}, Tipo: {Tipo}", 
-                funcionarioDto.NomeFuncionario, funcionarioDto.Email, funcionarioDto.Tipo);
+            ArgumentNullException.ThrowIfNull(funcionarioDto);
+
+            var nome = RequiredTrimmed(funcionarioDto.NomeFuncionario, nameof(funcionarioDto.NomeFuncionario));
+            var email = NormalizeEmail(funcionarioDto.Email);
+            var documento = RequiredTrimmed(funcionarioDto.Cpf, nameof(funcionarioDto.Cpf));
+            ValidateEmail(email);
+            ValidateFuncionarioType(funcionarioDto.Tipo);
+
+            if (string.IsNullOrWhiteSpace(funcionarioDto.Senha))
+            {
+                throw new ArgumentException("Senha é obrigatória para criar funcionário.", nameof(funcionarioDto.Senha));
+            }
 
             try
             {
-                // Validação: verificar se o usuário de acesso já existe
-                if (await _funcionarioRepository.EmailExistsAsync(funcionarioDto.Email))
+                return await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    _logger.LogWarning("Tentativa de criar funcionário com usuário de acesso já existente: {Email}", 
-                        funcionarioDto.Email);
-                    throw new InvalidOperationException("Usuário de acesso já existe.");
-                }
+                    if (await _usuarioRepository.EmailExistsAsync(email))
+                    {
+                        throw new InvalidOperationException("Email de acesso já está em uso.");
+                    }
 
-                // Criptografar a senha
-                var senhaHash = BCrypt.Net.BCrypt.HashPassword(funcionarioDto.Senha);
-                _logger.LogInformation("Senha criptografada com sucesso para o funcionário: {Email}", 
-                    funcionarioDto.Email);
+                    var usuario = await _usuarioRepository.CreateAsync(new Usuario
+                    {
+                        Nome = nome,
+                        Email = email,
+                        Documento = documento,
+                        Tipo = TipoUsuario.Colaborador,
+                        IsActive = true
+                    });
 
-                var funcionario = new Funcionario
-                {
-                    NomeFuncionario = funcionarioDto.NomeFuncionario,
-                    Email = funcionarioDto.Email,
-                    SenhaHash = senhaHash,
-                    Tipo = funcionarioDto.Tipo,
-                    IsActive = true
-                };
+                    var funcionario = new Funcionario
+                    {
+                        UsuarioId = usuario.Id,
+                        Usuario = usuario,
+                        SenhaHash = BCrypt.Net.BCrypt.HashPassword(funcionarioDto.Senha),
+                        Tipo = funcionarioDto.Tipo,
+                        IsActive = true
+                    };
 
-                var novoFuncionario = await _funcionarioRepository.CreateAsync(funcionario);
+                    funcionario.HistoricosStatusFuncionario.Add(new HistoricoStatusFuncionario
+                    {
+                        IsActive = true,
+                        DataHora = DateTime.UtcNow,
+                        Motivo = "Cadastro inicial."
+                    });
+                    usuario.HistoricosStatus.Add(new HistoricoStatusUsuario
+                    {
+                        IsActive = true,
+                        DataHora = DateTime.UtcNow,
+                        Motivo = "Cadastro inicial."
+                    });
 
-                _logger.LogInformation("Funcionário criado com sucesso. ID: {Id}, Nome: {Nome}, Email: {Email}", 
-                    novoFuncionario.Id, novoFuncionario.NomeFuncionario, novoFuncionario.Email);
-
-                return new FuncionarioDto
-                {
-                    Id = novoFuncionario.Id,
-                    NomeFuncionario = novoFuncionario.NomeFuncionario,
-                    Email = novoFuncionario.Email,
-                    Tipo = novoFuncionario.Tipo,
-                    IsActive = novoFuncionario.IsActive
-                };
+                    var criado = await _funcionarioRepository.CreateAsync(funcionario);
+                    _logger.LogInformation("Funcionário criado. ID: {FuncionarioId}", criado.Id);
+                    return MapToDto(criado);
+                });
             }
             catch (InvalidOperationException)
             {
-                // Re-throw validation exceptions without logging as error (already logged as warning)
                 throw;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro inesperado ao criar funcionário. Nome: {Nome}, Email: {Email}", 
-                    funcionarioDto.NomeFuncionario, funcionarioDto.Email);
+                _logger.LogError(ex, "Erro ao criar funcionário vinculado ao usuário.");
                 throw;
             }
         }
 
         public async Task<FuncionarioDto?> GetByIdAsync(string id)
         {
-            _logger.LogInformation("Buscando funcionário por ID: {Id}", id);
-
-            try
+            if (string.IsNullOrWhiteSpace(id))
             {
-                var funcionario = await _funcionarioRepository.GetByIdAsync(id);
-
-                if (funcionario == null)
-                {
-                    _logger.LogWarning("Funcionário não encontrado para ID: {Id}", id);
-                    return null;
-                }
-
-                _logger.LogInformation("Funcionário encontrado com sucesso. ID: {Id}, Nome: {Nome}, Ativo: {IsActive}", 
-                    funcionario.Id, funcionario.NomeFuncionario, funcionario.IsActive);
-
-                return new FuncionarioDto
-                {
-                    Id = funcionario.Id,
-                    NomeFuncionario = funcionario.NomeFuncionario,
-                    Email = funcionario.Email,
-                    Tipo = funcionario.Tipo,
-                    IsActive = funcionario.IsActive
-                };
+                throw new ArgumentException("ID do funcionário é obrigatório.", nameof(id));
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erro ao buscar funcionário por ID: {Id}", id);
-                throw;
-            }
+
+            var funcionario = await _funcionarioRepository.GetByIdAsync(id);
+            return funcionario is null ? null : MapToDto(funcionario);
         }
 
         public async Task<IEnumerable<FuncionarioDto>> GetAllAsync()
         {
-            _logger.LogInformation("Buscando todos os funcionários ativos");
-
-            try
-            {
-                var funcionarios = await _funcionarioRepository.GetAllAsync();
-                var funcionarioDtos = funcionarios.Select(f => new FuncionarioDto
-                {
-                    Id = f.Id,
-                    NomeFuncionario = f.NomeFuncionario,
-                    Email = f.Email,
-                    Tipo = f.Tipo,
-                    IsActive = f.IsActive
-                }).ToList();
-
-                _logger.LogInformation("Retornando {Count} funcionários ativos", funcionarioDtos.Count);
-
-                return funcionarioDtos;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erro ao buscar todos os funcionários");
-                throw;
-            }
+            var funcionarios = await _funcionarioRepository.GetAllAsync();
+            return funcionarios.Select(MapToDto).ToList();
         }
 
         public async Task<FuncionarioDto> UpdateAsync(string id, CreateFuncionarioDto funcionarioDto)
         {
-            _logger.LogInformation("Iniciando atualização de funcionário. ID: {Id}, Nome: {Nome}", 
-                id, funcionarioDto.NomeFuncionario);
+            ArgumentNullException.ThrowIfNull(funcionarioDto);
 
-            try
+            if (string.IsNullOrWhiteSpace(id))
             {
-                var funcionarioExistente = await _funcionarioRepository.GetByIdAsync(id);
-                if (funcionarioExistente == null)
-                {
-                    _logger.LogWarning("Tentativa de atualizar funcionário inexistente. ID: {Id}", id);
-                    throw new InvalidOperationException("Funcionário não encontrado.");
-                }
-
-                // Verificar se o novo usuário de acesso já existe (exceto para o próprio funcionário)
-                var funcionarioComMesmoUsuario = await _funcionarioRepository.GetByEmailAsync(funcionarioDto.Email);
-                if (funcionarioComMesmoUsuario != null && funcionarioComMesmoUsuario.Id != id)
-                {
-                    _logger.LogWarning("Tentativa de atualizar funcionário com usuário de acesso já existente: {Email}", 
-                        funcionarioDto.Email);
-                    throw new InvalidOperationException("Usuário de acesso já existe.");
-                }
-
-                // Atualizar dados
-                funcionarioExistente.NomeFuncionario = funcionarioDto.NomeFuncionario;
-                funcionarioExistente.Email = funcionarioDto.Email;
-                funcionarioExistente.Tipo = funcionarioDto.Tipo;
-
-                // Atualizar senha apenas se uma nova senha foi fornecida
-                if (!string.IsNullOrEmpty(funcionarioDto.Senha))
-                {
-                    funcionarioExistente.SenhaHash = BCrypt.Net.BCrypt.HashPassword(funcionarioDto.Senha);
-                    _logger.LogInformation("Senha atualizada para o funcionário: {Id}", id);
-                }
-
-                var funcionarioAtualizado = await _funcionarioRepository.UpdateAsync(funcionarioExistente);
-
-                _logger.LogInformation("Funcionário atualizado com sucesso. ID: {Id}, Nome: {Nome}", 
-                    funcionarioAtualizado.Id, funcionarioAtualizado.NomeFuncionario);
-
-                return new FuncionarioDto
-                {
-                    Id = funcionarioAtualizado.Id,
-                    NomeFuncionario = funcionarioAtualizado.NomeFuncionario,
-                    Email = funcionarioAtualizado.Email,
-                    Tipo = funcionarioAtualizado.Tipo,
-                    IsActive = funcionarioAtualizado.IsActive
-                };
+                throw new ArgumentException("ID do funcionário é obrigatório.", nameof(id));
             }
-            catch (InvalidOperationException)
+
+            var nome = RequiredTrimmed(funcionarioDto.NomeFuncionario, nameof(funcionarioDto.NomeFuncionario));
+            var email = NormalizeEmail(funcionarioDto.Email);
+            var documento = RequiredTrimmed(funcionarioDto.Cpf, nameof(funcionarioDto.Cpf));
+            ValidateEmail(email);
+            ValidateFuncionarioType(funcionarioDto.Tipo);
+
+            return await _unitOfWork.ExecuteInTransactionAsync(async () =>
             {
-                // Re-throw validation exceptions without logging as error (already logged as warning)
-                throw;
+                var funcionario = await _funcionarioRepository.GetByIdAsync(id);
+                if (funcionario is null)
+                {
+                    throw new KeyNotFoundException("Funcionário não encontrado.");
+                }
+
+                if (!string.Equals(funcionario.Usuario.Email, email, StringComparison.Ordinal) &&
+                    await _usuarioRepository.EmailExistsAsync(email, funcionario.UsuarioId))
+                {
+                    throw new InvalidOperationException("Email de acesso já está em uso.");
+                }
+
+                funcionario.Usuario.Nome = nome;
+                funcionario.Usuario.Email = email;
+                funcionario.Usuario.Documento = documento;
+                funcionario.Tipo = funcionarioDto.Tipo;
+
+                if (!string.IsNullOrWhiteSpace(funcionarioDto.Senha))
+                {
+                    funcionario.SenhaHash = BCrypt.Net.BCrypt.HashPassword(funcionarioDto.Senha);
+                }
+
+                var atualizado = await _funcionarioRepository.UpdateAsync(funcionario);
+                return MapToDto(atualizado);
+            });
+        }
+
+        public async Task<bool> DeleteAsync(string id, string funcionarioResponsavelId, string motivo)
+        {
+            ValidateStatusChange(id, funcionarioResponsavelId, motivo);
+            motivo = motivo.Trim();
+
+            return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+            {
+                var funcionario = await _funcionarioRepository.GetByIdAsync(id);
+                if (funcionario is null)
+                {
+                    return false;
+                }
+
+                var agora = DateTime.UtcNow;
+                if (funcionario.IsActive)
+                {
+                    funcionario.IsActive = false;
+                    funcionario.HistoricosStatusFuncionario.Add(new HistoricoStatusFuncionario
+                    {
+                        IsActive = false,
+                        DataHora = agora,
+                        Motivo = motivo,
+                        AlteradoPorFuncionarioId = funcionarioResponsavelId
+                    });
+                }
+
+                if (funcionario.Usuario.IsActive)
+                {
+                    funcionario.Usuario.IsActive = false;
+                    funcionario.Usuario.HistoricosStatus.Add(new HistoricoStatusUsuario
+                    {
+                        IsActive = false,
+                        DataHora = agora,
+                        Motivo = motivo,
+                        AlteradoPorFuncionarioId = funcionarioResponsavelId
+                    });
+                }
+
+                await _funcionarioRepository.UpdateAsync(funcionario);
+
+                var cartoes = await _cartaoRepository.GetAllByUsuarioIdAsync(funcionario.UsuarioId);
+                foreach (var cartao in cartoes.Where(cartao => cartao.Status == StatusCartao.Ativo))
+                {
+                    cartao.AlterarStatus(StatusCartao.Bloqueado);
+                    await _cartaoRepository.UpdateStatusWithHistoryAsync(
+                        cartao,
+                        new HistoricoStatusCartao
+                        {
+                            CartaoId = cartao.Id,
+                            Status = StatusCartao.Bloqueado,
+                            DataHora = agora,
+                            Motivo = motivo,
+                            AlteradoPorFuncionarioId = funcionarioResponsavelId
+                        });
+                }
+
+                return true;
+            });
+        }
+
+        public async Task<bool> ActivateAsync(string id, string funcionarioResponsavelId, string motivo)
+        {
+            ValidateStatusChange(id, funcionarioResponsavelId, motivo);
+            motivo = motivo.Trim();
+
+            return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+            {
+                var funcionario = await _funcionarioRepository.GetByIdAsync(id);
+                if (funcionario is null)
+                {
+                    return false;
+                }
+
+                var now = DateTime.UtcNow;
+                var changed = false;
+                if (!funcionario.IsActive)
+                {
+                    funcionario.IsActive = true;
+                    changed = true;
+                    funcionario.HistoricosStatusFuncionario.Add(new HistoricoStatusFuncionario
+                    {
+                        IsActive = true,
+                        DataHora = now,
+                        Motivo = motivo,
+                        AlteradoPorFuncionarioId = funcionarioResponsavelId
+                    });
+                }
+
+                if (!funcionario.Usuario.IsActive)
+                {
+                    funcionario.Usuario.IsActive = true;
+                    changed = true;
+                    funcionario.Usuario.HistoricosStatus.Add(new HistoricoStatusUsuario
+                    {
+                        IsActive = true,
+                        DataHora = now,
+                        Motivo = motivo,
+                        AlteradoPorFuncionarioId = funcionarioResponsavelId
+                    });
+                }
+
+                if (changed)
+                {
+                    await _funcionarioRepository.UpdateAsync(funcionario);
+                }
+                return true;
+            });
+        }
+
+        private static void ValidateStatusChange(string id, string funcionarioResponsavelId, string motivo)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                throw new ArgumentException("ID do funcionário é obrigatório.", nameof(id));
             }
-            catch (Exception ex)
+
+            if (string.IsNullOrWhiteSpace(funcionarioResponsavelId))
             {
-                _logger.LogError(ex, "Erro inesperado ao atualizar funcionário. ID: {Id}", id);
-                throw;
+                throw new ArgumentException("Funcionário responsável é obrigatório.", nameof(funcionarioResponsavelId));
+            }
+
+            if (string.IsNullOrWhiteSpace(motivo) || motivo.Trim().Length > 200)
+            {
+                throw new ArgumentException("O motivo é obrigatório e deve ter até 200 caracteres.", nameof(motivo));
             }
         }
 
-        public async Task<bool> DeleteAsync(string id)
+        private static FuncionarioDto MapToDto(Funcionario funcionario) => new()
         {
-            _logger.LogInformation("Iniciando desativação de funcionário. ID: {Id}", id);
+            Id = funcionario.Id,
+            NomeFuncionario = funcionario.Usuario.Nome,
+            Email = funcionario.Usuario.Email ?? string.Empty,
+            Cpf = funcionario.Usuario.Documento,
+            Tipo = funcionario.Tipo,
+            IsActive = funcionario.IsActive
+        };
 
-            try
+        private static string RequiredTrimmed(string? value, string parameterName)
+        {
+            if (string.IsNullOrWhiteSpace(value))
             {
-                var resultado = await _funcionarioRepository.DeleteAsync(id);
-
-                if (resultado)
-                {
-                    _logger.LogInformation("Funcionário desativado com sucesso. ID: {Id}", id);
-                }
-                else
-                {
-                    _logger.LogWarning("Tentativa de desativar funcionário inexistente. ID: {Id}", id);
-                }
-
-                return resultado;
+                throw new ArgumentException("Campo obrigatório.", parameterName);
             }
-            catch (Exception ex)
+
+            return value.Trim();
+        }
+
+        private static string NormalizeEmail(string? email) =>
+            string.IsNullOrWhiteSpace(email) ? string.Empty : email.Trim().ToLowerInvariant();
+
+        private static void ValidateEmail(string email)
+        {
+            if (email.Length > 254 || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email))
             {
-                _logger.LogError(ex, "Erro ao desativar funcionário. ID: {Id}", id);
-                throw;
+                throw new ArgumentException("Email inválido ou maior que 254 caracteres.", nameof(email));
+            }
+        }
+
+        private static void ValidateFuncionarioType(TipoFuncionario tipo)
+        {
+            if (!Enum.IsDefined(tipo))
+            {
+                throw new ArgumentOutOfRangeException(nameof(tipo), "Tipo de funcionário inválido.");
             }
         }
     }

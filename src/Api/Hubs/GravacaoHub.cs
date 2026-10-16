@@ -1,55 +1,38 @@
+using ControleDeAcesso.Api.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using System.Collections.Concurrent;
 
 namespace ControleDeAcesso.Api.Hubs;
 
-/// <summary>
-/// Hub SignalR responsável pela comunicação em tempo real 
-/// para comandos de gravação de GUID em cartões RFID
-/// </summary>
+[Authorize(Policy = "WorkerCallback")]
 public class GravacaoHub : Hub
 {
     private readonly ILogger<GravacaoHub> _logger;
-    
-    // Dicionário para rastrear solicitações de gravação pendentes: GUID -> UsuarioId
-    private static readonly ConcurrentDictionary<string, string> _solicitacoesPendentes = new();
+    private static int _connectedWorkers;
 
     public GravacaoHub(ILogger<GravacaoHub> logger)
     {
         _logger = logger;
     }
 
-    /// <summary>
-    /// Adiciona uma solicitação de gravação pendente
-    /// </summary>
-    public static void AdicionarSolicitacaoPendente(string guid, string usuarioId)
-    {
-        var guidReduzido = guid.Replace("-", "").Substring(0, 16);
-        _solicitacoesPendentes.TryAdd(guidReduzido, usuarioId);
-    }
-
-    /// <summary>
-    /// Remove e retorna o usuário ID de uma solicitação pendente
-    /// </summary>
-    public static string? RemoverSolicitacaoPendente(string guidGravado)
-    {
-        _solicitacoesPendentes.TryRemove(guidGravado, out var usuarioId);
-        return usuarioId;
-    }
+    public static bool HasConnectedWorker => Volatile.Read(ref _connectedWorkers) > 0;
 
     public override async Task OnConnectedAsync()
     {
-        _logger.LogInformation("Cliente conectado ao GravacaoHub: {connectionId}", Context.ConnectionId);
+        Interlocked.Increment(ref _connectedWorkers);
+        _logger.LogInformation("Worker conectado ao GravacaoHub: {connectionId}", Context.ConnectionId);
         await base.OnConnectedAsync();
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        _logger.LogInformation("Cliente desconectado do GravacaoHub: {connectionId}", Context.ConnectionId);
+        Interlocked.Decrement(ref _connectedWorkers);
+        _logger.LogInformation("Worker desconectado do GravacaoHub: {connectionId}", Context.ConnectionId);
         if (exception != null)
         {
-            _logger.LogError(exception, "Erro na desconexão do cliente {connectionId}", Context.ConnectionId);
+            _logger.LogError(exception, "Erro na desconexão do Worker {connectionId}", Context.ConnectionId);
         }
+
         await base.OnDisconnectedAsync(exception);
     }
 }

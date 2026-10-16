@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.SignalR;
 using ControleDeAcesso.Api.Hubs;
 using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace ControleDeAcesso.Api.Controllers
 {
@@ -35,38 +36,36 @@ namespace ControleDeAcesso.Api.Controllers
         /// <returns>Status da solicitação de gravação</returns>
         [HttpPost]
         [Authorize(Policy = "AdminOrOperador")] // Admins e Operadores podem gravar cartões
-        public async Task<ActionResult<GravacaoCartaoResponseDto>> SolicitarGravacao([FromBody] GravarCartaoDto gravarCartaoDto)
+        public async Task<ActionResult<GravacaoCartaoResponseDto>> SolicitarGravacao(
+            [FromBody] GravarCartaoDto gravarCartaoDto,
+            [FromHeader(Name = "Idempotency-Key")] string idempotencyKey,
+            CancellationToken cancellationToken)
         {
-            _logger.LogInformation("Solicitação de gravação de cartão para usuário: {UsuarioId}", gravarCartaoDto.UsuarioId);
-
             try
             {
-                // Gerar GUID único e seguro
-                string guidGerado = Guid.NewGuid().ToString();
-                
-                // Registrar solicitação pendente para rastreamento
-                GravacaoHub.AdicionarSolicitacaoPendente(guidGerado, gravarCartaoDto.UsuarioId);
-                
-                // NÃO criar o cartão ainda - aguardar confirmação do Arduino
-                // O cartão será criado apenas quando o Worker confirmar a gravação bem-sucedida
-                
-                // Enviar comando de gravação para todos os Worker Services conectados
-                await _hubContext.Clients.All.SendAsync("ReceberComandoGravacao", guidGerado);
-                
-                _logger.LogInformation("Comando de gravação enviado para GUID: {guid}", guidGerado);
-                
-                // Retornar resposta sem expor o GUID completo
-                var response = new GravacaoCartaoResponseDto
+                var funcionarioId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrWhiteSpace(funcionarioId))
                 {
-                    CartaoRef = guidGerado.Substring(0, 8) + "...", // Apenas primeiros 8 caracteres
-                    Status = "Solicitado",
-                    Mensagem = "Comando de gravação enviado. Aproxime o cartão do leitor.",
-                    UsuarioId = gravarCartaoDto.UsuarioId,
-                    NomeUsuario = "", // Será preenchido quando o cartão for criado
-                    DataSolicitacao = DateTime.UtcNow
-                };
-                
-                return Ok(response);
+                    return Unauthorized(new { message = "Funcionário autenticado sem identificador válido." });
+                }
+
+                var result = await _cartaoService.SolicitarGravacaoAsync(
+                    gravarCartaoDto, funcionarioId, idempotencyKey, cancellationToken);
+
+                if (result.Command != null &&
+                    result.Response.Status == "Pendente" &&
+                    GravacaoHub.HasConnectedWorker)
+                {
+                    await DespacharComandoAsync(result.Command, cancellationToken);
+                    var updated = await _cartaoService.GetSolicitacaoAsync(
+                        result.Command.SolicitacaoId, cancellationToken);
+                    return AcceptedAtAction(nameof(GetSolicitacao), new { id = result.Command.SolicitacaoId }, updated);
+                }
+
+                return AcceptedAtAction(
+                    nameof(GetSolicitacao),
+                    new { id = result.Response.SolicitacaoId },
+                    result.Response);
             }
             catch (ArgumentException ex)
             {
@@ -76,6 +75,10 @@ namespace ControleDeAcesso.Api.Controllers
             {
                 return Conflict(new { message = ex.Message });
             }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erro ao solicitar gravação de cartão");
@@ -83,62 +86,101 @@ namespace ControleDeAcesso.Api.Controllers
             }
         }
 
-        /// <summary>
-        /// Confirma a gravação bem-sucedida de um cartão RFID
-        /// Chamado pelo Worker quando o Arduino confirma a gravação
-        /// </summary>
-        /// <param name="request">Dados da confirmação de gravação</param>
-        /// <returns>Status da confirmação</returns>
-        [HttpPost("confirmar-gravacao")]
-        public async Task<ActionResult> ConfirmarGravacao([FromBody] ConfirmarGravacaoRequestDto request)
+        [HttpGet("solicitacoes/{id}")]
+        [Authorize(Policy = "AdminOrOperador")]
+        public async Task<ActionResult<GravacaoCartaoResponseDto>> GetSolicitacao(
+            string id,
+            CancellationToken cancellationToken)
         {
-            _logger.LogInformation("Confirmação de gravação de cartão para GUID: {GuidGravado}", request.GuidGravado);
+            var result = await _cartaoService.GetSolicitacaoAsync(id, cancellationToken);
+            return result == null ? NotFound() : Ok(result);
+        }
+
+        [HttpPost("solicitacoes/{id}/retentar")]
+        [Authorize(Policy = "AdminOrOperador")]
+        public async Task<ActionResult<GravacaoCartaoResponseDto>> RetentarGravacao(
+            string id,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                if (!GravacaoHub.HasConnectedWorker)
+                {
+                    var current = await _cartaoService.GetSolicitacaoAsync(id, cancellationToken);
+                    return current == null
+                        ? NotFound(new { message = "Solicitação de gravação não encontrada." })
+                        : StatusCode(StatusCodes.Status503ServiceUnavailable, current);
+                }
+
+                var command = await _cartaoService.PrepararRetentativaAsync(id, cancellationToken);
+                if (command == null)
+                {
+                    return NotFound(new { message = "Solicitação de gravação não encontrada." });
+                }
+
+                await DespacharComandoAsync(command, cancellationToken);
+                var updated = await _cartaoService.GetSolicitacaoAsync(id, cancellationToken);
+                return AcceptedAtAction(nameof(GetSolicitacao), new { id }, updated);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("solicitacoes/{id}/cancelar")]
+        [Authorize(Policy = "AdminOrOperador")]
+        public async Task<ActionResult<GravacaoCartaoResponseDto>> CancelarSolicitacao(
+            string id,
+            [FromBody] CancelarGravacaoCartaoDto request,
+            CancellationToken cancellationToken)
+        {
+            var funcionarioId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(funcionarioId))
+            {
+                return Unauthorized(new { message = "Funcionário autenticado sem identificador válido." });
+            }
 
             try
             {
-                if (string.IsNullOrWhiteSpace(request.GuidGravado))
-                {
-                    return BadRequest(new { message = "GUID gravado é obrigatório" });
-                }
-
-                // Buscar a solicitação pendente para encontrar o usuário
-                var usuarioId = GravacaoHub.RemoverSolicitacaoPendente(request.GuidGravado);
-                
-                if (string.IsNullOrEmpty(usuarioId))
-                {
-                    _logger.LogWarning("Solicitação de gravação não encontrada para GUID: {guid}", request.GuidGravado);
-                    return BadRequest(new { message = "Solicitação de gravação não encontrada" });
-                }
-                
-                var createCartaoDto = new CreateCartaoDto
-                {
-                    Uid = request.GuidGravado,
-                    UsuarioId = usuarioId
-                };
-                
-                try
-                {
-                    var cartao = await _cartaoService.CreateAsync(createCartaoDto);
-                    _logger.LogInformation("Cartão criado com sucesso após confirmação de gravação. ID: {Id}, UID: {Uid}", 
-                        cartao.Id, cartao.Uid);
-                        
-                    return Ok(new { 
-                        message = "Cartão criado com sucesso", 
-                        cartaoId = cartao.Id,
-                        uid = cartao.Uid 
-                    });
-                }
-                catch (InvalidOperationException ex) when (ex.Message.Contains("já está em uso"))
-                {
-                    // GUID já existe - possivelmente gravação duplicada
-                    _logger.LogWarning("Tentativa de criar cartão com GUID já existente: {guid}", request.GuidGravado);
-                    return Ok(new { message = "Cartão já existe no sistema" });
-                }
+                var result = await _cartaoService.CancelarSolicitacaoAsync(
+                    id, funcionarioId, request.Motivo, cancellationToken);
+                return result == null ? NotFound(new { message = "Solicitação de gravação não encontrada." }) : Ok(result);
             }
-            catch (Exception ex)
+            catch (ArgumentException ex)
             {
-                _logger.LogError(ex, "Erro ao confirmar gravação de cartão");
-                return StatusCode(500, new { message = "Erro interno do servidor", details = ex.Message });
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
+        }
+
+        private async Task DespacharComandoAsync(
+            GravacaoCartaoCommandDto command,
+            CancellationToken cancellationToken)
+        {
+            if (!await _cartaoService.RegistrarDespachoAsync(command.SolicitacaoId, cancellationToken))
+            {
+                return;
+            }
+
+            try
+            {
+                await _hubContext.Clients.All.SendAsync(
+                    "ReceberComandoGravacao", command, cancellationToken);
+            }
+            catch
+            {
+                await _cartaoService.RegistrarFalhaGravacaoAsync(
+                    new FalharGravacaoCartaoDto
+                    {
+                        SolicitacaoId = command.SolicitacaoId,
+                        Motivo = "Não foi possível despachar o comando ao Worker."
+                    },
+                    CancellationToken.None);
+                throw;
             }
         }
 
@@ -261,6 +303,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="updateCartaoDto">Dados atualizados do cartão</param>
         /// <returns>Cartão atualizado</returns>
         [HttpPut("{id}")]
+        [Authorize(Policy = "AdminOrOperador")]
         public async Task<ActionResult<CartaoDto>> Update(string id, [FromBody] CreateCartaoDto updateCartaoDto)
         {
             _logger.LogInformation("Requisição para atualizar cartão. ID: {Id}, UID: {Uid}", 
@@ -275,9 +318,13 @@ namespace ControleDeAcesso.Api.Controllers
             {
                 return BadRequest(new { message = ex.Message });
             }
-            catch (InvalidOperationException ex)
+            catch (KeyNotFoundException ex)
             {
                 return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -292,24 +339,35 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="id">ID do cartão</param>
         /// <returns>Resultado da operação</returns>
         [HttpDelete("{id}")]
-        public async Task<ActionResult> Delete(string id)
+        [Authorize(Policy = "AdminOrOperador")]
+        public async Task<ActionResult> Delete(string id, [FromBody] AlterarStatusCartaoDto request)
         {
             _logger.LogInformation("Requisição para desativar cartão. ID: {Id}", id);
 
             try
             {
-                var resultado = await _cartaoService.DeleteAsync(id);
+                var funcionarioId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrWhiteSpace(funcionarioId))
+                {
+                    return Unauthorized(new { message = "Funcionário autenticado sem identificador válido." });
+                }
+
+                var resultado = await _cartaoService.BlockAsync(id, funcionarioId, request.Motivo);
                 
                 if (!resultado)
                 {
                     return NotFound(new { message = "Cartão não encontrado" });
                 }
 
-                return Ok(new { message = "Cartão desativado com sucesso" });
+                return Ok(new { message = "Cartão bloqueado com sucesso" });
             }
             catch (ArgumentException ex)
             {
                 return BadRequest(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -324,13 +382,20 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="id">ID do cartão</param>
         /// <returns>Resultado da operação</returns>
         [HttpPut("{id}/ativar")]
-        public async Task<ActionResult> Activate(string id)
+        [Authorize(Policy = "AdminOrOperador")]
+        public async Task<ActionResult> Activate(string id, [FromBody] AlterarStatusCartaoDto request)
         {
             _logger.LogInformation("Requisição para ativar cartão. ID: {Id}", id);
 
             try
             {
-                var resultado = await _cartaoService.ActivateAsync(id);
+                var funcionarioId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrWhiteSpace(funcionarioId))
+                {
+                    return Unauthorized(new { message = "Funcionário autenticado sem identificador válido." });
+                }
+
+                var resultado = await _cartaoService.UnblockAsync(id, funcionarioId, request.Motivo);
                 
                 if (!resultado)
                 {
@@ -343,19 +408,43 @@ namespace ControleDeAcesso.Api.Controllers
             {
                 return BadRequest(new { message = ex.Message });
             }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erro ao ativar cartão. ID: {Id}", id);
                 return StatusCode(500, new { message = "Erro interno do servidor", details = ex.Message });
             }
         }
+
+        [HttpPost("{id}/cancelar")]
+        [Authorize(Policy = "AdminOrOperador")]
+        public async Task<ActionResult> Cancel(string id, [FromBody] AlterarStatusCartaoDto request)
+        {
+            var funcionarioId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(funcionarioId))
+            {
+                return Unauthorized(new { message = "Funcionário autenticado sem identificador válido." });
+            }
+
+            try
+            {
+                var result = await _cartaoService.CancelAsync(id, funcionarioId, request.Motivo);
+                return result
+                    ? Ok(new { message = "Cartão cancelado permanentemente." })
+                    : NotFound(new { message = "Cartão não encontrado." });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
+        }
     }
 
-    /// <summary>
-    /// DTO para confirmação de gravação de cartão
-    /// </summary>
-    public class ConfirmarGravacaoRequestDto
-    {
-        public string GuidGravado { get; set; } = string.Empty;
-    }
 }

@@ -26,23 +26,67 @@ namespace ControleDeAcesso.Application.Services
 
         public async Task<LogAcessoDto> RegistrarTentativaAsync(CreateLogAcessoDto createLogAcessoDto)
         {
-            _logger.LogInformation("Registrando tentativa de acesso. CartaoUid: {CartaoUid}, Permitido: {AcessoPermitido}", 
-                createLogAcessoDto.CartaoUid, createLogAcessoDto.AcessoPermitido);
+            _logger.LogInformation("Registrando tentativa de acesso. Permitido: {AcessoPermitido}",
+                createLogAcessoDto.AcessoPermitido);
 
             try
             {
-                if (string.IsNullOrWhiteSpace(createLogAcessoDto.CartaoUid))
+                string? cartaoId = null;
+                string? usuarioId = null;
+                string? uidInformado = null;
+                Cartao? cartaoParaLog = null;
+
+                if (!string.IsNullOrWhiteSpace(createLogAcessoDto.CartaoId) ||
+                    !string.IsNullOrWhiteSpace(createLogAcessoDto.UsuarioId))
                 {
-                    throw new ArgumentException("UID do cartão é obrigatório", nameof(createLogAcessoDto.CartaoUid));
+                    if (string.IsNullOrWhiteSpace(createLogAcessoDto.CartaoId) ||
+                        string.IsNullOrWhiteSpace(createLogAcessoDto.UsuarioId))
+                    {
+                        throw new ArgumentException("CartaoId e UsuarioId devem ser informados juntos.");
+                    }
+
+                    cartaoParaLog = await _cartaoRepository.GetByIdAsync(createLogAcessoDto.CartaoId);
+                    if (cartaoParaLog is null || cartaoParaLog.UsuarioId != createLogAcessoDto.UsuarioId)
+                    {
+                        throw new ArgumentException("Cartão e usuário do log não correspondem.");
+                    }
+
+                    cartaoId = cartaoParaLog.Id;
+                    usuarioId = cartaoParaLog.UsuarioId;
+                }
+                else if (!string.IsNullOrWhiteSpace(createLogAcessoDto.UidInformado))
+                {
+                    uidInformado = createLogAcessoDto.UidInformado.Trim();
+                }
+                else
+                {
+                    var uid = createLogAcessoDto.CartaoUid;
+                    if (!string.IsNullOrWhiteSpace(uid))
+                    {
+                        cartaoParaLog = await _cartaoRepository.GetByUidAsync(uid.Trim());
+                        if (cartaoParaLog is null)
+                        {
+                            uidInformado = uid.Trim();
+                        }
+                        else
+                        {
+                            cartaoId = cartaoParaLog.Id;
+                            usuarioId = cartaoParaLog.UsuarioId;
+                        }
+                    }
                 }
 
                 var logAcesso = new LogAcesso
                 {
-                    CartaoUid = createLogAcessoDto.CartaoUid.Trim(),
+                    CartaoId = cartaoId,
+                    Cartao = cartaoParaLog,
+                    UsuarioId = usuarioId,
+                    Usuario = cartaoParaLog?.Usuario,
+                    UidInformado = uidInformado,
                     AcessoPermitido = createLogAcessoDto.AcessoPermitido,
                     Motivo = createLogAcessoDto.Motivo?.Trim() ?? string.Empty,
                     MotivoTipo = createLogAcessoDto.MotivoTipo,
-                    DataHora = DateTime.Now
+                    DataHora = DateTime.UtcNow
                 };
 
                 var logCriado = await _logAcessoRepository.CreateAsync(logAcesso);
@@ -53,8 +97,7 @@ namespace ControleDeAcesso.Application.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao registrar tentativa de acesso. CartaoUid: {CartaoUid}", 
-                    createLogAcessoDto.CartaoUid);
+                _logger.LogError(ex, "Erro ao registrar tentativa de acesso.");
                 throw;
             }
         }
@@ -123,7 +166,10 @@ namespace ControleDeAcesso.Application.Services
                     throw new ArgumentException("UID do cartão é obrigatório", nameof(cartaoUid));
                 }
 
-                var logs = await _logAcessoRepository.GetByCartaoUidAsync(cartaoUid);
+                var cartao = await _cartaoRepository.GetByUidAsync(cartaoUid.Trim());
+                var logs = cartao is null
+                    ? await _logAcessoRepository.GetByUidInformadoAsync(cartaoUid.Trim())
+                    : await _logAcessoRepository.GetByCartaoIdAsync(cartao.Id);
                 var result = new List<LogAcessoDto>();
 
                 foreach (var log in logs)
@@ -151,7 +197,8 @@ namespace ControleDeAcesso.Application.Services
                     throw new ArgumentException("Data início deve ser menor ou igual à data fim");
                 }
 
-                var logs = await _logAcessoRepository.GetByDataPeriodoAsync(dataInicio, dataFim);
+                var logs = await _logAcessoRepository.GetByDataPeriodoAsync(
+                    ToUtc(dataInicio), ToUtc(dataFim));
                 var result = new List<LogAcessoDto>();
 
                 foreach (var log in logs)
@@ -174,7 +221,8 @@ namespace ControleDeAcesso.Application.Services
 
             try
             {
-                var logs = await _logAcessoRepository.GetByDataPeriodoAndStatusAsync(dataInicio, dataFim, true);
+                var logs = await _logAcessoRepository.GetByDataPeriodoAndStatusAsync(
+                    ToUtc(dataInicio), ToUtc(dataFim), true);
                 var result = new List<LogAcessoDto>();
 
                 foreach (var log in logs)
@@ -197,7 +245,8 @@ namespace ControleDeAcesso.Application.Services
 
             try
             {
-                var logs = await _logAcessoRepository.GetByDataPeriodoAndStatusAsync(dataInicio, dataFim, false);
+                var logs = await _logAcessoRepository.GetByDataPeriodoAndStatusAsync(
+                    ToUtc(dataInicio), ToUtc(dataFim), false);
                 var result = new List<LogAcessoDto>();
 
                 foreach (var log in logs)
@@ -210,6 +259,52 @@ namespace ControleDeAcesso.Application.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erro ao buscar acessos negados por período");
+                throw;
+            }
+        }
+
+        public async Task<IEnumerable<LogAcessoDto>> GetLogsParaExportacaoAsync(
+            DateTime dataInicio,
+            DateTime dataFim,
+            bool? acessoPermitido)
+        {
+            var inicioUtc = ToUtc(dataInicio);
+            var fimUtc = ToUtc(dataFim);
+
+            if (inicioUtc > fimUtc)
+            {
+                throw new ArgumentException("Data de início deve ser menor ou igual à data de fim");
+            }
+
+            if (fimUtc - inicioUtc > TimeSpan.FromDays(90))
+            {
+                throw new ArgumentException("O período máximo para exportação é de 90 dias");
+            }
+
+            _logger.LogInformation(
+                "Buscando logs para exportação: {DataInicio} - {DataFim}, Permitido: {AcessoPermitido}",
+                inicioUtc,
+                fimUtc,
+                acessoPermitido);
+
+            try
+            {
+                var logs = acessoPermitido.HasValue
+                    ? await _logAcessoRepository.GetByDataPeriodoAndStatusAsync(
+                        inicioUtc, fimUtc, acessoPermitido.Value)
+                    : await _logAcessoRepository.GetByDataPeriodoAsync(inicioUtc, fimUtc);
+                var result = new List<LogAcessoDto>();
+
+                foreach (var log in logs)
+                {
+                    result.Add(await MapToDtoWithUserInfoAsync(log));
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao consultar logs para exportação CSV");
                 throw;
             }
         }
@@ -254,7 +349,7 @@ namespace ControleDeAcesso.Application.Services
 
                 var estatisticas = new
                 {
-                    Data = DateTime.Today,
+                    Data = DateTime.UtcNow.Date,
                     TotalTentativas = totalHoje,
                     AcessosPermitidos = permitidosHoje,
                     AcessosNegados = negadosHoje,
@@ -280,16 +375,16 @@ namespace ControleDeAcesso.Application.Services
 
             try
             {
-                var dataInicio = data.Date;
-                var dataFim = dataInicio.AddDays(1).AddTicks(-1);
+                var dataInicio = ToUtc(data).Date;
+                var dataFim = dataInicio.AddDays(1);
 
-                var logs = await _logAcessoRepository.GetByDataPeriodoAsync(dataInicio, dataFim);
+                var logs = (await _logAcessoRepository.GetByDataPeriodoAsync(dataInicio, dataFim.AddTicks(-1))).ToList();
                 var permitidos = logs.Count(l => l.AcessoPermitido);
                 var negados = logs.Count(l => !l.AcessoPermitido);
 
                 var relatorio = new
                 {
-                    Data = data.Date,
+                    Data = dataInicio,
                     TotalTentativas = logs.Count(),
                     AcessosPermitidos = permitidos,
                     AcessosNegados = negados,
@@ -297,8 +392,13 @@ namespace ControleDeAcesso.Application.Services
                     HorarioPico = logs.GroupBy(l => l.DataHora.Hour)
                                      .OrderByDescending(g => g.Count())
                                      .FirstOrDefault()?.Key ?? 0,
-                    CartoesMaisUsados = logs.GroupBy(l => l.CartaoUid)
-                                          .Select(g => new { CartaoUid = g.Key, Tentativas = g.Count() })
+                    CartoesMaisUsados = logs.GroupBy(l => l.CartaoId ?? $"unknown:{l.UidInformado ?? "empty"}")
+                                          .Select(g => new
+                                          {
+                                              CartaoId = g.First().CartaoId,
+                                              CartaoUid = g.First().Cartao?.Uid ?? g.First().UidInformado ?? string.Empty,
+                                              Tentativas = g.Count()
+                                          })
                                           .OrderByDescending(x => x.Tentativas)
                                           .Take(5)
                                           .ToList()
@@ -318,29 +418,28 @@ namespace ControleDeAcesso.Application.Services
             var dto = new LogAcessoDto
             {
                 Id = logAcesso.Id,
-                DataHora = logAcesso.DataHora,
-                CartaoUid = logAcesso.CartaoUid,
+                DataHora = DateTime.SpecifyKind(logAcesso.DataHora, DateTimeKind.Utc),
+                CartaoId = logAcesso.CartaoId,
+                UsuarioId = logAcesso.UsuarioId,
+                UidInformado = logAcesso.UidInformado,
+                CartaoUid = logAcesso.CartaoId is not null
+                    ? logAcesso.Cartao?.Uid ?? string.Empty
+                    : logAcesso.UidInformado ?? string.Empty,
                 AcessoPermitido = logAcesso.AcessoPermitido,
                 Motivo = logAcesso.Motivo,
-                MotivoTipo = logAcesso.MotivoTipo
+                MotivoTipo = logAcesso.MotivoTipo,
+                UsuarioNome = logAcesso.Usuario?.Nome,
+                UsuarioTipo = logAcesso.Usuario?.Tipo.ToString()
             };
 
-            // Tentar obter informações do usuário através do cartão
-            try
-            {
-                var cartao = await _cartaoRepository.GetByUidAsync(logAcesso.CartaoUid);
-                if (cartao?.Usuario != null)
-                {
-                    dto.UsuarioNome = cartao.Usuario.Nome;
-                    dto.UsuarioTipo = cartao.Usuario.Tipo.ToString();
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Erro ao buscar informações do usuário para o cartão {CartaoUid}", logAcesso.CartaoUid);
-            }
-
-            return dto;
+            return await Task.FromResult(dto);
         }
+
+        private static DateTime ToUtc(DateTime value) => value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
     }
 }

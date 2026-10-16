@@ -6,6 +6,9 @@ namespace ControleDeAcesso.Application.DTOs
     {
         public long Id { get; set; }
         public DateTime DataHora { get; set; }
+        public string? CartaoId { get; set; }
+        public string? UsuarioId { get; set; }
+        public string? UidInformado { get; set; }
         public string CartaoUid { get; set; } = string.Empty;
         public bool AcessoPermitido { get; set; }
         public string Motivo { get; set; } = string.Empty;

@@ -2,6 +2,7 @@ using ControleDeAcesso.Application.DTOs;
 using ControleDeAcesso.Application.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace ControleDeAcesso.Api.Controllers
 {
@@ -34,6 +35,10 @@ namespace ControleDeAcesso.Api.Controllers
             catch (InvalidOperationException ex)
             {
                 return Conflict(new { message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -110,9 +115,17 @@ namespace ControleDeAcesso.Api.Controllers
                 var funcionario = await _funcionarioService.UpdateAsync(id, funcionarioDto);
                 return Ok(funcionario);
             }
-            catch (InvalidOperationException ex)
+            catch (KeyNotFoundException ex)
             {
                 return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -127,7 +140,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <returns>Confirmação da operação</returns>
         [HttpDelete("{id}")]
         [Authorize(Policy = "AdminOnly")] // Apenas admins podem desativar funcionários
-        public async Task<IActionResult> Delete(string id)
+        public async Task<IActionResult> Delete(string id, [FromBody] AlterarStatusFuncionarioDto request)
         {
             try
             {
@@ -136,7 +149,14 @@ namespace ControleDeAcesso.Api.Controllers
                     return BadRequest(new { message = "ID do funcionário é obrigatório" });
                 }
 
-                var resultado = await _funcionarioService.DeleteAsync(id);
+                var funcionarioResponsavelId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrWhiteSpace(funcionarioResponsavelId))
+                {
+                    return Unauthorized(new { message = "Funcionário autenticado sem identificador válido." });
+                }
+
+                var resultado = await _funcionarioService.DeleteAsync(
+                    id, funcionarioResponsavelId, request.Motivo);
                 
                 if (!resultado)
                 {
@@ -144,6 +164,10 @@ namespace ControleDeAcesso.Api.Controllers
                 }
 
                 return Ok(new { message = "Funcionário desativado com sucesso" });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -158,7 +182,9 @@ namespace ControleDeAcesso.Api.Controllers
         /// <returns>Confirmação da operação</returns>
         [HttpPatch("{id}/ativar")]
         [Authorize(Policy = "AdminOnly")] // Apenas admins podem ativar funcionários
-        public async Task<IActionResult> Ativar(string id)
+        public async Task<IActionResult> Ativar(
+            string id,
+            [FromBody] AlterarStatusFuncionarioDto request)
         {
             try
             {
@@ -167,24 +193,25 @@ namespace ControleDeAcesso.Api.Controllers
                     return BadRequest(new { message = "ID do funcionário é obrigatório" });
                 }
 
-                var funcionario = await _funcionarioService.GetByIdAsync(id);
-                
-                if (funcionario == null)
+                var funcionarioResponsavelId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrWhiteSpace(funcionarioResponsavelId))
+                {
+                    return Unauthorized(new { message = "Funcionário autenticado sem identificador válido." });
+                }
+
+                var activated = await _funcionarioService.ActivateAsync(
+                    id, funcionarioResponsavelId, request.Motivo);
+                if (!activated)
                 {
                     return NotFound(new { message = "Funcionário não encontrado" });
                 }
 
-                // Criar um DTO temporário para ativar o funcionário
-                var updateDto = new CreateFuncionarioDto
-                {
-                    NomeFuncionario = funcionario.NomeFuncionario,
-                    Email = funcionario.Email,
-                    Senha = "", // Senha vazia para não alterar
-                    Tipo = funcionario.Tipo
-                };
-
-                var funcionarioAtualizado = await _funcionarioService.UpdateAsync(id, updateDto);
-                return Ok(new { message = "Funcionário ativado com sucesso", funcionario = funcionarioAtualizado });
+                var funcionario = await _funcionarioService.GetByIdAsync(id);
+                return Ok(new { message = "Funcionário ativado com sucesso", funcionario });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {

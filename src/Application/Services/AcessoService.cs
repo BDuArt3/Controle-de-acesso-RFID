@@ -27,6 +27,7 @@ namespace ControleDeAcesso.Application.Services
         public async Task<AccessCheckResponseDto> CheckAccessAsync(string cardUid)
         {
             _logger.LogInformation("Iniciando verificação de acesso para cartão UID: {CardUid}", cardUid);
+            Cartao? cartao = null;
 
             try
             {
@@ -45,8 +46,9 @@ namespace ControleDeAcesso.Application.Services
                     };
                 }
 
+                cardUid = cardUid.Trim();
                 // Buscar cartão no banco de dados
-                var cartao = await _cartaoRepository.GetByUidAsync(cardUid);
+                cartao = await _cartaoRepository.GetByUidAsync(cardUid);
 
                 if (cartao == null)
                 {
@@ -64,13 +66,13 @@ namespace ControleDeAcesso.Application.Services
                 }
 
                 // Verificar se o cartão está ativo
-                if (!cartao.IsActive)
+                if (cartao.Status != StatusCartao.Ativo)
                 {
                     var motivoCartaoInativo = "Cartão desativado.";
                     _logger.LogWarning("Acesso negado: Cartão inativo. UID: {CardUid}", cardUid);
                     
                     // Registrar tentativa de acesso negado
-                    await RegistrarTentativaAcessoAsync(cardUid, false, TipoMotivoAcesso.CartaoDesativado, motivoCartaoInativo);
+                    await RegistrarTentativaAcessoAsync(cardUid, false, TipoMotivoAcesso.CartaoDesativado, motivoCartaoInativo, cartao);
                     
                     return new AccessCheckResponseDto 
                     { 
@@ -86,7 +88,7 @@ namespace ControleDeAcesso.Application.Services
                     _logger.LogWarning("Acesso negado: Usuário não encontrado para o cartão. UID: {CardUid}", cardUid);
                     
                     // Registrar tentativa de acesso negado
-                    await RegistrarTentativaAcessoAsync(cardUid, false, TipoMotivoAcesso.UsuarioNaoEncontrado, motivoUsuarioNaoEncontrado);
+                    await RegistrarTentativaAcessoAsync(cardUid, false, TipoMotivoAcesso.UsuarioNaoEncontrado, motivoUsuarioNaoEncontrado, cartao);
                     
                     return new AccessCheckResponseDto 
                     { 
@@ -102,7 +104,7 @@ namespace ControleDeAcesso.Application.Services
                         cardUid, cartao.Usuario.Id);
                     
                     // Registrar tentativa de acesso negado
-                    await RegistrarTentativaAcessoAsync(cardUid, false, TipoMotivoAcesso.UsuarioDesativado, motivoUsuarioInativo);
+                    await RegistrarTentativaAcessoAsync(cardUid, false, TipoMotivoAcesso.UsuarioDesativado, motivoUsuarioInativo, cartao);
                     
                     return new AccessCheckResponseDto 
                     { 
@@ -117,14 +119,29 @@ namespace ControleDeAcesso.Application.Services
                     cardUid, cartao.Usuario.Nome, cartao.Usuario.Tipo);
                 
                 // Registrar tentativa de acesso permitido
-                await RegistrarTentativaAcessoAsync(cardUid, true, TipoMotivoAcesso.AcessoAutorizado, motivoAcessoPermitido);
+                await RegistrarTentativaAcessoAsync(cardUid, true, TipoMotivoAcesso.AcessoAutorizado, motivoAcessoPermitido, cartao);
                 
                 return new AccessCheckResponseDto 
                 { 
                     Allowed = true, 
                     Message = motivoAcessoPermitido,
+                    UsuarioId = cartao.Usuario.Id,
+                    NomeUsuario = cartao.Usuario.Nome,
                     UsuarioNome = cartao.Usuario.Nome,
                     UsuarioTipo = cartao.Usuario.Tipo.ToString()
+                };
+            }
+            catch (FalhaAuditoriaException ex)
+            {
+                _logger.LogCritical(
+                    ex.InnerException,
+                    "Acesso negado porque não foi possível persistir a auditoria. CartaoId: {CartaoId}",
+                    cartao?.Id);
+
+                return new AccessCheckResponseDto
+                {
+                    Allowed = false,
+                    Message = "Acesso negado: não foi possível registrar a auditoria."
                 };
             }
             catch (Exception ex)
@@ -135,11 +152,16 @@ namespace ControleDeAcesso.Application.Services
                 // Registrar tentativa com erro
                 try
                 {
-                    await RegistrarTentativaAcessoAsync(cardUid, false, TipoMotivoAcesso.ErroInterno, $"Erro interno: {ex.Message}");
+                    await RegistrarTentativaAcessoAsync(cardUid, false, TipoMotivoAcesso.ErroInterno, "Erro interno ao verificar o acesso.", cartao);
                 }
-                catch (Exception logEx)
+                catch (FalhaAuditoriaException logEx)
                 {
-                    _logger.LogError(logEx, "Erro ao registrar log de acesso após falha");
+                    _logger.LogCritical(
+                        logEx.InnerException,
+                        "Acesso negado e auditoria indisponível após erro de verificação. CartaoId: {CartaoId}",
+                        cartao?.Id);
+
+                    motivoErroInterno = "Acesso negado: não foi possível registrar a auditoria.";
                 }
                 
                 return new AccessCheckResponseDto 
@@ -150,26 +172,42 @@ namespace ControleDeAcesso.Application.Services
             }
         }
 
-        private async Task RegistrarTentativaAcessoAsync(string cardUid, bool acessoPermitido, TipoMotivoAcesso motivoTipo, string motivo)
+        private async Task RegistrarTentativaAcessoAsync(
+            string? cardUid,
+            bool acessoPermitido,
+            TipoMotivoAcesso motivoTipo,
+            string motivo,
+            Cartao? cartao = null)
         {
+            var createLogDto = new CreateLogAcessoDto
+            {
+                CartaoId = cartao?.Id,
+                UsuarioId = cartao?.UsuarioId,
+                UidInformado = cartao is null && !string.IsNullOrWhiteSpace(cardUid)
+                    ? cardUid.Trim()
+                    : null,
+                AcessoPermitido = acessoPermitido,
+                MotivoTipo = motivoTipo,
+                Motivo = motivo
+            };
+
             try
             {
-                var createLogDto = new CreateLogAcessoDto
-                {
-                    CartaoUid = cardUid ?? "UID_VAZIO",
-                    AcessoPermitido = acessoPermitido,
-                    MotivoTipo = motivoTipo,
-                    Motivo = motivo
-                };
-
                 await _logAcessoService.RegistrarTentativaAsync(createLogDto);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erro ao registrar tentativa de acesso no log. CartaoUid: {CardUid}", cardUid);
-                // Não re-lançar a exceção para não afetar o fluxo principal
+                throw new FalhaAuditoriaException(ex);
+            }
+        }
+
+        private sealed class FalhaAuditoriaException : Exception
+        {
+            public FalhaAuditoriaException(Exception innerException)
+                : base("Não foi possível persistir o log de acesso.", innerException)
+            {
             }
         }
     }
 }
-

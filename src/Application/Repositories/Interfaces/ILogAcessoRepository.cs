@@ -8,7 +8,8 @@ namespace ControleDeAcesso.Application.Repositories.Interfaces
         Task<LogAcesso> CreateAsync(LogAcesso logAcesso);
         Task<LogAcesso?> GetByIdAsync(long id);
         Task<IEnumerable<LogAcesso>> GetAllAsync();
-        Task<IEnumerable<LogAcesso>> GetByCartaoUidAsync(string cartaoUid);
+        Task<IEnumerable<LogAcesso>> GetByCartaoIdAsync(string cartaoId);
+        Task<IEnumerable<LogAcesso>> GetByUidInformadoAsync(string uidInformado);
         Task<IEnumerable<LogAcesso>> GetByDataPeriodoAsync(DateTime dataInicio, DateTime dataFim);
         Task<IEnumerable<LogAcesso>> GetByDataPeriodoAndStatusAsync(DateTime dataInicio, DateTime dataFim, bool acessoPermitido);
         Task<IEnumerable<LogAcesso>> GetUltimosAcessosAsync(int quantidade);

@@ -23,6 +23,9 @@ jobs:
         with:
           dotnet-version: '10.x'
 
+      - name: Run tests
+        run: dotnet test ControleDeAcessoRfid.sln --configuration Release
+
       - name: Build with dotnet
         run: dotnet build --configuration Release
 

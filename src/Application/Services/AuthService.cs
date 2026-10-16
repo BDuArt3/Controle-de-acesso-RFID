@@ -66,8 +66,8 @@ namespace ControleDeAcesso.Application.Services
                     };
                 }
 
-                // Verificar se o funcionário está ativo
-                if (!funcionario.IsActive)
+                // Login is valid only while both the account and its person record are active.
+                if (!funcionario.IsActive || !funcionario.Usuario.IsActive)
                 {
                     _logger.LogWarning("Tentativa de login com usuário inativo: {Email}", loginDto.Email);
                     return new LoginResponseDto
@@ -92,8 +92,8 @@ namespace ControleDeAcesso.Application.Services
                 var funcionarioDto = new FuncionarioDto
                 {
                     Id = funcionario.Id,
-                    NomeFuncionario = funcionario.NomeFuncionario,
-                    Email = funcionario.Email,
+                    NomeFuncionario = funcionario.Usuario.Nome,
+                    Email = funcionario.Usuario.Email ?? string.Empty,
                     Tipo = funcionario.Tipo,
                     IsActive = funcionario.IsActive
                 };
@@ -164,7 +164,7 @@ namespace ControleDeAcesso.Application.Services
 
                 // Buscar funcionário
                 var funcionario = await _funcionarioRepository.GetByIdAsync(funcionarioId);
-                if (funcionario == null || !funcionario.IsActive)
+                if (funcionario == null || !funcionario.IsActive || !funcionario.Usuario.IsActive)
                 {
                     _refreshTokens.Remove(refreshToken);
                     _logger.LogWarning("Funcionário não encontrado ou inativo: {FuncionarioId}", funcionarioId);
@@ -175,8 +175,8 @@ namespace ControleDeAcesso.Application.Services
                 var funcionarioDto = new FuncionarioDto
                 {
                     Id = funcionario.Id,
-                    NomeFuncionario = funcionario.NomeFuncionario,
-                    Email = funcionario.Email,
+                    NomeFuncionario = funcionario.Usuario.Nome,
+                    Email = funcionario.Usuario.Email ?? string.Empty,
                     Tipo = funcionario.Tipo,
                     IsActive = funcionario.IsActive
                 };

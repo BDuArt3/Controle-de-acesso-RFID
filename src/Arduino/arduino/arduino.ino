@@ -46,6 +46,15 @@ void setup() {
     key.keyByte[i] = 0xFF;
   }
 
+  // Diagnóstico: 0x00 ou 0xFF indica que o MFRC522 não responde (fiação/alimentação)
+  byte versaoLeitor = mfrc522.PCD_ReadRegister(MFRC522::VersionReg);
+  if (versaoLeitor == 0x00 || versaoLeitor == 0xFF) {
+    Serial.println(F("LEITOR NAO RESPONDE. Verifique fiacao e alimentacao 3.3V."));
+  } else {
+    Serial.print(F("LEITOR OK. Versao do chip: 0x"));
+    Serial.println(versaoLeitor, HEX);
+  }
+
   Serial.println(F("Dispositivo de Borda Pronto."));
   Serial.println(F("Aguardando leitura de cartao ou comando de gravacao..."));
 }
