@@ -238,6 +238,12 @@ export default function UserForm({ editingUserId, onNavigate }: UserFormProps) {
               </div>
             </div>
 
+            {form.tipo === '2' && (
+              <p role="note" className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                O cartão de Visitante terá validade de 24 horas a partir da emissão confirmada.
+              </p>
+            )}
+
             <div className="flex justify-end space-x-4 pt-6 border-t">
               <Button type="button" variant="outline" onClick={handleCancel} disabled={isSaving}>
                 Cancelar

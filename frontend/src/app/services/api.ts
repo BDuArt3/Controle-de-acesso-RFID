@@ -14,7 +14,8 @@ export type MotivoTipo =
   | 4
   | 5
   | 6
-  | 7;
+  | 7
+  | 8;
 
 export interface TokenDto {
   accessToken: string;
@@ -100,6 +101,7 @@ export interface CartaoDto {
   motivoReemissao?: string | null;
   dataCadastro?: string;
   dataSolicitacao?: string;
+  dataExpiracao?: string | null;
 }
 
 export interface CreateCartaoDto {
