@@ -10,6 +10,12 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.ts'],
+    env: { VITE_API_BASE_URL: 'http://localhost/api' },
+  },
   resolve: {
     alias: {
       '@/styles': path.resolve(__dirname, './src/styles'),

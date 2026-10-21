@@ -22,6 +22,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from './ui/textarea';
 import { showToast } from './Toast';
 import { CartaoHistoryDialog } from './HistoryDialogs';
+import CartaoValidadeInfo from './CartaoValidadeInfo';
+import { getCartaoValidade } from '../services/cartaoValidade';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -78,6 +80,7 @@ export default function CartaoList() {
   const [timedOut, setTimedOut] = useState(false);
   const [pollNonce, setPollNonce] = useState(0);
   const [historyTarget, setHistoryTarget] = useState<CartaoDto | null>(null);
+  const [now, setNow] = useState(() => new Date());
   const requestId = request?.solicitacaoId ?? null;
   const idempotencyKeyRef = useRef<string>('');
 
@@ -103,6 +106,11 @@ export default function CartaoList() {
 
   useEffect(() => {
     void load();
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(timer);
   }, []);
 
   const activeUsers = useMemo(() => users.filter(user => isActive(user.isActive)), [users]);
@@ -467,7 +475,7 @@ export default function CartaoList() {
               <table className="w-full text-left text-sm">
                 <thead className="bg-muted/40 text-muted-foreground">
                   <tr>
-                    {['UID', 'Usuário', 'Status', 'Data', 'Ações'].map(label => (
+                    {['UID', 'Usuário', 'Status', 'Validade', 'Data', 'Ações'].map(label => (
                       <th className="whitespace-nowrap px-5 py-4 font-medium" key={label}>{label}</th>
                     ))}
                   </tr>
@@ -484,6 +492,9 @@ export default function CartaoList() {
                           <Badge variant={active ? 'default' : 'destructive'} className={active ? 'bg-green-100 text-green-800' : ''}>
                             {cardStatusLabel(item.status)}
                           </Badge>
+                        </td>
+                        <td className="px-5 py-3">
+                          <CartaoValidadeInfo card={item} now={now} />
                         </td>
                         <td className="whitespace-nowrap px-5 text-muted-foreground">
                           {item.dataCadastro || item.dataSolicitacao || '—'}
@@ -567,7 +578,7 @@ export default function CartaoList() {
                 <SelectContent>
                   {activeUsers.map(user => (
                     <SelectItem key={user.id} value={user.id}>
-                      {user.nome} · {user.documento}
+                      {user.nome}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -593,11 +604,23 @@ export default function CartaoList() {
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      {userCards.map(card => (
-                        <SelectItem key={card.id} value={card.id}>
-                          {card.uid} · {cardStatusLabel(card.status)}
-                        </SelectItem>
-                      ))}
+                      {userCards.map(card => {
+                        const validade = getCartaoValidade(card, now);
+                        const validadeLabel = validade.estado === 'vencida'
+                          ? `Validade vencida (${validade.texto})`
+                          : validade.estado === 'vigente'
+                            ? `Válido até ${validade.texto}`
+                            : validade.estado === 'invalida'
+                              ? validade.texto
+                              : null;
+
+                        return (
+                          <SelectItem key={card.id} value={card.id}>
+                            {card.uid} · {cardStatusLabel(card.status)}
+                            {validadeLabel && ` · ${validadeLabel}`}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                   {noActiveCard && (

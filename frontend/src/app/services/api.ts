@@ -14,7 +14,8 @@ export type MotivoTipo =
   | 4
   | 5
   | 6
-  | 7;
+  | 7
+  | 8;
 
 export interface TokenDto {
   accessToken: string;
@@ -57,7 +58,6 @@ export interface UsuarioDto {
   id: string;
   nome: string;
   email?: string | null;
-  documento: string;
   tipo: UsuarioTipo;
   isActive: boolean;
   cartoes?: UsuarioCartaoResumo[];
@@ -66,7 +66,6 @@ export interface UsuarioDto {
 export interface CreateUsuarioDto {
   nome: string;
   email?: string | null;
-  documento: string;
   tipo: UsuarioTipo;
 }
 
@@ -74,7 +73,6 @@ export interface FuncionarioDto {
   id: string;
   nomeFuncionario: string;
   email: string;
-  cpf: string;
   tipo: FuncionarioTipo;
   isActive: boolean;
 }
@@ -103,6 +101,7 @@ export interface CartaoDto {
   motivoReemissao?: string | null;
   dataCadastro?: string;
   dataSolicitacao?: string;
+  dataExpiracao?: string | null;
 }
 
 export interface CreateCartaoDto {
@@ -407,13 +406,11 @@ export const usuarioService = {
   create: (data: CreateUsuarioDto) => api.post<UsuarioDto>('/usuario', {
     nome: data.nome,
     email: normalizeEmail(data.email),
-    documento: data.documento,
     tipo: data.tipo,
   }),
   update: (id: string, data: CreateUsuarioDto) => api.put<UsuarioDto>(`/usuario/${encodeURIComponent(id)}`, {
     nome: data.nome,
     email: normalizeEmail(data.email),
-    documento: data.documento,
     tipo: data.tipo,
   }),
   deletar: (id: string, motivo: string) => api.delete<{ message: string }>(`/usuario/${encodeURIComponent(id)}`, { data: { motivo } }),
