@@ -8,6 +8,7 @@ namespace ControleDeAcesso.Core.Entities
         public string UsuarioId { get; init; } = string.Empty;
         public Usuario Usuario { get; private set; } = null!;
         public DateTime DataRegistro { get; set; } = DateTime.UtcNow;
+        public DateTime? DataExpiracao { get; set; }
         public ICollection<LogAcesso> LogsAcesso { get; set; } = new List<LogAcesso>();
         public HistoricoAssociacoesCartao? HistoricoAssociacaoCartao { get; set; }
         public ICollection<HistoricoStatusCartao> HistoricosStatus { get; set; } = new List<HistoricoStatusCartao>();

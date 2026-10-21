@@ -110,10 +110,10 @@ namespace ControleDeAcesso.Application.Services
             return funcionario is null ? null : MapToDto(funcionario);
         }
 
-        public async Task<IEnumerable<FuncionarioDto>> GetAllAsync()
+        public async Task<IEnumerable<FuncionarioListDto>> GetAllAsync()
         {
             var funcionarios = await _funcionarioRepository.GetAllAsync();
-            return funcionarios.Select(MapToDto).ToList();
+            return funcionarios.Select(MapToListDto).ToList();
         }
 
         public async Task<FuncionarioDto> UpdateAsync(string id, CreateFuncionarioDto funcionarioDto)
@@ -293,6 +293,15 @@ namespace ControleDeAcesso.Application.Services
             NomeFuncionario = funcionario.Usuario.Nome,
             Email = funcionario.Usuario.Email ?? string.Empty,
             Cpf = funcionario.Usuario.Documento,
+            Tipo = funcionario.Tipo,
+            IsActive = funcionario.IsActive
+        };
+
+        private static FuncionarioListDto MapToListDto(Funcionario funcionario) => new()
+        {
+            Id = funcionario.Id,
+            NomeFuncionario = funcionario.Usuario.Nome,
+            Email = funcionario.Usuario.Email ?? string.Empty,
             Tipo = funcionario.Tipo,
             IsActive = funcionario.IsActive
         };

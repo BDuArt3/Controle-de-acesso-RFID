@@ -10,5 +10,6 @@ namespace ControleDeAcesso.Application.DTOs
         public bool IsActive { get; set; }
         public string UsuarioId { get; set; } = string.Empty;
         public string NomeUsuario { get; set; } = string.Empty;
+        public DateTime? DataExpiracao { get; set; }
     }
 }

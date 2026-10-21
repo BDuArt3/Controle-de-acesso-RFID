@@ -288,7 +288,8 @@ namespace ControleDeAcesso.Application.Services
                     Uid = c.Uid,
                     Status = c.Status,
                     IsActive = c.Status == StatusCartao.Ativo,
-                    UsuarioId = c.UsuarioId
+                    UsuarioId = c.UsuarioId,
+                    DataExpiracao = c.DataExpiracao
                 }).ToList() ?? new List<CartaoDto>()
             };
         }

@@ -103,16 +103,94 @@ public sealed class AccessAttemptTests
         Assert.Contains("auditoria", response.Message, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static Cartao CreateCard(StatusCartao status, bool userActive)
+    [Fact]
+    public async Task ExpiredVisitorCardIsBlockedAndAccessIsDenied()
+    {
+        var fixture = new AccessFixture();
+        var card = CreateCard(
+            StatusCartao.Ativo,
+            userActive: true,
+            tipo: TipoUsuario.Visitante,
+            expiration: DateTime.UtcNow.AddSeconds(-1));
+        fixture.CardRepository
+            .Setup(repository => repository.GetByUidAsync(Credential))
+            .ReturnsAsync(card);
+
+        var response = await fixture.Service.CheckAccessAsync(Credential);
+
+        Assert.False(response.Allowed);
+        Assert.Equal(StatusCartao.Bloqueado, card.Status);
+        var history = Assert.Single(fixture.StatusHistories);
+        Assert.Equal(StatusCartao.Bloqueado, history.Status);
+        Assert.Equal("Cartão de visitante expirado.", history.Motivo);
+        var logged = Assert.Single(fixture.Logs);
+        Assert.False(logged.AcessoPermitido);
+        Assert.Equal(TipoMotivoAcesso.CartaoExpirado, logged.MotivoTipo);
+    }
+
+    [Fact]
+    public async Task VisitorCardBeforeExpirationIsAllowed()
+    {
+        var fixture = new AccessFixture();
+        var card = CreateCard(
+            StatusCartao.Ativo,
+            userActive: true,
+            tipo: TipoUsuario.Visitante,
+            expiration: DateTime.UtcNow.AddHours(1));
+        fixture.CardRepository
+            .Setup(repository => repository.GetByUidAsync(Credential))
+            .ReturnsAsync(card);
+
+        var response = await fixture.Service.CheckAccessAsync(Credential);
+
+        Assert.True(response.Allowed);
+        Assert.Equal(StatusCartao.Ativo, card.Status);
+        Assert.Empty(fixture.StatusHistories);
+        Assert.True(Assert.Single(fixture.Logs).AcessoPermitido);
+    }
+
+    [Fact]
+    public async Task ExpiredDateDoesNotBlockNonVisitorCard()
+    {
+        var fixture = new AccessFixture();
+        var card = CreateCard(
+            StatusCartao.Ativo,
+            userActive: true,
+            tipo: TipoUsuario.Aluno,
+            expiration: DateTime.UtcNow.AddSeconds(-1));
+        fixture.CardRepository
+            .Setup(repository => repository.GetByUidAsync(Credential))
+            .ReturnsAsync(card);
+
+        var response = await fixture.Service.CheckAccessAsync(Credential);
+
+        Assert.True(response.Allowed);
+        Assert.Equal(StatusCartao.Ativo, card.Status);
+        Assert.Empty(fixture.StatusHistories);
+        Assert.True(Assert.Single(fixture.Logs).AcessoPermitido);
+    }
+
+    private static Cartao CreateCard(
+        StatusCartao status,
+        bool userActive,
+        TipoUsuario tipo = TipoUsuario.Aluno,
+        DateTime? expiration = null)
     {
         var user = new Usuario
         {
             Id = UserId,
             Nome = "Pessoa",
             Documento = "document",
+            Tipo = tipo,
             IsActive = userActive
         };
-        var card = new Cartao { Id = CardId, Uid = Credential, UsuarioId = UserId };
+        var card = new Cartao
+        {
+            Id = CardId,
+            Uid = Credential,
+            UsuarioId = UserId,
+            DataExpiracao = expiration
+        };
         if (status != StatusCartao.Ativo)
         {
             card.AlterarStatus(status);
@@ -127,6 +205,7 @@ public sealed class AccessAttemptTests
         public Mock<ICartaoRepository> CardRepository { get; } = new();
         public Mock<ILogAcessoService> LogService { get; } = new();
         public List<CreateLogAcessoDto> Logs { get; } = [];
+        public List<HistoricoStatusCartao> StatusHistories { get; } = [];
         public AcessoService Service { get; }
 
         public AccessFixture()
@@ -137,6 +216,12 @@ public sealed class AccessAttemptTests
                 .Setup(service => service.RegistrarTentativaAsync(It.IsAny<CreateLogAcessoDto>()))
                 .Callback<CreateLogAcessoDto>(Logs.Add)
                 .ReturnsAsync((LogAcessoDto)null!);
+            CardRepository
+                .Setup(repository => repository.UpdateStatusWithHistoryAsync(
+                    It.IsAny<Cartao>(),
+                    It.IsAny<HistoricoStatusCartao>()))
+                .Callback<Cartao, HistoricoStatusCartao>((_, history) => StatusHistories.Add(history))
+                .ReturnsAsync((Cartao card, HistoricoStatusCartao _) => card);
             Service = new AcessoService(
                 CardRepository.Object,
                 LogService.Object,

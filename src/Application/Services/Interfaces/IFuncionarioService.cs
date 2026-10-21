@@ -7,7 +7,7 @@ namespace ControleDeAcesso.Application.Services.Interfaces
     {
         Task<FuncionarioDto> CreateAsync(CreateFuncionarioDto funcionarioDto);
         Task<FuncionarioDto?> GetByIdAsync(string id);
-        Task<IEnumerable<FuncionarioDto>> GetAllAsync();
+        Task<IEnumerable<FuncionarioListDto>> GetAllAsync();
         Task<FuncionarioDto> UpdateAsync(string id, CreateFuncionarioDto funcionarioDto);
         Task<bool> DeleteAsync(string id, string funcionarioResponsavelId, string motivo);
         Task<bool> ActivateAsync(string id, string funcionarioResponsavelId, string motivo);
