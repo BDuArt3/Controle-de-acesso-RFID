@@ -81,6 +81,10 @@ namespace ControleDeAcesso.Infrastructure.Data
                     .HasDatabaseName("IX_Cartoes_Uid");
                 entity.HasIndex(cartao => cartao.UsuarioId)
                     .HasDatabaseName("IX_Cartoes_UsuarioId");
+                entity.HasIndex(cartao => cartao.UsuarioId)
+                    .IsUnique()
+                    .HasDatabaseName("IX_Cartoes_UsuarioId_Ativo")
+                    .HasFilter("[Status] = 0");
 
                 entity.ToTable(table => table.HasCheckConstraint(
                     "CK_Cartoes_Status",

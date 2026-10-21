@@ -56,6 +56,11 @@ namespace ControleDeAcesso.Infrastructure.Migrations
                     b.HasIndex("UsuarioId")
                         .HasDatabaseName("IX_Cartoes_UsuarioId");
 
+                    b.HasIndex("UsuarioId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Cartoes_UsuarioId_Ativo")
+                        .HasFilter("[Status] = 0");
+
                     b.ToTable("Cartoes", t =>
                         {
                             t.HasCheckConstraint("CK_Cartoes_Status", "[Status] IN (0, 1, 2)");

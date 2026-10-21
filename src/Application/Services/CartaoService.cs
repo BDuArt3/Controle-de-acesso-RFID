@@ -137,6 +137,13 @@ namespace ControleDeAcesso.Application.Services
                     }
                 }
 
+                var cartoesAtivos = await _cartaoRepository.GetByUsuarioIdAsync(usuarioId);
+                if (cartoesAtivos.Any(cartao => cartao.Id != cartaoAnteriorId))
+                {
+                    throw new InvalidOperationException(
+                        "O usuário já possui um cartão ativo. Bloqueie ou selecione o cartão atual para reemissão.");
+                }
+
                 var credencial = await GerarCredencialUnicaAsync(cancellationToken);
                 var agora = DateTime.UtcNow;
                 var solicitacao = new SolicitacaoGravacaoCartao
@@ -316,6 +323,12 @@ namespace ControleDeAcesso.Application.Services
                         throw new InvalidOperationException(
                             "O histórico de associação do cartão anterior está ausente ou já encerrado.");
                     }
+                }
+
+                if ((await _cartaoRepository.GetByUsuarioIdAsync(usuario.Id)).Any())
+                {
+                    throw new InvalidOperationException(
+                        "O usuário já possui um cartão ativo. A gravação não pode ser confirmada.");
                 }
 
                 var agora = DateTime.UtcNow;
@@ -724,6 +737,13 @@ namespace ControleDeAcesso.Application.Services
                     {
                         throw new InvalidOperationException(
                             "O cartão não pode ser ativado enquanto seu titular estiver inativo.");
+                    }
+
+                    if ((await _cartaoRepository.GetByUsuarioIdAsync(cartao.UsuarioId))
+                        .Any(cartaoAtivo => cartaoAtivo.Id != cartao.Id))
+                    {
+                        throw new InvalidOperationException(
+                            "O titular já possui outro cartão ativo.");
                     }
                 }
 
