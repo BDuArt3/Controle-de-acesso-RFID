@@ -56,6 +56,8 @@ public sealed class StatusTransitionTests
             card,
             new Usuario { Id = "user", Nome = "Titular", Documento = "document", IsActive = true });
         cardRepository.Setup(repository => repository.GetByIdAsync(card.Id)).ReturnsAsync(card);
+        cardRepository.Setup(repository => repository.GetByUsuarioIdAsync(card.UsuarioId))
+            .ReturnsAsync(Array.Empty<Cartao>());
         cardRepository.Setup(repository => repository.UpdateStatusWithHistoryAsync(
                 It.IsAny<Cartao>(), It.IsAny<HistoricoStatusCartao>()))
             .ReturnsAsync((Cartao updatedCard, HistoricoStatusCartao _) => updatedCard);
@@ -75,6 +77,31 @@ public sealed class StatusTransitionTests
                     (history.Motivo == "Desbloqueio aprovado" ||
                      history.Motivo == "Substituição do cartão"))),
             Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task UnblockIsRejectedWhenUserAlreadyHasAnotherActiveCard()
+    {
+        var cardRepository = new Mock<ICartaoRepository>();
+        var blocked = new Cartao { Id = "blocked", Uid = "1111111111111111", UsuarioId = "user" };
+        blocked.AlterarStatus(StatusCartao.Bloqueado);
+        typeof(Cartao).GetProperty(nameof(Cartao.Usuario))!.SetValue(
+            blocked,
+            new Usuario { Id = "user", Nome = "Titular", Documento = "document", IsActive = true });
+        cardRepository.Setup(repository => repository.GetByIdAsync(blocked.Id)).ReturnsAsync(blocked);
+        cardRepository.Setup(repository => repository.GetByUsuarioIdAsync(blocked.UsuarioId))
+            .ReturnsAsync(new[] { new Cartao { Id = "active", Uid = "2222222222222222", UsuarioId = "user" } });
+        var service = CreateCardService(cardRepository.Object);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.UnblockAsync(blocked.Id, "operator", "Desbloqueio aprovado"));
+
+        Assert.Equal(StatusCartao.Bloqueado, blocked.Status);
+        cardRepository.Verify(
+            repository => repository.UpdateStatusWithHistoryAsync(
+                It.IsAny<Cartao>(),
+                It.IsAny<HistoricoStatusCartao>()),
+            Times.Never);
     }
 
     [Fact]

@@ -102,20 +102,15 @@ public sealed class CardIssuanceTests
     }
 
     [Fact]
-    public async Task IssuingAnotherCardDoesNotDeactivateExistingCardsForSameUser()
+    public async Task IssuingAnotherCardIsRejectedWhenUserAlreadyHasAnActiveCard()
     {
         var fixture = new CardServiceFixture();
         var existing = new Cartao { Uid = "1111111111111111", UsuarioId = UserId };
-        var issued = await fixture.RequestNewCardAsync();
+        fixture.ActiveCards.Add(existing);
 
-        await fixture.ConfirmAsync(issued.Command!);
-
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.RequestNewCardAsync());
         Assert.Equal(StatusCartao.Ativo, existing.Status);
-        fixture.Cartoes.Verify(
-            repository => repository.UpdateStatusWithHistoryAsync(
-                It.IsAny<Cartao>(),
-                It.IsAny<HistoricoStatusCartao>()),
-            Times.Never);
+        Assert.Empty(fixture.Requests);
     }
 
     [Fact]
@@ -123,6 +118,7 @@ public sealed class CardIssuanceTests
     {
         var fixture = new CardServiceFixture();
         var oldCard = new Cartao { Uid = "1111111111111111", UsuarioId = UserId };
+        fixture.ActiveCards.Add(oldCard);
         var oldAssociation = new HistoricoAssociacoesCartao
         {
             CartaoId = oldCard.Id,
@@ -160,6 +156,7 @@ public sealed class CardIssuanceTests
     {
         var fixture = new CardServiceFixture();
         var oldCard = new Cartao { Uid = "1111111111111111", UsuarioId = UserId };
+        fixture.ActiveCards.Add(oldCard);
         oldCard.HistoricoAssociacaoCartao = new HistoricoAssociacoesCartao
         {
             CartaoId = oldCard.Id,
@@ -200,6 +197,17 @@ public sealed class CardIssuanceTests
     }
 
     [Fact]
+    public async Task ConfirmationRejectsCardWhenAnotherActiveCardWasAddedAfterRequest()
+    {
+        var fixture = new CardServiceFixture();
+        var issued = await fixture.RequestNewCardAsync();
+        fixture.ActiveCards.Add(new Cartao { Uid = "1111111111111111", UsuarioId = UserId });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.ConfirmAsync(issued.Command!));
+        Assert.Empty(fixture.CreatedCards);
+    }
+
+    [Fact]
     public async Task IdempotencyKeyCannotBeReusedWithDifferentRecipient()
     {
         var fixture = new CardServiceFixture();
@@ -223,6 +231,7 @@ public sealed class CardIssuanceTests
     {
         public Mock<ICartaoRepository> Cartoes { get; } = new();
         public List<SolicitacaoGravacaoCartao> Requests { get; } = [];
+        public List<Cartao> ActiveCards { get; } = [];
         public List<(Cartao Card, HistoricoAssociacoesCartao Association, HistoricoStatusCartao Status)> CreatedCards { get; } = [];
         public TipoUsuario UserType { get; set; } = TipoUsuario.Aluno;
         public CartaoService Service { get; }
@@ -274,12 +283,19 @@ public sealed class CardIssuanceTests
 
             Cartoes.Setup(repository => repository.GetByUidAsync(It.IsAny<string>()))
                 .ReturnsAsync((Cartao?)null);
+            Cartoes.Setup(repository => repository.GetByUsuarioIdAsync(It.IsAny<string>()))
+                .ReturnsAsync((string userId) =>
+                    ActiveCards.Where(card => card.UsuarioId == userId && card.Status == StatusCartao.Ativo).ToList());
             Cartoes.Setup(repository => repository.CreateWithAuditAsync(
                     It.IsAny<Cartao>(),
                     It.IsAny<HistoricoAssociacoesCartao>(),
                     It.IsAny<HistoricoStatusCartao>()))
                 .Callback<Cartao, HistoricoAssociacoesCartao, HistoricoStatusCartao>(
-                    (card, association, status) => CreatedCards.Add((card, association, status)))
+                    (card, association, status) =>
+                    {
+                        CreatedCards.Add((card, association, status));
+                        ActiveCards.Add(card);
+                    })
                 .ReturnsAsync((Cartao card, HistoricoAssociacoesCartao _, HistoricoStatusCartao _) => card);
 
             var unitOfWork = new Mock<IUnitOfWork>();
