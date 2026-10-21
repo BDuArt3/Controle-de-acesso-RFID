@@ -14,7 +14,6 @@ namespace ControleDeAcesso.Application.DTOs
         [StringLength(254)]
         public string? Email { get; set; }
 
-        [Required]
         public string Documento { get; set; } = string.Empty;
 
         [EnumDataType(typeof(TipoUsuario))]

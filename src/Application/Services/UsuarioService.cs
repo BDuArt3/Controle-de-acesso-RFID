@@ -36,7 +36,7 @@ namespace ControleDeAcesso.Application.Services
                 {
                     Nome = createUsuarioDto.Nome.Trim(),
                     Email = NormalizeEmail(createUsuarioDto.Email),
-                    Documento = RequiredTrimmed(createUsuarioDto.Documento, nameof(createUsuarioDto.Documento)),
+                    Documento = createUsuarioDto.Documento?.Trim() ?? string.Empty,
                     Tipo = createUsuarioDto.Tipo,
                     IsActive = true
                 };
@@ -146,7 +146,10 @@ namespace ControleDeAcesso.Application.Services
 
                 usuarioExistente.Nome = updateUsuarioDto.Nome.Trim();
                 usuarioExistente.Email = NormalizeEmail(updateUsuarioDto.Email);
-                usuarioExistente.Documento = RequiredTrimmed(updateUsuarioDto.Documento, nameof(updateUsuarioDto.Documento));
+                if (!string.IsNullOrWhiteSpace(updateUsuarioDto.Documento))
+                {
+                    usuarioExistente.Documento = updateUsuarioDto.Documento.Trim();
+                }
                 usuarioExistente.Tipo = updateUsuarioDto.Tipo;
 
                 if (usuarioExistente.Email is null)
@@ -277,7 +280,6 @@ namespace ControleDeAcesso.Application.Services
                 Id = usuario.Id,
                 Nome = usuario.Nome,
                 Email = usuario.Email,
-                Documento = usuario.Documento,
                 Tipo = usuario.Tipo,
                 IsActive = usuario.IsActive,
                 Cartoes = usuario.Cartoes?.Select(c => new CartaoDto
