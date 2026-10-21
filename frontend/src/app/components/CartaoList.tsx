@@ -3,8 +3,10 @@ import { AlertCircle, CheckCircle2, CreditCard, History, Loader2, Lock, MoreHori
 import { useAuth } from '../hooks/useAuth';
 import {
   cartaoService,
+  conflictMessage,
   createIdempotencyKey,
   errorMessage,
+  isConflictError,
   isActive,
   type CartaoDto,
   type CartaoSolicitacaoStatus,
@@ -75,10 +77,13 @@ export default function CartaoList() {
   const [actionTarget, setActionTarget] = useState<CartaoDto | null>(null);
   const [actionMode, setActionMode] = useState<CardActionMode | null>(null);
   const [actionReason, setActionReason] = useState('');
+  const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const [pollingError, setPollingError] = useState('');
   const [timedOut, setTimedOut] = useState(false);
   const [pollNonce, setPollNonce] = useState(0);
+  const [requestRefresh, setRequestRefresh] = useState(0);
   const [historyTarget, setHistoryTarget] = useState<CartaoDto | null>(null);
   const [now, setNow] = useState(() => new Date());
   const requestId = request?.solicitacaoId ?? null;
@@ -130,7 +135,8 @@ export default function CartaoList() {
   useEffect(() => {
     setPreviousCardId('');
     setUserCards([]);
-    if (!requestOpen || issueMode !== 'reissue' || !selectedUserId) {
+    idempotencyKeyRef.current = '';
+    if (!requestOpen || !selectedUserId) {
       return;
     }
     let cancelled = false;
@@ -138,7 +144,11 @@ export default function CartaoList() {
     cartaoService.getByUsuario(selectedUserId)
       .then(({ data }) => {
         if (!cancelled) {
-          setUserCards(data.filter(card => card.status === 0));
+          const activeCards = data.filter(card => card.status === 0);
+          setUserCards(activeCards);
+          if (activeCards.length === 1) {
+            setPreviousCardId(activeCards[0].id);
+          }
         }
       })
       .catch(failure => {
@@ -155,9 +165,12 @@ export default function CartaoList() {
       cancelled = true;
       setUserCardsLoading(false);
     };
-  }, [requestOpen, issueMode, selectedUserId]);
+  }, [requestOpen, selectedUserId, requestRefresh]);
 
-  const noActiveCard = issueMode === 'reissue' && !!selectedUserId && !userCardsLoading && userCards.length === 0;
+  const currentActiveCard = userCards[0] ?? null;
+  const userReady = !!selectedUserId && !userCardsLoading;
+  const noActiveCard = issueMode === 'reissue' && userReady && userCards.length === 0;
+  const newBlockedByActive = issueMode === 'new' && userReady && !!currentActiveCard;
 
   const resetRequestForm = () => {
     setIssueMode('new');
@@ -187,6 +200,7 @@ export default function CartaoList() {
     setActionTarget(card);
     setActionMode(mode);
     setActionReason('');
+    setActionError('');
   };
 
   const closeActionDialog = () => {
@@ -196,11 +210,27 @@ export default function CartaoList() {
     setActionTarget(null);
     setActionMode(null);
     setActionReason('');
+    setActionError('');
+  };
+
+  const blockCurrentCard = () => {
+    if (busy || !currentActiveCard) {
+      return;
+    }
+    setRequestOpen(false);
+    openActionDialog(currentActiveCard, 'block');
   };
 
   const submitRequest = async () => {
+    if (busyRef.current) {
+      return;
+    }
     if (!selectedUserId) {
       setRequestError('Selecione um usuário.');
+      return;
+    }
+    if (issueMode === 'new' && (userCardsLoading || currentActiveCard)) {
+      setRequestError('Este usuário já possui um cartão ativo. Bloqueie-o ou inicie uma reemissão.');
       return;
     }
 
@@ -209,6 +239,7 @@ export default function CartaoList() {
       return;
     }
 
+    busyRef.current = true;
     setBusy(true);
     setRequestError('');
     try {
@@ -229,23 +260,31 @@ export default function CartaoList() {
       setRequest(data);
       showToast('Solicitação de cartão registrada.', 'success');
     } catch (failure) {
-      setRequestError(errorMessage(failure));
+      if (isConflictError(failure)) {
+        idempotencyKeyRef.current = '';
+        setRequestError(conflictMessage(failure, 'Este usuário já possui um cartão ativo. Bloqueie-o ou inicie uma reemissão.'));
+        setRequestRefresh(value => value + 1);
+      } else {
+        setRequestError(errorMessage(failure));
+      }
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
 
   const submitAction = async () => {
-    if (!actionTarget || !actionMode) {
+    if (!actionTarget || !actionMode || busyRef.current) {
       return;
     }
     if (!actionReason.trim()) {
-      setError('Informe um motivo.');
+      setActionError('Informe um motivo.');
       return;
     }
 
+    busyRef.current = true;
     setBusy(true);
-    setError('');
+    setActionError('');
     try {
       if (actionMode === 'block') {
         await cartaoService.bloquear(actionTarget.id, actionReason.trim());
@@ -256,10 +295,23 @@ export default function CartaoList() {
       }
       showToast('Status do cartão atualizado.', 'success');
       await load();
-      closeActionDialog();
+      busyRef.current = false;
+      setBusy(false);
+      setActionTarget(null);
+      setActionMode(null);
+      setActionReason('');
+      setActionError('');
     } catch (failure) {
-      setError(errorMessage(failure));
+      if (isConflictError(failure) && actionMode === 'activate') {
+        setActionError('Não foi possível reativar: o titular já possui outro cartão ativo. Bloqueie o cartão ativo antes de reativar este.');
+        void load();
+      } else if (isConflictError(failure)) {
+        setActionError(conflictMessage(failure, 'A operação conflita com o estado atual do cartão.'));
+      } else {
+        setActionError(errorMessage(failure));
+      }
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
@@ -558,7 +610,7 @@ export default function CartaoList() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="issueMode">Tipo de solicitação</Label>
-              <Select value={issueMode} onValueChange={value => setIssueMode(value as IssueMode)} disabled={busy}>
+              <Select value={issueMode} onValueChange={value => { setIssueMode(value as IssueMode); setRequestError(''); idempotencyKeyRef.current = ''; }} disabled={busy}>
                 <SelectTrigger id="issueMode">
                   <SelectValue />
                 </SelectTrigger>
@@ -584,6 +636,23 @@ export default function CartaoList() {
                 </SelectContent>
               </Select>
             </div>
+
+            {newBlockedByActive && currentActiveCard && (
+              <div role="alert" className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                <p>Este usuário já possui um cartão ativo: <span className="font-mono font-medium">{currentActiveCard.uid}</span>. Não é possível fazer uma nova emissão.</p>
+                <p>Bloqueie o cartão atual ou inicie uma reemissão.</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" disabled={busy} onClick={blockCurrentCard}>
+                    <Lock className="mr-2 size-4" />
+                    Bloquear cartão atual
+                  </Button>
+                  <Button type="button" size="sm" disabled={busy} onClick={() => { setIssueMode('reissue'); setRequestError(''); idempotencyKeyRef.current = ''; }}>
+                    <RefreshCw className="mr-2 size-4" />
+                    Iniciar reemissão
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {issueMode === 'reissue' && (
               <>
@@ -648,7 +717,7 @@ export default function CartaoList() {
 
           <div className="flex justify-end gap-2">
             <Button variant="outline" disabled={busy} onClick={closeRequestDialog}>Cancelar</Button>
-            <Button disabled={busy} onClick={() => void submitRequest()}>
+            <Button disabled={busy || userCardsLoading || newBlockedByActive || (issueMode === 'reissue' && noActiveCard)} onClick={() => void submitRequest()}>
               {busy ? 'Enviando...' : 'Solicitar'}
             </Button>
           </div>
@@ -677,6 +746,8 @@ export default function CartaoList() {
               disabled={busy}
             />
           </div>
+
+          {actionError && <p role="alert" className="text-sm text-destructive">{actionError}</p>}
 
           <div className="flex justify-end gap-2">
             <Button variant="outline" disabled={busy} onClick={closeActionDialog}>Cancelar</Button>

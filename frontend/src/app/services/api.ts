@@ -297,6 +297,16 @@ export function buildMessageFromError(error: unknown) {
 
 export const errorMessage = buildMessageFromError;
 
+export function isConflictError(error: unknown) {
+  return axios.isAxiosError(error) && error.response?.status === 409;
+}
+
+export function conflictMessage(error: unknown, fallback: string) {
+  const data = axios.isAxiosError(error) ? error.response?.data as RequestErrorBody | undefined : undefined;
+  const message = data && typeof data === 'object' ? data.message : undefined;
+  return typeof message === 'string' && message.trim() ? message.trim() : fallback;
+}
+
 export function isActive(value: unknown) {
   if (typeof value === 'boolean') {
     return value;
