@@ -89,7 +89,6 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
     }
     return users.filter(user =>
       user.nome.toLowerCase().includes(normalized)
-      || user.documento.toLowerCase().includes(normalized)
       || user.email?.toLowerCase().includes(normalized),
     );
   }, [searchQuery, users]);
@@ -167,7 +166,7 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nome, documento ou email..."
+                placeholder="Buscar por nome ou email..."
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 className="pl-10"
@@ -189,7 +188,6 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                     </div>
                     <div>
                       <h3 className="font-medium">{user.nome}</h3>
-                      <p className="text-sm text-muted-foreground">{user.documento}</p>
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         <Badge variant="outline">{userTypeLabel(user.tipo)}</Badge>
                         {user.email && <span className="text-xs text-muted-foreground">{user.email}</span>}

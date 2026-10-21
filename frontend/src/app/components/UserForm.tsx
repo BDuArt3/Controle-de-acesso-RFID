@@ -18,14 +18,12 @@ interface UserFormProps {
 interface UserFormState {
   nome: string;
   email: string;
-  documento: string;
   tipo: string;
 }
 
 const emptyForm: UserFormState = {
   nome: '',
   email: '',
-  documento: '',
   tipo: '',
 };
 
@@ -75,7 +73,6 @@ export default function UserForm({ editingUserId, onNavigate }: UserFormProps) {
         setForm({
           nome: data.nome,
           email: data.email || '',
-          documento: data.documento,
           tipo: String(data.tipo),
         });
       } catch (err) {
@@ -110,8 +107,8 @@ export default function UserForm({ editingUserId, onNavigate }: UserFormProps) {
       return;
     }
 
-    if (!form.nome.trim() || !form.documento.trim() || !form.tipo) {
-      setError('Preencha nome, documento e tipo.');
+    if (    !form.nome.trim() || !form.tipo) {
+          setError('Preencha nome e tipo.');
       return;
     }
 
@@ -128,7 +125,6 @@ export default function UserForm({ editingUserId, onNavigate }: UserFormProps) {
     const payload = {
       nome: form.nome.trim(),
       email: normalizeEmail(form.email),
-      documento: form.documento.trim(),
       tipo: Number(form.tipo) as UsuarioDto['tipo'],
     };
 
@@ -217,18 +213,6 @@ export default function UserForm({ editingUserId, onNavigate }: UserFormProps) {
                                   placeholder="nome@dominio.com"
                   value={form.email}
                   onChange={(event) => updateField('email', event.target.value)}
-                  disabled={isSaving}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="documento">Documento *</Label>
-                <Input
-                  id="documento"
-                  type="text"
-                  placeholder="CPF, RG ou outro documento"
-                  value={form.documento}
-                  onChange={(event) => updateField('documento', event.target.value)}
                   disabled={isSaving}
                 />
               </div>

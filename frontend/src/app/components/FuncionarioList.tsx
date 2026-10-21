@@ -91,7 +91,6 @@ export default function FuncionarioList() {
     }
     return items.filter(item =>
       item.nomeFuncionario.toLowerCase().includes(normalized)
-      || item.cpf.toLowerCase().includes(normalized)
       || item.email.toLowerCase().includes(normalized),
     );
   }, [items, search]);
@@ -102,7 +101,7 @@ export default function FuncionarioList() {
       setForm({
         nomeFuncionario: funcionario.nomeFuncionario,
         email: funcionario.email,
-        cpf: funcionario.cpf,
+        cpf: '',
         senha: '',
         tipo: String(funcionario.tipo),
       });
@@ -244,7 +243,7 @@ export default function FuncionarioList() {
               <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
               <Input
                 aria-label="Buscar funcionário"
-                placeholder="Buscar por nome, email ou CPF..."
+                placeholder="Buscar por nome ou email..."
                 className="pl-9"
                 value={search}
                 onChange={event => setSearch(event.target.value)}
@@ -267,7 +266,7 @@ export default function FuncionarioList() {
               <table className="w-full text-left text-sm">
                 <thead className="bg-muted/40 text-muted-foreground">
                   <tr>
-                    {['Nome', 'Email', 'CPF', 'Tipo', 'Status', 'Ações'].map(label => (
+                    {['Nome', 'Email', 'Tipo', 'Status', 'Ações'].map(label => (
                       <th key={label} className="px-5 py-4 font-medium">{label}</th>
                     ))}
                   </tr>
@@ -279,7 +278,6 @@ export default function FuncionarioList() {
                       <tr key={item.id} className="border-t transition-colors hover:bg-muted/30">
                         <td className="whitespace-nowrap px-5 py-5 font-medium">{item.nomeFuncionario}</td>
                         <td className="whitespace-nowrap px-5">{item.email}</td>
-                        <td className="whitespace-nowrap px-5 font-mono text-xs">{item.cpf}</td>
                         <td className="px-5">{tipoLabels[item.tipo] ?? item.tipo}</td>
                         <td className="px-5">
                           <Badge

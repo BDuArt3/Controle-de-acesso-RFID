@@ -567,7 +567,7 @@ export default function CartaoList() {
                 <SelectContent>
                   {activeUsers.map(user => (
                     <SelectItem key={user.id} value={user.id}>
-                      {user.nome} · {user.documento}
+                      {user.nome}
                     </SelectItem>
                   ))}
                 </SelectContent>
