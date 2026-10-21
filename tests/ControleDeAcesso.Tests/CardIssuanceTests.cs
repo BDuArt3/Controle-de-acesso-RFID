@@ -41,6 +41,19 @@ public sealed class CardIssuanceTests
     }
 
     [Fact]
+    public async Task VisitorCardExpires24HoursAfterIssuanceConfirmation()
+    {
+        var fixture = new CardServiceFixture { UserType = TipoUsuario.Visitante };
+        var issued = await fixture.RequestNewCardAsync();
+
+        await fixture.ConfirmAsync(issued.Command!);
+
+        var (card, _, _) = Assert.Single(fixture.CreatedCards);
+        Assert.NotNull(card.DataExpiracao);
+        Assert.Equal(TimeSpan.FromHours(24), card.DataExpiracao!.Value - card.DataRegistro);
+    }
+
+    [Fact]
     public async Task RepeatedConfirmationDoesNotCreateAnotherLogicalCard()
     {
         var fixture = new CardServiceFixture();
@@ -211,6 +224,7 @@ public sealed class CardIssuanceTests
         public Mock<ICartaoRepository> Cartoes { get; } = new();
         public List<SolicitacaoGravacaoCartao> Requests { get; } = [];
         public List<(Cartao Card, HistoricoAssociacoesCartao Association, HistoricoStatusCartao Status)> CreatedCards { get; } = [];
+        public TipoUsuario UserType { get; set; } = TipoUsuario.Aluno;
         public CartaoService Service { get; }
 
         public CardServiceFixture()
@@ -223,6 +237,7 @@ public sealed class CardIssuanceTests
                     Id = id,
                     Nome = "Titular",
                     Documento = "doc",
+                    Tipo = UserType,
                     IsActive = true
                 });
 

@@ -74,6 +74,7 @@ namespace ControleDeAcesso.Infrastructure.Data
                 entity.Property(cartao => cartao.UsuarioId).IsRequired().HasMaxLength(36);
                 entity.Property(cartao => cartao.Status).IsRequired();
                 entity.Property(cartao => cartao.DataRegistro).IsRequired();
+                entity.Property(cartao => cartao.DataExpiracao);
 
                 entity.HasIndex(cartao => cartao.Uid)
                     .IsUnique()

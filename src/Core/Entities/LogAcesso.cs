@@ -8,7 +8,8 @@ namespace ControleDeAcesso.Core.Entities
         CartaoDesativado = 4,
         UsuarioNaoEncontrado = 5,
         UsuarioDesativado = 6,
-        ErroInterno = 7
+        ErroInterno = 7,
+        CartaoExpirado = 8
     }
 
     public class LogAcesso

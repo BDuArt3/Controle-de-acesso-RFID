@@ -31,6 +31,9 @@ namespace ControleDeAcesso.Infrastructure.Migrations
                     b.Property<DateTime>("DataRegistro")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("DataExpiracao")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("Status")
                         .HasColumnType("int");
 

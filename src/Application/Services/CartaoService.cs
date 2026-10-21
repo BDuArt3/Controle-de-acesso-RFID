@@ -323,7 +323,10 @@ namespace ControleDeAcesso.Application.Services
                 {
                     Uid = credencial,
                     UsuarioId = usuario.Id,
-                    DataRegistro = agora
+                    DataRegistro = agora,
+                    DataExpiracao = usuario.Tipo == TipoUsuario.Visitante
+                        ? agora.AddHours(24)
+                        : null
                 };
                 var associacao = new HistoricoAssociacoesCartao
                 {
@@ -758,7 +761,8 @@ namespace ControleDeAcesso.Application.Services
                 Status = cartao.Status,
                 IsActive = cartao.Status == StatusCartao.Ativo,
                 UsuarioId = cartao.UsuarioId,
-                NomeUsuario = nomeUsuario ?? cartao.Usuario?.Nome ?? "Usuário não encontrado"
+                NomeUsuario = nomeUsuario ?? cartao.Usuario?.Nome ?? "Usuário não encontrado",
+                DataExpiracao = cartao.DataExpiracao
             };
         }
     }

@@ -97,6 +97,40 @@ namespace ControleDeAcesso.Application.Services
                     };
                 }
 
+                if (cartao.Usuario.Tipo == TipoUsuario.Visitante &&
+                    cartao.DataExpiracao is DateTime dataExpiracao &&
+                    DateTime.UtcNow >= dataExpiracao)
+                {
+                    var agora = DateTime.UtcNow;
+                    var motivoCartaoExpirado = "Cartão de visitante expirado.";
+                    cartao.AlterarStatus(StatusCartao.Bloqueado);
+                    await _cartaoRepository.UpdateStatusWithHistoryAsync(
+                        cartao,
+                        new HistoricoStatusCartao
+                        {
+                            CartaoId = cartao.Id,
+                            Status = StatusCartao.Bloqueado,
+                            DataHora = agora,
+                            Motivo = motivoCartaoExpirado
+                        });
+
+                    _logger.LogWarning(
+                        "Acesso negado: cartão de visitante expirado e bloqueado. UID: {CardUid}, CartaoId: {CartaoId}",
+                        cardUid, cartao.Id);
+                    await RegistrarTentativaAcessoAsync(
+                        cardUid,
+                        false,
+                        TipoMotivoAcesso.CartaoExpirado,
+                        motivoCartaoExpirado,
+                        cartao);
+
+                    return new AccessCheckResponseDto
+                    {
+                        Allowed = false,
+                        Message = motivoCartaoExpirado
+                    };
+                }
+
                 if (!cartao.Usuario.IsActive)
                 {
                     var motivoUsuarioInativo = "Usuário desativado.";
