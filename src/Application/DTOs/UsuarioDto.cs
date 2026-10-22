@@ -9,6 +9,7 @@ namespace ControleDeAcesso.Application.DTOs
         public string? Email { get; set; }
         public TipoUsuario Tipo { get; set; }
         public bool IsActive { get; set; }
+        public bool IsFuncionario { get; set; }
         public List<CartaoDto> Cartoes { get; set; } = new List<CartaoDto>();
     }
 }
