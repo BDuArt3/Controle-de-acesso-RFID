@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { errorMessage, normalizeEmail, type UsuarioDto, usuarioService } from '../services/api';
+import { conflictMessage, errorMessage, isConflictError, normalizeEmail, type UsuarioDto, usuarioService } from '../services/api';
 import { Alert, AlertDescription } from './ui/alert';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -139,7 +139,7 @@ export default function UserForm({ editingUserId, onNavigate }: UserFormProps) {
       }
       onNavigate('users');
     } catch (err) {
-      setError(errorMessage(err));
+      setError(isConflictError(err) ? conflictMessage(err, errorMessage(err)) : errorMessage(err));
     } finally {
       setIsSaving(false);
     }

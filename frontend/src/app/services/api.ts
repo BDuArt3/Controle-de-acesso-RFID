@@ -60,6 +60,7 @@ export interface UsuarioDto {
   email?: string | null;
   tipo: UsuarioTipo;
   isActive: boolean;
+  isFuncionario: boolean;
   cartoes?: UsuarioCartaoResumo[];
 }
 
