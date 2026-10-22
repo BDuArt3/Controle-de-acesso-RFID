@@ -305,6 +305,7 @@ namespace ControleDeAcesso.Application.Services
                     Status = c.Status,
                     IsActive = c.Status == StatusCartao.Ativo,
                     UsuarioId = c.UsuarioId,
+                    DataRegistro = c.DataRegistro,
                     DataExpiracao = c.DataExpiracao
                 }).ToList() ?? new List<CartaoDto>()
             };
