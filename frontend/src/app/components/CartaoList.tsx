@@ -40,6 +40,13 @@ const terminalStatuses: CartaoSolicitacaoStatus[] = ['Concluida', 'Falhou', 'Can
 const POLL_INTERVAL_MS = 1500;
 const POLL_TIMEOUT_MS = 30000;
 
+function formatDataRegistro(value: string | null | undefined) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+}
+
 function cardOwner(card: CartaoDto, users: UsuarioDto[]) {
   return card.usuarioNome
     || card.nomeUsuario
@@ -527,7 +534,7 @@ export default function CartaoList() {
               <table className="w-full text-left text-sm">
                 <thead className="bg-muted/40 text-muted-foreground">
                   <tr>
-                    {['UID', 'Usuário', 'Status', 'Validade', 'Data', 'Ações'].map(label => (
+                    {['UID', 'Usuário', 'Status', 'Validade', 'Data de registro', 'Ações'].map(label => (
                       <th className="whitespace-nowrap px-5 py-4 font-medium" key={label}>{label}</th>
                     ))}
                   </tr>
@@ -549,7 +556,7 @@ export default function CartaoList() {
                           <CartaoValidadeInfo card={item} now={now} />
                         </td>
                         <td className="whitespace-nowrap px-5 text-muted-foreground">
-                          {item.dataCadastro || item.dataSolicitacao || '—'}
+                          {formatDataRegistro(item.dataRegistro)}
                         </td>
                         <td className="px-5">
                           {(canViewHistory || (canManage && !cancelled)) && (

@@ -100,8 +100,7 @@ export interface CartaoDto {
   nomeUsuario?: string;
   cartaoAnteriorId?: string | null;
   motivoReemissao?: string | null;
-  dataCadastro?: string;
-  dataSolicitacao?: string;
+  dataRegistro: string;
   dataExpiracao?: string | null;
 }
 
