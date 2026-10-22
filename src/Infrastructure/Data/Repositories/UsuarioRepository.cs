@@ -51,6 +51,7 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             {
                 var usuario = await _context.Usuarios
                                      .Include(u => u.Cartoes)
+                                     .Include(u => u.Funcionario)
                                      .FirstOrDefaultAsync(u => u.Id == id);
 
                 if (usuario == null)
@@ -109,6 +110,7 @@ namespace ControleDeAcesso.Infrastructure.Data.Repositories
             {
                 var usuarios = await _context.Usuarios
                                      .Include(u => u.Cartoes)
+                                     .Include(u => u.Funcionario)
                                      .Where(u => u.IsActive)
                                      .ToListAsync();
 

@@ -144,6 +144,8 @@ namespace ControleDeAcesso.Application.Services
                     throw new KeyNotFoundException($"Usuário com ID {id} não encontrado");
                 }
 
+                EnsureNotFuncionario(usuarioExistente);
+
                 usuarioExistente.Nome = updateUsuarioDto.Nome.Trim();
                 usuarioExistente.Email = NormalizeEmail(updateUsuarioDto.Email);
                 if (!string.IsNullOrWhiteSpace(updateUsuarioDto.Documento))
@@ -192,6 +194,8 @@ namespace ControleDeAcesso.Application.Services
                     return false;
                 }
 
+                EnsureNotFuncionario(usuario);
+
                 if (usuario.IsActive)
                 {
                     usuario.IsActive = false;
@@ -230,6 +234,8 @@ namespace ControleDeAcesso.Application.Services
                     return false;
                 }
 
+                EnsureNotFuncionario(usuario);
+
                 if (!usuario.IsActive)
                 {
                     usuario.IsActive = true;
@@ -252,6 +258,15 @@ namespace ControleDeAcesso.Application.Services
             {
                 _logger.LogError(ex, "Erro ao ativar usuário. ID: {Id}", id);
                 throw;
+            }
+        }
+
+        private static void EnsureNotFuncionario(Usuario usuario)
+        {
+            if (usuario.Funcionario is not null)
+            {
+                throw new InvalidOperationException(
+                    "Este usuário é um funcionário. Gerencie-o pela tela de funcionários.");
             }
         }
 
@@ -282,6 +297,7 @@ namespace ControleDeAcesso.Application.Services
                 Email = usuario.Email,
                 Tipo = usuario.Tipo,
                 IsActive = usuario.IsActive,
+                IsFuncionario = usuario.Funcionario is not null,
                 Cartoes = usuario.Cartoes?.Select(c => new CartaoDto
                 {
                     Id = c.Id,
