@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Edit, History, Lock, MoreHorizontal, Plus, Search, Unlock } from 'lucide-react';
+import { Briefcase, Edit, History, Lock, MoreHorizontal, Plus, Search, Unlock } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import {
+  conflictMessage,
   errorMessage,
   isActive,
+  isConflictError,
   type UsuarioDto,
   usuarioService,
 } from '../services/api';
@@ -131,7 +133,7 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
       await refresh();
       closeReasonDialog();
     } catch (failure) {
-      setError(errorMessage(failure));
+      setError(isConflictError(failure) ? conflictMessage(failure, errorMessage(failure)) : errorMessage(failure));
     } finally {
       setPendingId(null);
     }
@@ -190,6 +192,19 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                       <h3 className="font-medium">{user.nome}</h3>
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         <Badge variant="outline">{userTypeLabel(user.tipo)}</Badge>
+                        {user.isFuncionario && (
+                          <Badge
+                            variant="secondary"
+                            title="Funcionário – gerencie na tela de Funcionários"
+                            className="cursor-pointer"
+                            role="link"
+                            tabIndex={0}
+                            onClick={() => onNavigate('funcionarios')}
+                            onKeyDown={(event) => { if (event.key === 'Enter') onNavigate('funcionarios'); }}
+                          >
+                            Funcionário – gerencie na tela de Funcionários
+                          </Badge>
+                        )}
                         {user.email && <span className="text-xs text-muted-foreground">{user.email}</span>}
                         <span className="text-xs text-muted-foreground">
                           {user.cartoes?.length ? `${user.cartoes.length} cartão(ões)` : 'Sem cartões conhecidos'}
@@ -213,19 +228,29 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleEdit(user)} disabled={!canAdminister}>
-                          <Edit className="mr-2 h-4 w-4" />
-                          Editar
-                        </DropdownMenuItem>
-                        {active ? (
-                          <DropdownMenuItem onClick={() => openReasonDialog(user, 'delete')} disabled={!canAdminister || pendingId !== null}>
-                            <Lock className="mr-2 h-4 w-4" />
-                            Desativar
-                          </DropdownMenuItem>
-                        ) : (
-                          <DropdownMenuItem onClick={() => openReasonDialog(user, 'activate')} disabled={!canAdminister || pendingId !== null}>
-                            <Unlock className="mr-2 h-4 w-4" />
-                            Reativar
+                        {!user.isFuncionario && (
+                          <>
+                            <DropdownMenuItem onClick={() => handleEdit(user)} disabled={!canAdminister}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Editar
+                            </DropdownMenuItem>
+                            {active ? (
+                              <DropdownMenuItem onClick={() => openReasonDialog(user, 'delete')} disabled={!canAdminister || pendingId !== null}>
+                                <Lock className="mr-2 h-4 w-4" />
+                                Desativar
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem onClick={() => openReasonDialog(user, 'activate')} disabled={!canAdminister || pendingId !== null}>
+                                <Unlock className="mr-2 h-4 w-4" />
+                                Reativar
+                              </DropdownMenuItem>
+                            )}
+                          </>
+                        )}
+                        {user.isFuncionario && (
+                          <DropdownMenuItem onClick={() => onNavigate('funcionarios')}>
+                            <Briefcase className="mr-2 h-4 w-4" />
+                            Gerenciar em Funcionários
                           </DropdownMenuItem>
                         )}
                         {canAdminister && (
