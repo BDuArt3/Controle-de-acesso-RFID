@@ -782,6 +782,7 @@ namespace ControleDeAcesso.Application.Services
                 IsActive = cartao.Status == StatusCartao.Ativo,
                 UsuarioId = cartao.UsuarioId,
                 NomeUsuario = nomeUsuario ?? cartao.Usuario?.Nome ?? "Usuário não encontrado",
+                DataRegistro = cartao.DataRegistro,
                 DataExpiracao = cartao.DataExpiracao
             };
         }
