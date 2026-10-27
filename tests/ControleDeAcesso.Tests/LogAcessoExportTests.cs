@@ -1,4 +1,5 @@
 using ControleDeAcesso.Api.Controllers;
+using ControleDeAcesso.Api.Reports;
 using ControleDeAcesso.Application.DTOs;
 using ControleDeAcesso.Application.Repositories.Interfaces;
 using ControleDeAcesso.Application.Services;
@@ -111,7 +112,7 @@ public sealed class LogAcessoExportTests
             });
         var controller = CreateController(service.Object);
 
-        var result = await controller.ExportarCsv(start, end, null);
+        var result = await controller.Exportar(start, end, null);
 
         var file = Assert.IsType<FileContentResult>(result);
         Assert.Equal("text/csv; charset=utf-8", file.ContentType);
@@ -125,11 +126,171 @@ public sealed class LogAcessoExportTests
         Assert.Contains("\"Negado\"", csv);
 
         var authorization = typeof(LogAcessoController)
-            .GetMethod(nameof(LogAcessoController.ExportarCsv))!
+            .GetMethod(nameof(LogAcessoController.Exportar))!
             .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: false)
             .Cast<AuthorizeAttribute>()
             .Single();
         Assert.Equal("AdminOrOperador", authorization.Policy);
+    }
+
+    [Fact]
+    public async Task ExportEndpointReturnsPdfDownload()
+    {
+        var start = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+        var end = start.AddDays(1);
+        var service = new Mock<ILogAcessoService>();
+        service.Setup(logService => logService.GetLogsParaExportacaoAsync(start, end, false))
+            .ReturnsAsync(new[]
+            {
+                new LogAcessoDto
+                {
+                    Id = 15,
+                    DataHora = start,
+                    CartaoUid = "cartao-uid",
+                    UidInformado = "uid-informado",
+                    UsuarioNome = "Maria Silva",
+                    UsuarioTipo = "Funcionário",
+                    AcessoPermitido = true,
+                    Motivo = "Acesso autorizado"
+                }
+            });
+        var controller = CreateController(service.Object);
+
+        var result = await controller.Exportar(start, end, false, "PDF");
+
+        var file = Assert.IsType<FileContentResult>(result);
+        Assert.Equal("application/pdf", file.ContentType);
+        Assert.Equal("logs-acesso-20261001-20261002.pdf", file.FileDownloadName);
+        Assert.StartsWith("%PDF-", Encoding.ASCII.GetString(file.FileContents, 0, 5));
+        service.Verify(
+            logService => logService.GetLogsParaExportacaoAsync(start, end, false),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ExportEndpointReturnsInformativePdfWhenThereAreNoLogs()
+    {
+        var start = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+        var end = start.AddDays(1);
+        var service = new Mock<ILogAcessoService>();
+        service.Setup(logService => logService.GetLogsParaExportacaoAsync(start, end, null))
+            .ReturnsAsync(Array.Empty<LogAcessoDto>());
+        var controller = CreateController(service.Object);
+
+        var result = await controller.Exportar(start, end, null, "pdf");
+
+        var file = Assert.IsType<FileContentResult>(result);
+        Assert.StartsWith("%PDF-", Encoding.ASCII.GetString(file.FileContents, 0, 5));
+        Assert.Equal("application/pdf", file.ContentType);
+    }
+
+    [Fact]
+    public void PdfRowsUseFriendlyColumnsAndDoNotDuplicateUnknownCardUid()
+    {
+        var date = new DateTime(2026, 10, 1, 3, 15, 0, DateTimeKind.Utc);
+        var rows = LogAcessoPdfGenerator.BuildRows(new[]
+        {
+            new LogAcessoDto
+            {
+                DataHora = date,
+                CartaoUid = "uid-nao-cadastrado",
+                UidInformado = "uid-nao-cadastrado",
+                AcessoPermitido = false,
+                Motivo = "Cartão não encontrado"
+            },
+            new LogAcessoDto
+            {
+                DataHora = date,
+                CartaoUid = "uid-cartao-admin",
+                AcessoPermitido = true,
+                UsuarioNome = "Admin",
+                UsuarioTipo = "Colaborador",
+                Motivo = "Acesso autorizado"
+            }
+        });
+
+        Assert.Equal(
+            new[]
+            {
+                "Data e hora (Brasília)",
+                "UID do cartão",
+                "Usuário",
+                "Tipo de usuário",
+                "Resultado",
+                "Motivo"
+            },
+            LogAcessoPdfGenerator.ColumnHeaders);
+        Assert.Equal(2, rows.Count);
+        Assert.Equal("01/10/2026 00:15:00", rows[0].DateTime);
+        Assert.Equal("uid-nao-cadastrado", rows[0].CardUid);
+        Assert.Equal("Não identificado", rows[0].UserName);
+        Assert.Equal("Não identificado", rows[0].UserType);
+        Assert.Equal("Negado", rows[0].Result);
+        Assert.Equal("01/10/2026 00:15:00", rows[1].DateTime);
+        Assert.Equal("uid-cartao-admin", rows[1].CardUid);
+        Assert.Equal("Admin", rows[1].UserName);
+        Assert.Equal("Colaborador", rows[1].UserType);
+        Assert.Equal("Permitido", rows[1].Result);
+    }
+
+    [Fact]
+    public void PdfSummaryShowsBrasiliaPeriodFilterAndAccessTotals()
+    {
+        var rows = LogAcessoPdfGenerator.BuildRows(new[]
+        {
+            new LogAcessoDto { AcessoPermitido = true },
+            new LogAcessoDto { AcessoPermitido = true },
+            new LogAcessoDto { AcessoPermitido = false }
+        });
+
+        var summary = LogAcessoPdfGenerator.BuildSummary(
+            rows,
+            new DateTime(2026, 10, 1, 3, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 10, 2, 2, 59, 0, DateTimeKind.Utc),
+            false);
+
+        Assert.Equal("01/10/2026 00:00 a 01/10/2026 23:59", summary.Period);
+        Assert.Equal("Negado", summary.AccessFilter);
+        Assert.Equal(3, summary.Total);
+        Assert.Equal(2, summary.Allowed);
+        Assert.Equal(1, summary.Denied);
+    }
+
+    [Fact]
+    public void PdfSummaryForEmptyResultsReportsZeroCountsAndAllFilter()
+    {
+        var summary = LogAcessoPdfGenerator.BuildSummary(
+            Array.Empty<LogAcessoPdfRow>(),
+            new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 10, 2, 0, 0, 0, DateTimeKind.Utc),
+            null);
+
+        Assert.Equal("Todos", summary.AccessFilter);
+        Assert.Equal(0, summary.Total);
+        Assert.Equal(0, summary.Allowed);
+        Assert.Equal(0, summary.Denied);
+    }
+
+    [Fact]
+    public async Task ExportEndpointRejectsUnknownFormatWithoutQueryingLogs()
+    {
+        var service = new Mock<ILogAcessoService>();
+        var controller = CreateController(service.Object);
+
+        var result = await controller.Exportar(
+            DateTime.UtcNow,
+            DateTime.UtcNow,
+            null,
+            "xlsx");
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains("Formato inválido", Assert.IsType<string>(badRequest.Value));
+        service.Verify(
+            logService => logService.GetLogsParaExportacaoAsync(
+                It.IsAny<DateTime>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<bool?>()),
+            Times.Never);
     }
 
     [Fact]
@@ -138,7 +299,7 @@ public sealed class LogAcessoExportTests
         var service = new Mock<ILogAcessoService>();
         var controller = CreateController(service.Object);
 
-        var result = await controller.ExportarCsv(null, DateTime.UtcNow, null);
+        var result = await controller.Exportar(null, DateTime.UtcNow, null);
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result);
         Assert.Contains("dataInicio", Assert.IsType<string>(badRequest.Value));

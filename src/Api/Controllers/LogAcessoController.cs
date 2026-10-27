@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using System.Globalization;
 using System.Text;
+using ControleDeAcesso.Api.Reports;
 
 namespace ControleDeAcesso.Api.Controllers
 {
@@ -116,21 +117,29 @@ namespace ControleDeAcesso.Api.Controllers
         }
 
         /// <summary>
-        /// Exporta logs de acesso em CSV para o período informado.
+        /// Exporta logs de acesso em CSV ou PDF para o período informado.
         /// </summary>
         [HttpGet("exportar")]
         [Authorize(Policy = "AdminOrOperador")]
         [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK, "text/csv")]
+        [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK, "application/pdf")]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> ExportarCsv(
+        public async Task<IActionResult> Exportar(
             [FromQuery] DateTime? dataInicio,
             [FromQuery] DateTime? dataFim,
-            [FromQuery] bool? acessoPermitido)
+            [FromQuery] bool? acessoPermitido,
+            [FromQuery] string? formato = "csv")
         {
             if (!dataInicio.HasValue || !dataFim.HasValue)
             {
                 return BadRequest("Informe dataInicio e dataFim para exportar os logs.");
+            }
+
+            if (!string.Equals(formato, "csv", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(formato, "pdf", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest("Formato inválido. Informe 'csv' ou 'pdf'.");
             }
 
             try
@@ -139,6 +148,21 @@ namespace ControleDeAcesso.Api.Controllers
                     dataInicio.Value,
                     dataFim.Value,
                     acessoPermitido);
+
+                if (string.Equals(formato, "pdf", StringComparison.OrdinalIgnoreCase))
+                {
+                    var pdf = LogAcessoPdfGenerator.Generate(
+                        logs,
+                        dataInicio.Value,
+                        dataFim.Value,
+                        acessoPermitido);
+                    var pdfFileName = string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"logs-acesso-{dataInicio.Value:yyyyMMdd}-{dataFim.Value:yyyyMMdd}.pdf");
+
+                    return File(pdf, "application/pdf", pdfFileName);
+                }
+
                 var csv = BuildCsv(logs);
                 var utf8WithBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
                 var fileContents = utf8WithBom.GetPreamble()
