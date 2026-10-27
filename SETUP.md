@@ -103,6 +103,18 @@ cd src/Api
 dotnet ef database update
 ```
 
+### 📄 Exportação de logs de acesso
+
+Usuários com perfil `Admin` ou `Operador` podem exportar logs pela rota autenticada:
+
+```text
+GET /api/log-acesso/exportar?dataInicio=2026-10-01T00:00:00Z&dataFim=2026-10-02T00:00:00Z&formato=pdf
+```
+
+`dataInicio` e `dataFim` são obrigatórios. `acessoPermitido` é opcional (`true` para permitidos, `false` para negados). `formato` aceita `csv` ou `pdf`; se omitido, permanece `csv` para compatibilidade. O intervalo máximo continua sendo 90 dias, e ambos os formatos usam os mesmos filtros. O CSV mantém os campos e o conteúdo atuais. O PDF usa colunas amigáveis (data e hora, UID do cartão, usuário, tipo de usuário, resultado e motivo), mostra o período/filtro e totais de permitidos e negados, e converte as datas para o horário de Brasília. A tabela A4 horizontal repete o cabeçalho nas páginas; quando não há registros, o PDF exibe uma mensagem e os totais zerados. A API expõe o cabeçalho `Content-Disposition` via CORS para que o frontend possa obter o nome do arquivo.
+
+A geração de PDF usa QuestPDF sob a Community License. Antes de usar em produção, confirme a elegibilidade da organização conforme os termos vigentes do QuestPDF; organizações não elegíveis precisam obter uma licença paga ou substituir a biblioteca por uma alternativa apropriada.
+
 ---
 
 ## 4. ☁️ Deploy em Nuvem (Azure)

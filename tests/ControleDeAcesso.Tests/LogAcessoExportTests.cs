@@ -1,4 +1,5 @@
 using ControleDeAcesso.Api.Controllers;
+using ControleDeAcesso.Api.Reports;
 using ControleDeAcesso.Application.DTOs;
 using ControleDeAcesso.Application.Repositories.Interfaces;
 using ControleDeAcesso.Application.Services;
@@ -181,6 +182,93 @@ public sealed class LogAcessoExportTests
         var file = Assert.IsType<FileContentResult>(result);
         Assert.StartsWith("%PDF-", Encoding.ASCII.GetString(file.FileContents, 0, 5));
         Assert.Equal("application/pdf", file.ContentType);
+    }
+
+    [Fact]
+    public void PdfRowsUseFriendlyColumnsAndDoNotDuplicateUnknownCardUid()
+    {
+        var date = new DateTime(2026, 10, 1, 3, 15, 0, DateTimeKind.Utc);
+        var rows = LogAcessoPdfGenerator.BuildRows(new[]
+        {
+            new LogAcessoDto
+            {
+                DataHora = date,
+                CartaoUid = "uid-nao-cadastrado",
+                UidInformado = "uid-nao-cadastrado",
+                AcessoPermitido = false,
+                Motivo = "Cartão não encontrado"
+            },
+            new LogAcessoDto
+            {
+                DataHora = date,
+                CartaoUid = "uid-cartao-admin",
+                AcessoPermitido = true,
+                UsuarioNome = "Admin",
+                UsuarioTipo = "Colaborador",
+                Motivo = "Acesso autorizado"
+            }
+        });
+
+        Assert.Equal(
+            new[]
+            {
+                "Data e hora (Brasília)",
+                "UID do cartão",
+                "Usuário",
+                "Tipo de usuário",
+                "Resultado",
+                "Motivo"
+            },
+            LogAcessoPdfGenerator.ColumnHeaders);
+        Assert.Equal(2, rows.Count);
+        Assert.Equal("01/10/2026 00:15:00", rows[0].DateTime);
+        Assert.Equal("uid-nao-cadastrado", rows[0].CardUid);
+        Assert.Equal("Não identificado", rows[0].UserName);
+        Assert.Equal("Não identificado", rows[0].UserType);
+        Assert.Equal("Negado", rows[0].Result);
+        Assert.Equal("01/10/2026 00:15:00", rows[1].DateTime);
+        Assert.Equal("uid-cartao-admin", rows[1].CardUid);
+        Assert.Equal("Admin", rows[1].UserName);
+        Assert.Equal("Colaborador", rows[1].UserType);
+        Assert.Equal("Permitido", rows[1].Result);
+    }
+
+    [Fact]
+    public void PdfSummaryShowsBrasiliaPeriodFilterAndAccessTotals()
+    {
+        var rows = LogAcessoPdfGenerator.BuildRows(new[]
+        {
+            new LogAcessoDto { AcessoPermitido = true },
+            new LogAcessoDto { AcessoPermitido = true },
+            new LogAcessoDto { AcessoPermitido = false }
+        });
+
+        var summary = LogAcessoPdfGenerator.BuildSummary(
+            rows,
+            new DateTime(2026, 10, 1, 3, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 10, 2, 2, 59, 0, DateTimeKind.Utc),
+            false);
+
+        Assert.Equal("01/10/2026 00:00 a 01/10/2026 23:59", summary.Period);
+        Assert.Equal("Negado", summary.AccessFilter);
+        Assert.Equal(3, summary.Total);
+        Assert.Equal(2, summary.Allowed);
+        Assert.Equal(1, summary.Denied);
+    }
+
+    [Fact]
+    public void PdfSummaryForEmptyResultsReportsZeroCountsAndAllFilter()
+    {
+        var summary = LogAcessoPdfGenerator.BuildSummary(
+            Array.Empty<LogAcessoPdfRow>(),
+            new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 10, 2, 0, 0, 0, DateTimeKind.Utc),
+            null);
+
+        Assert.Equal("Todos", summary.AccessFilter);
+        Assert.Equal(0, summary.Total);
+        Assert.Equal(0, summary.Allowed);
+        Assert.Equal(0, summary.Denied);
     }
 
     [Fact]
