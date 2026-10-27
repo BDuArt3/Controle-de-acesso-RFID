@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Download, Filter, Search, UserCheck, UserX } from 'lucide-react';
-import { errorMessage, isGranted, type LogAcessoDto, logAcessoService } from '../services/api';
+import { errorMessage, type ExportFormat, isGranted, type LogAcessoDto, logAcessoService } from '../services/api';
 import { Alert, AlertDescription } from './ui/alert';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -18,6 +19,39 @@ function getDisplayName(log: LogAcessoDto) {
 
 function getAccessResult(log: LogAcessoDto): ResultFilter {
   return log.acessoPermitido ? 'granted' : 'denied';
+}
+
+function getDateRange(dateFilter: DateFilter, startDate: string, endDate: string) {
+  if (dateFilter === 'custom') {
+    return {
+      start: startDate ? new Date(`${startDate}T00:00:00`) : null,
+      end: endDate ? new Date(`${endDate}T23:59:59.999`) : null,
+    };
+  }
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  if (dateFilter === 'week') {
+    start.setDate(start.getDate() - 6);
+  } else if (dateFilter === 'month') {
+    start.setMonth(start.getMonth() - 1);
+  }
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
+function triggerDownload(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  try {
+    link.click();
+  } finally {
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
 }
 
 function formatDateTime(value: string) {
@@ -37,7 +71,8 @@ export default function AccessLogs() {
   const [error, setError] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-
+  const [exportError, setExportError] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
   useEffect(() => {
     let active = true;
 
@@ -75,48 +110,39 @@ export default function AccessLogs() {
       const matchesResult = resultFilter === 'all' || result === resultFilter;
 
       const date = new Date(log.dataHora);
-      const lower = new Date();
-      lower.setHours(0, 0, 0, 0);
-      if (dateFilter === 'week') {
-        lower.setDate(lower.getDate() - 6);
-      } else if (dateFilter === 'month') {
-        lower.setMonth(lower.getMonth() - 1);
-      }
-      const upper = new Date();
-      upper.setHours(23, 59, 59, 999);
-      const matchesDate = dateFilter === 'custom'
-        ? (!startDate || date >= new Date(`${startDate}T00:00:00`)) && (!endDate || date <= new Date(`${endDate}T23:59:59.999`))
-        : date >= lower && date <= upper;
+      const { start, end } = getDateRange(dateFilter, startDate, endDate);
+      const matchesDate = (!start || date >= start) && (!end || date <= end);
 
       return matchesSearch && matchesResult && matchesDate;
     });
   }, [dateFilter, endDate, logs, resultFilter, searchQuery, startDate]);
 
-  const handleExport = () => {
-    const escapeCsv = (value: string) => `"${value.replace(/^[=+@-]/, match => `'${match}`).replace(/"/g, '""')}"`;
-    const rows = [
-      ['ID', 'Cartão', 'Usuário', 'Data e hora', 'Resultado', 'Motivo'],
-      ...filteredLogs.map(log => [
-        log.id,
-        log.cartaoUid || log.uidInformado || '',
-        getDisplayName(log),
-        log.dataHora,
-        log.acessoPermitido ? 'Permitido' : 'Negado',
-        log.motivo || '',
-      ]),
-    ];
+  const handleExport = async (formato: ExportFormat) => {
+    const { start, end } = getDateRange(dateFilter, startDate, endDate);
+    if (!start || !end) {
+      setExportError('Informe as datas inicial e final do período para exportar.');
+      return;
+    }
+    if (start > end) {
+      setExportError('A data inicial não pode ser posterior à data final.');
+      return;
+    }
 
-    const blob = new Blob(['\uFEFF' + rows.map(row => row.map(value => escapeCsv(String(value))).join(';')).join('\r\n')], {
-      type: 'text/csv;charset=utf-8',
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'logs-de-acesso.csv';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    setExportError('');
+    setIsExporting(true);
+    try {
+      const { blob, fileName } = await logAcessoService.exportar({
+        dataInicio: start.toISOString(),
+        dataFim: end.toISOString(),
+        ...(resultFilter === 'all' ? {} : { acessoPermitido: resultFilter === 'granted' }),
+        formato,
+      });
+      triggerDownload(blob, fileName);
+    } catch (failure) {
+      setExportError(`Não foi possível exportar os logs. ${errorMessage(failure)}`);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -129,11 +155,20 @@ export default function AccessLogs() {
           <h1>Logs de Acesso</h1>
           <p className="text-muted-foreground">Auditoria de tentativas de acesso ao sistema.</p>
         </div>
-        <Button variant="outline" onClick={handleExport} disabled={isLoading || !!error}>
-          <Download className="mr-2 h-4 w-4" />
-          Exportar
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" disabled={isLoading || !!error || isExporting}>
+              <Download className="mr-2 h-4 w-4" />
+              {isExporting ? 'Exportando...' : 'Exportar'}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => void handleExport('csv')}>CSV</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void handleExport('pdf')}>PDF</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
+      {exportError && <Alert variant="destructive"><AlertDescription>{exportError}</AlertDescription></Alert>}
 
       <Card>
         <CardHeader>
@@ -223,7 +258,11 @@ export default function AccessLogs() {
                       <p className="text-sm text-muted-foreground">
                         UID: {log.cartaoUid || log.uidInformado || '—'}
                       </p>
-                      {log.motivo && <p className="mt-1 text-sm text-red-600">{log.motivo}</p>}
+                      {log.motivo && (
+                        <p className={`mt-1 text-sm ${granted ? 'text-green-600' : 'text-red-600'}`}>
+                          {log.motivo}
+                        </p>
+                      )}
                     </div>
                   </div>
 

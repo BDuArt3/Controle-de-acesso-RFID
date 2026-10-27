@@ -467,8 +467,74 @@ export const cartaoHistoricoService = {
     api.get<CartaoHistoricoResponse>(`/cartao/${encodeURIComponent(id)}/historico`, { params }),
 };
 
+export type ExportFormat = 'csv' | 'pdf';
+
+export interface ExportLogsParams {
+  dataInicio: string;
+  dataFim: string;
+  acessoPermitido?: boolean;
+  formato: ExportFormat;
+}
+
+export interface ExportedFile {
+  blob: Blob;
+  fileName: string;
+}
+
+export function fileNameFromContentDisposition(header: unknown, fallback: string) {
+  const value = typeof header === 'string' ? header : '';
+  const encoded = /filename\*\s*=\s*(?:UTF-8|utf-8)''([^;]+)/i.exec(value)?.[1];
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded.trim().replace(/^"|"$/g, ''));
+    } catch {
+      // usa o nome simples abaixo
+    }
+  }
+  const plain = /filename\s*=\s*(?:"([^"]+)"|([^;]+))/i.exec(value);
+  const name = (plain?.[1] ?? plain?.[2])?.trim();
+  return name || fallback;
+}
+
+async function readBlobError(error: unknown) {
+  if (!axios.isAxiosError(error) || !(error.response?.data instanceof Blob)) {
+    return error;
+  }
+  const blob = error.response.data;
+  let parsed: unknown = undefined;
+  try {
+    const text = await blob.text();
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = text;
+    }
+  } catch {
+    // mantém o erro original
+  }
+  error.response.data = parsed;
+  return error;
+}
+
+async function exportLogs(params: ExportLogsParams): Promise<ExportedFile> {
+  try {
+    const response = await api.get<Blob>('/log-acesso/exportar', { params, responseType: 'blob' });
+    const headers = response.headers as Record<string, unknown> | undefined;
+    return {
+      blob: response.data,
+      fileName: fileNameFromContentDisposition(
+        headers?.['content-disposition'],
+        `logs-de-acesso.${params.formato}`,
+      ),
+    };
+  } catch (error) {
+    throw await readBlobError(error);
+  }
+}
+
 export const logAcessoService = {
   list: () => api.get<LogAcessoDto[]>('/log-acesso'),
+  exportar: exportLogs,
   get: (id: string) => api.get<LogAcessoDto>(`/log-acesso/${encodeURIComponent(id)}`),
   getByCartaoUid: (uid: string) => api.get<LogAcessoDto[]>(`/log-acesso/cartao/${encodeURIComponent(uid)}`),
   getByPeriodo: (dataInicio: string, dataFim: string) =>
