@@ -134,6 +134,7 @@ namespace ControleDeAcesso.Api
                 options.AddPolicy("AllowFrontend", policy =>
                 {
                     policy.WithOrigins(allowedOrigins)
+                          .WithExposedHeaders("Content-Disposition")
                           .AllowAnyMethod()
                           .AllowAnyHeader()
                           .AllowCredentials();

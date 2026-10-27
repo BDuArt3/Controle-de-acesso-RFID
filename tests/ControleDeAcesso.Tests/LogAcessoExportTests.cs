@@ -111,7 +111,7 @@ public sealed class LogAcessoExportTests
             });
         var controller = CreateController(service.Object);
 
-        var result = await controller.ExportarCsv(start, end, null);
+        var result = await controller.Exportar(start, end, null);
 
         var file = Assert.IsType<FileContentResult>(result);
         Assert.Equal("text/csv; charset=utf-8", file.ContentType);
@@ -125,11 +125,84 @@ public sealed class LogAcessoExportTests
         Assert.Contains("\"Negado\"", csv);
 
         var authorization = typeof(LogAcessoController)
-            .GetMethod(nameof(LogAcessoController.ExportarCsv))!
+            .GetMethod(nameof(LogAcessoController.Exportar))!
             .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: false)
             .Cast<AuthorizeAttribute>()
             .Single();
         Assert.Equal("AdminOrOperador", authorization.Policy);
+    }
+
+    [Fact]
+    public async Task ExportEndpointReturnsPdfDownload()
+    {
+        var start = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+        var end = start.AddDays(1);
+        var service = new Mock<ILogAcessoService>();
+        service.Setup(logService => logService.GetLogsParaExportacaoAsync(start, end, false))
+            .ReturnsAsync(new[]
+            {
+                new LogAcessoDto
+                {
+                    Id = 15,
+                    DataHora = start,
+                    CartaoUid = "cartao-uid",
+                    UidInformado = "uid-informado",
+                    UsuarioNome = "Maria Silva",
+                    UsuarioTipo = "Funcionário",
+                    AcessoPermitido = true,
+                    Motivo = "Acesso autorizado"
+                }
+            });
+        var controller = CreateController(service.Object);
+
+        var result = await controller.Exportar(start, end, false, "PDF");
+
+        var file = Assert.IsType<FileContentResult>(result);
+        Assert.Equal("application/pdf", file.ContentType);
+        Assert.Equal("logs-acesso-20261001-20261002.pdf", file.FileDownloadName);
+        Assert.StartsWith("%PDF-", Encoding.ASCII.GetString(file.FileContents, 0, 5));
+        service.Verify(
+            logService => logService.GetLogsParaExportacaoAsync(start, end, false),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ExportEndpointReturnsInformativePdfWhenThereAreNoLogs()
+    {
+        var start = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+        var end = start.AddDays(1);
+        var service = new Mock<ILogAcessoService>();
+        service.Setup(logService => logService.GetLogsParaExportacaoAsync(start, end, null))
+            .ReturnsAsync(Array.Empty<LogAcessoDto>());
+        var controller = CreateController(service.Object);
+
+        var result = await controller.Exportar(start, end, null, "pdf");
+
+        var file = Assert.IsType<FileContentResult>(result);
+        Assert.StartsWith("%PDF-", Encoding.ASCII.GetString(file.FileContents, 0, 5));
+        Assert.Equal("application/pdf", file.ContentType);
+    }
+
+    [Fact]
+    public async Task ExportEndpointRejectsUnknownFormatWithoutQueryingLogs()
+    {
+        var service = new Mock<ILogAcessoService>();
+        var controller = CreateController(service.Object);
+
+        var result = await controller.Exportar(
+            DateTime.UtcNow,
+            DateTime.UtcNow,
+            null,
+            "xlsx");
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains("Formato inválido", Assert.IsType<string>(badRequest.Value));
+        service.Verify(
+            logService => logService.GetLogsParaExportacaoAsync(
+                It.IsAny<DateTime>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<bool?>()),
+            Times.Never);
     }
 
     [Fact]
@@ -138,7 +211,7 @@ public sealed class LogAcessoExportTests
         var service = new Mock<ILogAcessoService>();
         var controller = CreateController(service.Object);
 
-        var result = await controller.ExportarCsv(null, DateTime.UtcNow, null);
+        var result = await controller.Exportar(null, DateTime.UtcNow, null);
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result);
         Assert.Contains("dataInicio", Assert.IsType<string>(badRequest.Value));

@@ -304,7 +304,7 @@ namespace ControleDeAcesso.Application.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao consultar logs para exportação CSV");
+                _logger.LogError(ex, "Erro ao consultar logs para exportação");
                 throw;
             }
         }
