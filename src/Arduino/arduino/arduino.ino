@@ -9,6 +9,8 @@
  * gravado em um bloco de memória específico. Envia ambos os dados para o computador.
  * 2. MODO GRAVAÇÃO (Ativado por Comando): Ouve a porta serial por um comando "WRITE:<GUID>".
  * Ao receber o comando, espera um cartão ser aproximado e grava o GUID fornecido na memória dele.
+ * 3. FEEDBACK DE ACESSO: interpreta ACESSO:PERMITIDO/ACESSO:NEGADO para sinalização visual
+ * e acionamento temporizado do relé da catraca.
  * --------------------------------------------------------------------------------------------------------------------
  */
 
@@ -19,6 +21,13 @@
 // Definição dos pinos de controle do leitor
 #define SS_PIN  10
 #define RST_PIN 9
+
+// Pinos livres no Uno considerando MFRC522 (D9-D13) e serial USB (D0-D1).
+#define LED_VERDE_PIN 7
+#define LED_VERMELHO_PIN 6
+#define CATRACA_RELE_PIN 5
+#define CATRACA_RELE_NIVEL_ATIVO HIGH
+#define TEMPO_FEEDBACK_ACESSO_MS 2000UL
 
 // Cria a instância do leitor MFRC522
 MFRC522 mfrc522(SS_PIN, RST_PIN);
@@ -31,10 +40,20 @@ MFRC522::MIFARE_Key key;
 // Bloco 4 é uma escolha segura, pois não é um "sector trailer" (que armazena as chaves).
 byte blocoGuid = 4;
 
+bool feedbackAcessoAtivo = false;
+unsigned long fimFeedbackAcessoMs = 0;
+
 //=======================================================================
 // FUNÇÃO SETUP: Executada uma única vez ao ligar o Arduino.
 //=======================================================================
 void setup() {
+  pinMode(LED_VERDE_PIN, OUTPUT);
+  pinMode(LED_VERMELHO_PIN, OUTPUT);
+  pinMode(CATRACA_RELE_PIN, OUTPUT);
+  digitalWrite(LED_VERDE_PIN, LOW);
+  digitalWrite(LED_VERMELHO_PIN, LOW);
+  digitalWrite(CATRACA_RELE_PIN, CATRACA_RELE_NIVEL_ATIVO == HIGH ? LOW : HIGH);
+
   Serial.begin(9600); // Inicia comunicação com o PC
   while (!Serial);
 
@@ -63,14 +82,20 @@ void setup() {
 // FUNÇÃO LOOP: Executada continuamente.
 //=======================================================================
 void loop() {
+  atualizarFeedbackAcesso();
+
   // --- Verificação de Comando de Gravação ---
   // Primeiro, verifica se o Worker Service enviou algum comando.
   if (Serial.available() > 0) {
     String comando = Serial.readStringUntil('\n');
     comando.trim();
 
+    if (comando == "ACESSO:PERMITIDO") {
+      iniciarFeedbackAcesso(true);
+    } else if (comando == "ACESSO:NEGADO") {
+      iniciarFeedbackAcesso(false);
     // Se o comando for para gravar (começa com "WRITE:")
-    if (comando.startsWith("WRITE:")) {
+    } else if (comando.startsWith("WRITE:")) {
       String guidParaGravar = comando.substring(6); // Extrai apenas o GUID do comando
       if (guidParaGravar.length() == 16) {
         Serial.println("Comando de gravacao recebido. Aproxime o cartao para gravar o GUID: " + guidParaGravar);
@@ -98,6 +123,36 @@ void loop() {
   // Para a comunicação com o cartão e espera um pouco para evitar leituras repetidas.
   mfrc522.PICC_HaltA();
   delay(1500);
+}
+
+void iniciarFeedbackAcesso(bool permitido) {
+  digitalWrite(LED_VERDE_PIN, LOW);
+  digitalWrite(LED_VERMELHO_PIN, LOW);
+  digitalWrite(CATRACA_RELE_PIN, CATRACA_RELE_NIVEL_ATIVO == HIGH ? LOW : HIGH);
+
+  if (permitido) {
+    digitalWrite(LED_VERDE_PIN, HIGH);
+    digitalWrite(CATRACA_RELE_PIN, CATRACA_RELE_NIVEL_ATIVO);
+    Serial.println(F("INFO: Acesso permitido; rele acionado."));
+  } else {
+    digitalWrite(LED_VERMELHO_PIN, HIGH);
+    Serial.println(F("INFO: Acesso negado; catraca permanece bloqueada."));
+  }
+
+  feedbackAcessoAtivo = true;
+  fimFeedbackAcessoMs = millis() + TEMPO_FEEDBACK_ACESSO_MS;
+}
+
+void atualizarFeedbackAcesso() {
+  if (!feedbackAcessoAtivo ||
+      (long)(millis() - fimFeedbackAcessoMs) < 0) {
+    return;
+  }
+
+  digitalWrite(LED_VERDE_PIN, LOW);
+  digitalWrite(LED_VERMELHO_PIN, LOW);
+  digitalWrite(CATRACA_RELE_PIN, CATRACA_RELE_NIVEL_ATIVO == HIGH ? LOW : HIGH);
+  feedbackAcessoAtivo = false;
 }
 
 //=======================================================================
@@ -145,6 +200,8 @@ void aguardarParaGravar(String guid) {
   long tempoInicio = millis();
   // Fica esperando por um cartão por até 15 segundos
   while ((millis() - tempoInicio) < 15000) {
+    atualizarFeedbackAcesso();
+
     if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
       
       // Verificar o tipo do cartão

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using ControleDeAcesso.Application.DTOs;
+using ControleDeAcesso.Core.Entities;
 
 namespace ControleDeAcesso.Worker;
 
@@ -40,9 +41,16 @@ public sealed class WorkerApiClient
         string uid,
         string guid,
         CancellationToken cancellationToken = default) =>
+        VerifyAccessAsync(uid, guid, LogAcesso.LocalPadrao, cancellationToken);
+
+    public Task<HttpResponseMessage> VerifyAccessAsync(
+        string uid,
+        string guid,
+        string local,
+        CancellationToken cancellationToken = default) =>
         SendAuthorizedAsync(
             "/api/acesso/verificar",
-            new { uid, guid },
+            new { uid, guid, local },
             cancellationToken);
 
     private async Task<HttpResponseMessage?> PostWithRetryAsync<TRequest>(

@@ -2,6 +2,7 @@ namespace ControleDeAcesso.Worker;
 
 using System.IO.Ports;
 using ControleDeAcesso.Application.DTOs;
+using ControleDeAcesso.Core.Entities;
 using Microsoft.AspNetCore.SignalR.Client;
 public class Worker : BackgroundService
 {
@@ -10,7 +11,9 @@ public class Worker : BackgroundService
     private readonly string _apiBaseUrl;
     private readonly string _comPortName;
     private readonly string _workerApiKey;
+    private readonly string _localAcesso;
     private SerialPort? _serialPort;
+    private readonly object _serialWriteLock = new();
     private HubConnection? _hubConnection;
     private bool _isDisposing = false;
     private readonly SemaphoreSlim _recordingLock = new(1, 1);
@@ -23,12 +26,19 @@ public class Worker : BackgroundService
     private string? _credencialSendoGravada;
     private bool _gravacaoRecenteRealizada = false;
 
+    private readonly MedicaoTempoResposta _medicao;
+    private readonly object _leituraLock = new();
+    private DateTime? _inicioLeituraUtc;
+    private long _inicioLeituraTicks;
+
     public Worker(
         ILogger<Worker> logger,
-        IConfiguration configuration
+        IConfiguration configuration,
+        MedicaoTempoResposta medicao
         )
     {
         _logger = logger;
+        _medicao = medicao;
         var configuredApiBaseUrl = configuration["ApiSettings:BaseUrl"];
         if (!Uri.TryCreate(configuredApiBaseUrl, UriKind.Absolute, out var apiBaseUri) ||
             (apiBaseUri.Scheme != Uri.UriSchemeHttp && apiBaseUri.Scheme != Uri.UriSchemeHttps))
@@ -39,6 +49,15 @@ public class Worker : BackgroundService
 
         _apiBaseUrl = apiBaseUri.ToString().TrimEnd('/');
         _comPortName = configuration["SerialPortSettings:ComPortName"] ?? "COM4";
+        var localConfigurado = configuration["AccessPoint:Location"];
+        _localAcesso = string.IsNullOrWhiteSpace(localConfigurado)
+            ? LogAcesso.LocalPadrao
+            : localConfigurado.Trim();
+        if (_localAcesso.Length > 100)
+        {
+            throw new InvalidOperationException("AccessPoint:Location deve ter no máximo 100 caracteres.");
+        }
+
         _workerApiKey = configuration["WorkerAuth:ApiKey"]
             ?? throw new InvalidOperationException("WorkerAuth:ApiKey não configurada para o Worker.");
         if (_workerApiKey.Length < 32)
@@ -155,7 +174,10 @@ public class Worker : BackgroundService
 
             _solicitacaoSendoGravada = command.SolicitacaoId;
             _credencialSendoGravada = command.Credencial;
-            _serialPort.WriteLine($"WRITE:{command.Credencial}");
+            lock (_serialWriteLock)
+            {
+                _serialPort.WriteLine($"WRITE:{command.Credencial}");
+            }
             _logger.LogInformation(
                 "Comando enviado ao Arduino para solicitação {SolicitacaoId}.",
                 command.SolicitacaoId);
@@ -212,7 +234,7 @@ public class Worker : BackgroundService
                         var credencial = _credencialSendoGravada;
                         _solicitacaoSendoGravada = null;
                         _credencialSendoGravada = null;
-                        _ = Task.Run(async () => 
+                        _ = Task.Run(async () =>
                         {
                             await ConfirmarGravacaoCartao(solicitacaoId, credencial);
                             // Aguardar um pouco para garantir que a gravação foi processada na API
@@ -237,56 +259,14 @@ public class Worker : BackgroundService
                     // UID físico do cartão
                     string uid = data.Replace("UID:", "");
                     _logger.LogInformation(">>> UID Físico lido: {uid} <<<", uid);
-                    _ultimoUidLido = uid;
-                    
-                    // Se já temos tanto UID quanto GUID, verificar acesso
-                    if (!string.IsNullOrEmpty(_ultimoGuidLido))
-                    {
-                        var uidParaVerificar = _ultimoUidLido;
-                        var guidParaVerificar = _ultimoGuidLido;
-                        LimparVariaveisTemporarias();
-                        _ = Task.Run(async () => 
-                        {
-                            // Se uma gravação recente foi realizada, aguardar a confirmação
-                            if (_gravacaoRecenteRealizada)
-                            {
-                                _logger.LogInformation(">>> Aguardando confirmação de gravação antes de verificar acesso <<<");
-                                while (_gravacaoRecenteRealizada)
-                                {
-                                    await Task.Delay(500);
-                                }
-                            }
-                            await VerificarAcesso(uidParaVerificar, guidParaVerificar);
-                        });
-                    }
+                    ProcessarLeituraCartao(novoUid: uid, novoGuid: null);
                 }
                 else if (data.StartsWith("GUID:"))
                 {
                     // GUID gravado na memória do cartão
                     string guid = data.Replace("GUID:", "");
                     _logger.LogInformation(">>> GUID gravado lido: {guid} <<<", guid);
-                    _ultimoGuidLido = guid;
-                    
-                    // Se já temos tanto UID quanto GUID, verificar acesso
-                    if (!string.IsNullOrEmpty(_ultimoUidLido))
-                    {
-                        var uidParaVerificar = _ultimoUidLido;
-                        var guidParaVerificar = _ultimoGuidLido;
-                        LimparVariaveisTemporarias();
-                        _ = Task.Run(async () => 
-                        {
-                            // Se uma gravação recente foi realizada, aguardar a confirmação
-                            if (_gravacaoRecenteRealizada)
-                            {
-                                _logger.LogInformation(">>> Aguardando confirmação de gravação antes de verificar acesso <<<");
-                                while (_gravacaoRecenteRealizada)
-                                {
-                                    await Task.Delay(500);
-                                }
-                            }
-                            await VerificarAcesso(uidParaVerificar, guidParaVerificar);
-                        });
-                    }
+                    ProcessarLeituraCartao(novoUid: null, novoGuid: guid);
                 }
                 else
                 {
@@ -405,29 +385,96 @@ public class Worker : BackgroundService
         }
     }
 
-    private void LimparVariaveisTemporarias()
+    private void ProcessarLeituraCartao(string? novoUid, string? novoGuid)
+    {
+        string? uidParaVerificar = null;
+        string? guidParaVerificar = null;
+        (DateTime Utc, long Ticks)? inicio = null;
+
+        lock (_leituraLock)
+        {
+            MarcarInicioLeituraInterno();
+            if (novoUid != null) _ultimoUidLido = novoUid;
+            if (novoGuid != null) _ultimoGuidLido = novoGuid;
+
+            if (!string.IsNullOrEmpty(_ultimoUidLido) && !string.IsNullOrEmpty(_ultimoGuidLido))
+            {
+                uidParaVerificar = _ultimoUidLido;
+                guidParaVerificar = _ultimoGuidLido;
+                inicio = ConsumirInicioLeituraInterno();
+                LimparVariaveisTemporariasInterno();
+            }
+        }
+
+        if (uidParaVerificar != null && guidParaVerificar != null)
+        {
+            _ = Task.Run(async () => 
+            {
+                // Se uma gravação recente foi realizada, aguardar a confirmação
+                if (_gravacaoRecenteRealizada)
+                {
+                    _logger.LogInformation(">>> Aguardando confirmação de gravação antes de verificar acesso <<<");
+                    while (_gravacaoRecenteRealizada)
+                    {
+                        await Task.Delay(500);
+                    }
+                }
+                await VerificarAcesso(uidParaVerificar, guidParaVerificar, inicio);
+            });
+        }
+    }
+
+    private void MarcarInicioLeituraInterno()
+    {
+        if (_inicioLeituraUtc != null) return;
+        _inicioLeituraUtc = DateTime.UtcNow;
+        _inicioLeituraTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+        _logger.LogInformation(">>> [MEDICAO] Arduino enviou dados em {inicio:O} <<<", _inicioLeituraUtc);
+    }
+
+    private (DateTime Utc, long Ticks)? ConsumirInicioLeituraInterno()
+    {
+        if (_inicioLeituraUtc == null) return null;
+        var inicio = (_inicioLeituraUtc.Value, _inicioLeituraTicks);
+        _inicioLeituraUtc = null;
+        _inicioLeituraTicks = 0;
+        return inicio;
+    }
+
+    private void LimparVariaveisTemporariasInterno()
     {
         _ultimoUidLido = null;
         _ultimoGuidLido = null;
     }
 
-    private async Task VerificarAcesso(string uid, string guid)
+    private async Task VerificarAcesso(string uid, string guid, (DateTime Utc, long Ticks)? inicioMedicao = null)
     {
+        var inicio = inicioMedicao ?? default;
+        var inicioApi = System.Diagnostics.Stopwatch.GetTimestamp();
+        int? status = null;
+        var autorizado = false;
         try
         {
             // Validar se os parâmetros não são nulos ou vazios
             if (string.IsNullOrEmpty(uid) || string.IsNullOrEmpty(guid))
             {
                 _logger.LogWarning(">>> Tentativa de verificação de acesso com parâmetros inválidos - UID: {uid}, GUID: {guid} <<<", uid ?? "(null)", guid ?? "(null)");
+                EnviarResultadoAcesso(AccessFeedbackSerialProtocol.AccessDenied);
                 return;
             }
 
             _logger.LogInformation(">>> Verificando acesso para UID: {uid}, GUID: {guid} <<<", uid, guid);
             
-            // A API valida a credencial gravada; o UID físico não identifica a emissão lógica.
-            using var response = await _apiClient.VerifyAccessAsync(uid: guid, guid: guid);
+            // Envia o UID físico para log/diagnóstico e o GUID gravado para validação da credencial
+            using var response = await _apiClient.VerifyAccessAsync(
+                uid: uid,
+                guid: guid,
+                local: _localAcesso);
             var responseContent = await response.Content.ReadAsStringAsync();
-            
+            status = (int)response.StatusCode;
+            autorizado = response.IsSuccessStatusCode;
+            RegistrarMedicao(inicio, inicioApi, status, autorizado);
+            EnviarResultadoAcesso(AccessFeedbackSerialProtocol.ForResponse(response));
             if (response.IsSuccessStatusCode)
             {
                 _logger.LogInformation(">>> ACESSO AUTORIZADO para GUID: {guid} (UID físico: {uid}) - Resposta: {response} <<<", guid, uid, responseContent);
@@ -440,6 +487,67 @@ public class Worker : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Erro ao verificar acesso para UID: {uid}, GUID: {guid}", uid, guid);
+            EnviarResultadoAcesso(AccessFeedbackSerialProtocol.AccessDenied);
+        }
+    }
+
+    private void EnviarResultadoAcesso(string comando)
+    {
+        lock (_serialWriteLock)
+        {
+            var serialPort = _serialPort;
+            if (serialPort?.IsOpen != true)
+            {
+                _logger.LogError(
+                    "Não foi possível enviar o resultado {Comando} ao Arduino: porta serial indisponível.",
+                    comando);
+                return;
+            }
+
+            try
+            {
+                serialPort.WriteLine(comando);
+                _logger.LogInformation("Resultado de acesso enviado ao Arduino pela serial: {Comando}", comando);
+            }
+            catch (IOException ex)
+            {
+                _logger.LogError(ex, "Falha de I/O ao enviar resultado {Comando} ao Arduino.", comando);
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogError(ex, "Porta serial fechada ao enviar resultado {Comando} ao Arduino.", comando);
+            }
+            catch (TimeoutException ex)
+            {
+                _logger.LogError(ex, "Timeout ao enviar resultado {Comando} ao Arduino.", comando);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogError(ex, "Acesso negado ao enviar resultado {Comando} ao Arduino.", comando);
+            }
+        }
+    }
+
+    private void RegistrarMedicao((DateTime Utc, long Ticks) inicio, long inicioApiTicks, int? status, bool autorizado)
+    {
+        try
+        {
+            var fimTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+            var fimUtc = DateTime.UtcNow;
+            var apiMs = System.Diagnostics.Stopwatch.GetElapsedTime(inicioApiTicks, fimTicks).TotalMilliseconds;
+            if (inicio.Ticks == 0)
+            {
+                _logger.LogWarning(">>> [MEDICAO] Início da leitura não encontrado; medição descartada <<<");
+                return;
+            }
+
+            var totalMs = System.Diagnostics.Stopwatch.GetElapsedTime(inicio.Ticks, fimTicks).TotalMilliseconds;
+            _medicao.Registrar(new MedicaoRegistro(inicio.Utc, fimUtc, Math.Round(totalMs, 1), Math.Round(apiMs, 1), status, autorizado));
+            _logger.LogInformation(">>> [MEDICAO] Resposta da API em {fim:O} - total {total:F0} ms (API {api:F0} ms) <<<", fimUtc, totalMs, apiMs);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha ao registrar medição de tempo de resposta.");
         }
     }
 
