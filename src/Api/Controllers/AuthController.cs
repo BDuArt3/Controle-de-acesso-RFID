@@ -127,7 +127,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="refreshTokenDto">Refresh token a ser revogado</param>
         /// <returns>Status da operação</returns>
         [HttpPost("logout")]
-        [Authorize]
+        [AllowAnonymous]
         public async Task<IActionResult> Logout([FromBody] RefreshTokenDto refreshTokenDto)
         {
             if (refreshTokenDto == null)

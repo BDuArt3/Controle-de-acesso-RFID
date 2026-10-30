@@ -39,6 +39,7 @@ namespace ControleDeAcesso.Api
             builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
             builder.Services.AddScoped<ICartaoRepository, CartaoRepository>();
             builder.Services.AddScoped<ISolicitacaoGravacaoCartaoRepository, SolicitacaoGravacaoCartaoRepository>();
+            builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
             builder.Services.AddScoped<ILogAcessoRepository, LogAcessoRepository>();
             builder.Services.AddScoped<IHistoricoRepository, HistoricoRepository>();
             builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();

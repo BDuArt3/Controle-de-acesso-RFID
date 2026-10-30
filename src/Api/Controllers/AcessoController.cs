@@ -3,6 +3,7 @@ using ControleDeAcesso.Application.Services.Interfaces;
 using ControleDeAcesso.Application.DTOs;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Authorization;
+using System.ComponentModel.DataAnnotations;
 
 namespace ControleDeAcesso.Api.Controllers
 {
@@ -28,12 +29,17 @@ namespace ControleDeAcesso.Api.Controllers
         [Authorize(Policy = "WorkerCallback")]
         public async Task<ActionResult<AccessCheckResponseDto>> VerificarAcesso([FromBody] VerificarAcessoRequestDto request)
         {
-            _logger.LogInformation("Solicitação de verificação de acesso - UID: {uid}, GUID: {guid}", request.Uid, request.Guid);
+            _logger.LogInformation(
+                "Solicitação de verificação de acesso - UID físico: {uid}, GUID/Credencial: {guid}, Local: {local}",
+                request.Uid,
+                request.Guid,
+                request.Local);
 
             try
             {
-                // Por enquanto, usar o UID para verificação (pode ser expandido para usar GUID também)
-                var resultado = await _acessoService.CheckAccessAsync(request.Uid);
+                // A validação de acesso busca pela credencial gravada (Guid); se ausente, faz fallback para Uid
+                var credencial = !string.IsNullOrWhiteSpace(request.Guid) ? request.Guid : request.Uid;
+                var resultado = await _acessoService.CheckAccessAsync(credencial, request.Local);
                 
                 if (resultado.Allowed)
                 {
@@ -46,7 +52,7 @@ namespace ControleDeAcesso.Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao verificar acesso para UID: {uid}", request.Uid);
+                _logger.LogError(ex, "Erro ao verificar acesso para UID: {uid}, GUID: {guid}", request.Uid, request.Guid);
                 return StatusCode(500, new AccessCheckResponseDto 
                 { 
                     Allowed = false, 
@@ -63,5 +69,8 @@ namespace ControleDeAcesso.Api.Controllers
     {
         public string Uid { get; set; } = string.Empty;
         public string Guid { get; set; } = string.Empty;
+
+        [StringLength(100)]
+        public string Local { get; set; } = ControleDeAcesso.Core.Entities.LogAcesso.LocalPadrao;
     }
 }

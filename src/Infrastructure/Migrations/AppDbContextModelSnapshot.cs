@@ -28,10 +28,10 @@ namespace ControleDeAcesso.Infrastructure.Migrations
                         .HasMaxLength(36)
                         .HasColumnType("nvarchar(36)");
 
-                    b.Property<DateTime>("DataRegistro")
+                    b.Property<DateTime?>("DataExpiracao")
                         .HasColumnType("datetime2");
 
-                    b.Property<DateTime?>("DataExpiracao")
+                    b.Property<DateTime>("DataRegistro")
                         .HasColumnType("datetime2");
 
                     b.Property<int>("Status")
@@ -52,9 +52,6 @@ namespace ControleDeAcesso.Infrastructure.Migrations
                     b.HasIndex("Uid")
                         .IsUnique()
                         .HasDatabaseName("IX_Cartoes_Uid");
-
-                    b.HasIndex("UsuarioId")
-                        .HasDatabaseName("IX_Cartoes_UsuarioId");
 
                     b.HasIndex("UsuarioId")
                         .IsUnique()
@@ -283,6 +280,13 @@ namespace ControleDeAcesso.Infrastructure.Migrations
                     b.Property<DateTime>("DataHora")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("Local")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasDefaultValue("Entrada Principal");
+
                     b.Property<string>("Motivo")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -311,6 +315,40 @@ namespace ControleDeAcesso.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("CK_LogsAcesso_Identificadores", "(([CartaoId] IS NULL AND [UsuarioId] IS NULL) OR ([CartaoId] IS NOT NULL AND [UsuarioId] IS NOT NULL)) AND ([CartaoId] IS NULL OR [UidInformado] IS NULL)");
                         });
+                });
+
+            modelBuilder.Entity("ControleDeAcesso.Core.Entities.RefreshToken", b =>
+                {
+                    b.Property<string>("TokenHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FuncionarioId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)");
+
+                    b.Property<string>("ReplacedByTokenHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("TokenHash");
+
+                    b.HasIndex("ExpiresAtUtc")
+                        .HasDatabaseName("IX_RefreshTokens_ExpiresAtUtc");
+
+                    b.HasIndex("FuncionarioId");
+
+                    b.ToTable("RefreshTokens");
                 });
 
             modelBuilder.Entity("ControleDeAcesso.Core.Entities.SolicitacaoGravacaoCartao", b =>
@@ -570,6 +608,16 @@ namespace ControleDeAcesso.Infrastructure.Migrations
                     b.Navigation("Cartao");
 
                     b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("ControleDeAcesso.Core.Entities.RefreshToken", b =>
+                {
+                    b.HasOne("ControleDeAcesso.Core.Entities.Funcionario", null)
+                        .WithMany()
+                        .HasForeignKey("FuncionarioId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired()
+                        .HasConstraintName("FK_RefreshTokens_Funcionarios_FuncionarioId");
                 });
 
             modelBuilder.Entity("ControleDeAcesso.Core.Entities.SolicitacaoGravacaoCartao", b =>

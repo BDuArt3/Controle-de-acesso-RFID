@@ -14,8 +14,11 @@ namespace ControleDeAcesso.Core.Entities
 
     public class LogAcesso
     {
+        public const string LocalPadrao = "Entrada Principal";
+
         public long Id { get; set; }
         public DateTime DataHora { get; set; }
+        public string Local { get; set; } = LocalPadrao;
         public string? CartaoId { get; set; }
         public Cartao? Cartao { get; set; }
         public string? UsuarioId { get; set; }

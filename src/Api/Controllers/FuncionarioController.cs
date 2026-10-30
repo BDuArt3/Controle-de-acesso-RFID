@@ -52,6 +52,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="id">ID do funcionário</param>
         /// <returns>Funcionário encontrado</returns>
         [HttpGet("{id}")]
+        [Authorize(Policy = "AdminOnly")] // Apenas admins podem buscar funcionário por ID
         public async Task<IActionResult> GetById(string id)
         {
             try

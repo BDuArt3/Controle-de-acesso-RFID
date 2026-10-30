@@ -16,19 +16,20 @@ public sealed class AccessAttemptTests
     private const string UserId = "user-id";
 
     [Fact]
-    public async Task AllowedAttemptLogsCardAndUserSnapshotBeforeAllowing()
+    public async Task AllowedAttemptLogsCardUserAndLocationBeforeAllowing()
     {
         var fixture = new AccessFixture();
         fixture.CardRepository
             .Setup(repository => repository.GetByUidAsync(Credential))
             .ReturnsAsync(CreateCard(StatusCartao.Ativo, userActive: true));
 
-        var response = await fixture.Service.CheckAccessAsync(Credential);
+        var response = await fixture.Service.CheckAccessAsync(Credential, "Bloco A");
 
         Assert.True(response.Allowed);
         var logged = Assert.Single(fixture.Logs);
         Assert.Equal(CardId, logged.CartaoId);
         Assert.Equal(UserId, logged.UsuarioId);
+        Assert.Equal("Bloco A", logged.Local);
         Assert.Null(logged.UidInformado);
         Assert.True(logged.AcessoPermitido);
     }
@@ -69,6 +70,7 @@ public sealed class AccessAttemptTests
         Assert.Null(logged.UsuarioId);
         Assert.Equal(Credential, logged.UidInformado);
         Assert.Equal(TipoMotivoAcesso.CartaoNaoEncontrado, logged.MotivoTipo);
+        Assert.Equal(LogAcesso.LocalPadrao, logged.Local);
     }
 
     [Fact]
@@ -147,6 +149,16 @@ public sealed class AccessAttemptTests
         Assert.Equal(StatusCartao.Ativo, card.Status);
         Assert.Empty(fixture.StatusHistories);
         Assert.True(Assert.Single(fixture.Logs).AcessoPermitido);
+    }
+
+    [Fact]
+    public async Task BlankLocationUsesConfiguredDefaultInAuditLog()
+    {
+        var fixture = new AccessFixture();
+
+        await fixture.Service.CheckAccessAsync(Credential, "  ");
+
+        Assert.Equal(LogAcesso.LocalPadrao, Assert.Single(fixture.Logs).Local);
     }
 
     [Fact]

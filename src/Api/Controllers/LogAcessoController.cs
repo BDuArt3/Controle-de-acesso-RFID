@@ -64,7 +64,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="id">ID do log de acesso</param>
         /// <returns>Log de acesso encontrado</returns>
         [HttpGet("{id}")]
-        [Authorize(Policy = "AdminOnly")] // Apenas admins podem visualizar logs específicos
+        [Authorize(Policy = "TodosFuncionarios")] // Todos os funcionários podem visualizar detalhes de um log
         [ProducesResponseType(typeof(LogAcessoDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -120,7 +120,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// Exporta logs de acesso em CSV ou PDF para o período informado.
         /// </summary>
         [HttpGet("exportar")]
-        [Authorize(Policy = "AdminOrOperador")]
+        [Authorize(Policy = "TodosFuncionarios")] // Todos os funcionários podem exportar o relatório de logs
         [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK, "text/csv")]
         [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK, "application/pdf")]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -194,6 +194,7 @@ namespace ControleDeAcesso.Api.Controllers
                 "DataHoraUtc",
                 "CartaoUid",
                 "UidInformado",
+                "Local",
                 "UsuarioNome",
                 "UsuarioTipo",
                 "Resultado",
@@ -207,6 +208,7 @@ namespace ControleDeAcesso.Api.Controllers
                     log.DataHora.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture),
                     log.CartaoUid,
                     log.UidInformado ?? string.Empty,
+                    log.Local,
                     log.UsuarioNome ?? string.Empty,
                     log.UsuarioTipo ?? string.Empty,
                     log.AcessoPermitido ? "Permitido" : "Negado",
@@ -239,7 +241,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="uid">UID do cartão</param>
         /// <returns>Lista de logs do cartão</returns>
         [HttpGet("cartao/{uid}")]
-        [Authorize(Policy = "AdminOnly")] // Apenas admins podem buscar logs por cartão
+        [Authorize(Policy = "TodosFuncionarios")] // Todos os funcionários podem filtrar logs por cartão
         [ProducesResponseType(typeof(IEnumerable<LogAcessoDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
@@ -269,7 +271,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="dataFim">Data de fim (yyyy-MM-dd)</param>
         /// <returns>Lista de logs do período</returns>
         [HttpGet("periodo")]
-        [Authorize(Policy = "AdminOnly")] // Apenas admins podem buscar logs por período
+        [Authorize(Policy = "TodosFuncionarios")] // Todos os funcionários podem filtrar logs por período
         [ProducesResponseType(typeof(IEnumerable<LogAcessoDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
@@ -301,6 +303,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="dataFim">Data de fim</param>
         /// <returns>Lista de acessos permitidos</returns>
         [HttpGet("periodo/permitidos")]
+        [Authorize(Policy = "TodosFuncionarios")] // Todos os funcionários podem filtrar acessos permitidos
         [ProducesResponseType(typeof(IEnumerable<LogAcessoDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
@@ -327,6 +330,7 @@ namespace ControleDeAcesso.Api.Controllers
         /// <param name="dataFim">Data de fim</param>
         /// <returns>Lista de acessos negados</returns>
         [HttpGet("periodo/negados")]
+        [Authorize(Policy = "TodosFuncionarios")] // Todos os funcionários podem filtrar acessos negados
         [ProducesResponseType(typeof(IEnumerable<LogAcessoDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]

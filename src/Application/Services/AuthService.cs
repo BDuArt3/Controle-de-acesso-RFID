@@ -1,6 +1,7 @@
 using ControleDeAcesso.Application.DTOs;
 using ControleDeAcesso.Application.Services.Interfaces;
 using ControleDeAcesso.Application.Repositories.Interfaces;
+using ControleDeAcesso.Core.Entities;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
@@ -14,19 +15,20 @@ namespace ControleDeAcesso.Application.Services
     public class AuthService : IAuthService
     {
         private readonly IFuncionarioRepository _funcionarioRepository;
+        private readonly IRefreshTokenRepository _refreshTokenRepository;
         private readonly IConfiguration _configuration;
         private readonly ILogger<AuthService> _logger;
-        private readonly Dictionary<string, (string FuncionarioId, DateTime ExpiresAt)> _refreshTokens;
 
         public AuthService(
             IFuncionarioRepository funcionarioRepository,
+            IRefreshTokenRepository refreshTokenRepository,
             IConfiguration configuration,
             ILogger<AuthService> logger)
         {
             _funcionarioRepository = funcionarioRepository;
+            _refreshTokenRepository = refreshTokenRepository;
             _configuration = configuration;
             _logger = logger;
-            _refreshTokens = new Dictionary<string, (string, DateTime)>();
         }
 
         public async Task<LoginResponseDto> LoginAsync(LoginDto loginDto)
@@ -101,10 +103,16 @@ namespace ControleDeAcesso.Application.Services
                 // Gerar tokens
                 var accessToken = GenerateAccessToken(funcionarioDto);
                 var refreshToken = GenerateRefreshToken();
-
-                // Armazenar refresh token
-                var expiresAt = DateTime.UtcNow.AddDays(7); // Refresh token válido por 7 dias
-                _refreshTokens[refreshToken] = (funcionario.Id, expiresAt);
+                var now = DateTime.UtcNow;
+                var expiresAt = now.AddDays(7);
+                await _refreshTokenRepository.DeleteExpiredAsync(now);
+                await _refreshTokenRepository.AddAsync(new RefreshToken
+                {
+                    TokenHash = HashRefreshToken(refreshToken),
+                    FuncionarioId = funcionario.Id,
+                    CreatedAtUtc = now,
+                    ExpiresAtUtc = expiresAt
+                });
 
                 var tokenDto = new TokenDto
                 {
@@ -147,27 +155,28 @@ namespace ControleDeAcesso.Application.Services
 
             try
             {
-                if (!_refreshTokens.ContainsKey(refreshToken))
+                var now = DateTime.UtcNow;
+                var tokenHash = HashRefreshToken(refreshToken);
+                var storedToken = await _refreshTokenRepository.GetByTokenHashAsync(tokenHash);
+                if (storedToken is null || storedToken.RevokedAtUtc is not null)
                 {
                     _logger.LogWarning("Refresh token inválido ou expirado");
                     throw new SecurityTokenException("Refresh token inválido");
                 }
 
-                var (funcionarioId, expiresAt) = _refreshTokens[refreshToken];
-
-                if (DateTime.UtcNow > expiresAt)
+                if (now >= storedToken.ExpiresAtUtc)
                 {
-                    _refreshTokens.Remove(refreshToken);
-                    _logger.LogWarning("Refresh token expirado para funcionário: {FuncionarioId}", funcionarioId);
+                    await _refreshTokenRepository.RevokeAsync(tokenHash, now);
+                    _logger.LogWarning("Refresh token expirado para funcionário: {FuncionarioId}", storedToken.FuncionarioId);
                     throw new SecurityTokenException("Refresh token expirado");
                 }
 
                 // Buscar funcionário
-                var funcionario = await _funcionarioRepository.GetByIdAsync(funcionarioId);
+                var funcionario = await _funcionarioRepository.GetByIdAsync(storedToken.FuncionarioId);
                 if (funcionario == null || !funcionario.IsActive || !funcionario.Usuario.IsActive)
                 {
-                    _refreshTokens.Remove(refreshToken);
-                    _logger.LogWarning("Funcionário não encontrado ou inativo: {FuncionarioId}", funcionarioId);
+                    await _refreshTokenRepository.RevokeAsync(tokenHash, now);
+                    _logger.LogWarning("Funcionário não encontrado ou inativo: {FuncionarioId}", storedToken.FuncionarioId);
                     throw new SecurityTokenException("Funcionário inválido");
                 }
 
@@ -184,13 +193,25 @@ namespace ControleDeAcesso.Application.Services
                 // Gerar novos tokens
                 var newAccessToken = GenerateAccessToken(funcionarioDto);
                 var newRefreshToken = GenerateRefreshToken();
-
-                // Remover o refresh token antigo e adicionar o novo
-                _refreshTokens.Remove(refreshToken);
                 var newExpiresAt = DateTime.UtcNow.AddDays(7);
-                _refreshTokens[newRefreshToken] = (funcionario.Id, newExpiresAt);
+                var rotated = await _refreshTokenRepository.TryRotateAsync(
+                    tokenHash,
+                    new RefreshToken
+                    {
+                        TokenHash = HashRefreshToken(newRefreshToken),
+                        FuncionarioId = funcionario.Id,
+                        CreatedAtUtc = now,
+                        ExpiresAtUtc = newExpiresAt
+                    },
+                    now);
+                if (!rotated)
+                {
+                    throw new SecurityTokenException("Refresh token inválido ou já utilizado");
+                }
 
-                _logger.LogInformation("Refresh token realizado com sucesso para funcionário: {FuncionarioId}", funcionarioId);
+                _logger.LogInformation(
+                    "Refresh token realizado com sucesso para funcionário: {FuncionarioId}",
+                    storedToken.FuncionarioId);
 
                 return new TokenDto
                 {
@@ -207,32 +228,31 @@ namespace ControleDeAcesso.Application.Services
             }
         }
 
-        public Task<bool> RevokeTokenAsync(string refreshToken)
+        public async Task<bool> RevokeTokenAsync(string refreshToken)
         {
             if (string.IsNullOrWhiteSpace(refreshToken))
             {
                 _logger.LogWarning("Tentativa de revogar refresh token vazio");
-                return Task.FromResult(false);
+                return false;
             }
 
             _logger.LogInformation("Revogando refresh token");
 
             try
             {
-                if (_refreshTokens.ContainsKey(refreshToken))
-                {
-                    _refreshTokens.Remove(refreshToken);
+                var revoked = await _refreshTokenRepository.RevokeAsync(
+                    HashRefreshToken(refreshToken),
+                    DateTime.UtcNow);
+                if (revoked)
                     _logger.LogInformation("Refresh token revogado com sucesso");
-                    return Task.FromResult(true);
-                }
-
-                _logger.LogWarning("Tentativa de revogar refresh token inválido");
-                return Task.FromResult(false);
+                else
+                    _logger.LogWarning("Tentativa de revogar refresh token inválido");
+                return revoked;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erro ao revogar refresh token");
-                return Task.FromResult(false);
+                throw;
             }
         }
 
@@ -313,5 +333,8 @@ namespace ControleDeAcesso.Application.Services
             rng.GetBytes(randomBytes);
             return Convert.ToBase64String(randomBytes);
         }
+
+        private static string HashRefreshToken(string refreshToken) =>
+            Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(refreshToken)));
     }
 }
