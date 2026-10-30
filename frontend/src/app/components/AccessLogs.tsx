@@ -106,7 +106,11 @@ export default function AccessLogs() {
       const result = getAccessResult(log);
       const displayName = getDisplayName(log).toLowerCase();
       const uid = (log.cartaoUid || log.uidInformado || '').toLowerCase();
-      const matchesSearch = !normalizedSearch || displayName.includes(normalizedSearch) || uid.includes(normalizedSearch);
+      const local = (log.local || '').toLowerCase();
+      const matchesSearch = !normalizedSearch ||
+        displayName.includes(normalizedSearch) ||
+        uid.includes(normalizedSearch) ||
+        local.includes(normalizedSearch);
       const matchesResult = resultFilter === 'all' || result === resultFilter;
 
       const date = new Date(log.dataHora);
@@ -185,7 +189,7 @@ export default function AccessLogs() {
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id="search"
-                  placeholder="Nome, UID ou cartão..."
+                  placeholder="Nome, UID, cartão ou local..."
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   className="pl-10"
@@ -257,6 +261,9 @@ export default function AccessLogs() {
                       <h3 className="font-medium">{getDisplayName(log)}</h3>
                       <p className="text-sm text-muted-foreground">
                         UID: {log.cartaoUid || log.uidInformado || '—'}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Local: {log.local || 'Entrada Principal'}
                       </p>
                       {log.motivo && (
                         <p className={`mt-1 text-sm ${granted ? 'text-green-600' : 'text-red-600'}`}>

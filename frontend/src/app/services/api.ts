@@ -123,6 +123,7 @@ export interface SolicitacaoCartaoDto {
 export interface LogAcessoDto {
   id: string;
   dataHora: string;
+  local?: string;
   cartaoId?: string | null;
   usuarioId?: string | null;
   uidInformado?: string | null;
@@ -381,8 +382,9 @@ api.interceptors.response.use(
   response => response,
   (error: AxiosError) => {
     const url = error.config?.url ?? '';
-    if (error.response?.status === 401 && !url.includes('/auth/login')) {
-      tokenStorage.clear();
+    if (error.response?.status === 401 &&
+      !url.includes('/auth/login') &&
+      !url.includes('/auth/logout')) {
       window.dispatchEvent(new Event('auth:logout'));
     }
     return Promise.reject(error);
