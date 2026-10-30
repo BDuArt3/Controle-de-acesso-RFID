@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Reflection;
 using ControleDeAcesso.Application.Repositories.Interfaces;
 using ControleDeAcesso.Application.Services;
 using ControleDeAcesso.Application.DTOs;
@@ -119,5 +120,93 @@ public class UsuarioServiceTests
 
         Assert.True(result);
         Assert.False(usuario.IsActive);
+        repository.Verify(item => item.UpdateAsync(usuario), Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_BlocksActiveCardsAndRecordsStatusHistory()
+    {
+        var activeCard = CreateCard("card-active", StatusCartao.Ativo);
+        var blockedCard = CreateCard("card-blocked", StatusCartao.Bloqueado);
+        var cancelledCard = CreateCard("card-cancelled", StatusCartao.Cancelado);
+        var usuario = CreateUsuarioWithCards("usuario-id", true, activeCard, blockedCard, cancelledCard);
+        var repository = new Mock<IUsuarioRepository>();
+        repository.Setup(item => item.GetByIdAsync(usuario.Id)).ReturnsAsync(usuario);
+        repository.Setup(item => item.UpdateAsync(usuario)).ReturnsAsync(usuario);
+        var service = new UsuarioService(repository.Object, NullLogger<UsuarioService>.Instance);
+
+        var result = await service.DeleteAsync(usuario.Id, "funcionario-id", "Vínculo encerrado");
+
+        Assert.True(result);
+        Assert.False(usuario.IsActive);
+        Assert.Equal(StatusCartao.Bloqueado, activeCard.Status);
+        Assert.Equal(StatusCartao.Bloqueado, blockedCard.Status);
+        Assert.Equal(StatusCartao.Cancelado, cancelledCard.Status);
+        var history = Assert.Single(activeCard.HistoricosStatus);
+        Assert.Equal(StatusCartao.Bloqueado, history.Status);
+        Assert.Equal("Vínculo encerrado", history.Motivo);
+        Assert.Equal("funcionario-id", history.AlteradoPorFuncionarioId);
+        Assert.Single(usuario.HistoricosStatus);
+        repository.Verify(item => item.UpdateAsync(usuario), Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_BlocksLegacyActiveCard_WhenUsuarioIsAlreadyInactive()
+    {
+        var activeCard = CreateCard("legacy-card", StatusCartao.Ativo);
+        var usuario = CreateUsuarioWithCards("usuario-inativo", false, activeCard);
+        var repository = new Mock<IUsuarioRepository>();
+        repository.Setup(item => item.GetByIdAsync(usuario.Id)).ReturnsAsync(usuario);
+        repository.Setup(item => item.UpdateAsync(usuario)).ReturnsAsync(usuario);
+        var service = new UsuarioService(repository.Object, NullLogger<UsuarioService>.Instance);
+
+        var result = await service.DeleteAsync(usuario.Id, "funcionario-id", "Correção de estado legado");
+
+        Assert.True(result);
+        Assert.False(usuario.IsActive);
+        Assert.Equal(StatusCartao.Bloqueado, activeCard.Status);
+        Assert.Equal("Correção de estado legado", Assert.Single(activeCard.HistoricosStatus).Motivo);
+        Assert.Empty(usuario.HistoricosStatus);
+        repository.Verify(item => item.UpdateAsync(usuario), Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_DoesNotUpdate_WhenUsuarioAndCardsAreAlreadyInactive()
+    {
+        var blockedCard = CreateCard("card-blocked", StatusCartao.Bloqueado);
+        var usuario = CreateUsuarioWithCards("usuario-inativo", false, blockedCard);
+        var repository = new Mock<IUsuarioRepository>();
+        repository.Setup(item => item.GetByIdAsync(usuario.Id)).ReturnsAsync(usuario);
+        var service = new UsuarioService(repository.Object, NullLogger<UsuarioService>.Instance);
+
+        var result = await service.DeleteAsync(usuario.Id, "funcionario-id", "Motivo");
+
+        Assert.True(result);
+        repository.Verify(item => item.UpdateAsync(It.IsAny<Usuario>()), Times.Never);
+    }
+
+    private static Usuario CreateUsuarioWithCards(string id, bool isActive, params Cartao[] cards)
+    {
+        var usuario = new Usuario { Id = id, Nome = "Aluno", IsActive = isActive };
+        var backingCollection = (List<Cartao>)typeof(Usuario)
+            .GetField("_cartoes", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(usuario)!;
+        backingCollection.AddRange(cards);
+        return usuario;
+    }
+
+    private static Cartao CreateCard(string id, StatusCartao status)
+    {
+        var cartao = new Cartao
+        {
+            Id = id,
+            Uid = id,
+            UsuarioId = "usuario-id"
+        };
+        if (status != StatusCartao.Ativo)
+        {
+            cartao.AlterarStatus(status);
+        }
+        return cartao;
     }
 }

@@ -6,6 +6,7 @@ using ControleDeAcesso.Worker;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -43,7 +44,10 @@ public sealed class WorkerApiClientTests
             SolicitacaoId = "request-2",
             Motivo = "Hardware indisponível"
         });
-        using var access = await api.VerifyAccessAsync("0123456789ABCDEF", "credential-guid");
+        using var access = await api.VerifyAccessAsync(
+            "0123456789ABCDEF",
+            "credential-guid",
+            "Portaria Bloco A");
 
         Assert.Equal(HttpStatusCode.OK, confirmed!.StatusCode);
         Assert.Equal(HttpStatusCode.OK, failed!.StatusCode);
@@ -67,7 +71,8 @@ public sealed class WorkerApiClientTests
                 "/api/acesso/verificar",
                 ApiKey,
                 ("uid", "0123456789ABCDEF"),
-                ("guid", "credential-guid")));
+                ("guid", "credential-guid"),
+                ("local", "Portaria Bloco A")));
     }
 
     [Fact]
@@ -125,7 +130,10 @@ public sealed class WorkerApiClientTests
         Assert.Throws<InvalidOperationException>(() =>
             new ControleDeAcesso.Worker.Worker(
                 NullLogger<ControleDeAcesso.Worker.Worker>.Instance,
-                configuration));
+                configuration,
+                new ControleDeAcesso.Worker.MedicaoTempoResposta(
+                    configuration,
+                    Mock.Of<IHostEnvironment>(e => e.ContentRootPath == AppContext.BaseDirectory))));
     }
 
     [Fact]

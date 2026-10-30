@@ -42,6 +42,7 @@ public sealed class LogAcessoExportTests
         var log = Assert.Single(logs);
         Assert.Equal(42L, log.Id);
         Assert.Equal("unknown-card", log.CartaoUid);
+        Assert.Equal(LogAcesso.LocalPadrao, log.Local);
         repository.Verify(repo => repo.GetByDataPeriodoAndStatusAsync(start, end, false), Times.Once);
         repository.Verify(repo => repo.GetByDataPeriodoAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>()), Times.Never);
     }
@@ -60,6 +61,33 @@ public sealed class LogAcessoExportTests
 
         Assert.Empty(logs);
         repository.Verify(repo => repo.GetByDataPeriodoAsync(start, end), Times.Once);
+    }
+
+    [Fact]
+    public async Task RegistrarTentativaAsyncPersistsAndReturnsLocation()
+    {
+        LogAcesso? persistedLog = null;
+        var repository = new Mock<ILogAcessoRepository>();
+        repository.Setup(repo => repo.CreateAsync(It.IsAny<LogAcesso>()))
+            .ReturnsAsync((LogAcesso log) =>
+            {
+                persistedLog = log;
+                return log;
+            });
+        var service = CreateService(repository.Object);
+
+        var result = await service.RegistrarTentativaAsync(new CreateLogAcessoDto
+        {
+            UidInformado = "credential-unknown",
+            Local = "  Entrada Bloco A  ",
+            AcessoPermitido = false,
+            Motivo = "Cartão não encontrado",
+            MotivoTipo = TipoMotivoAcesso.CartaoNaoEncontrado
+        });
+
+        Assert.NotNull(persistedLog);
+        Assert.Equal("Entrada Bloco A", persistedLog.Local);
+        Assert.Equal("Entrada Bloco A", result.Local);
     }
 
     [Fact]
@@ -105,6 +133,7 @@ public sealed class LogAcessoExportTests
                     Id = 7,
                     DataHora = start,
                     CartaoUid = "card-uid",
+                    Local = "Entrada Bloco A",
                     UsuarioNome = "=2+2;\"Nome\"",
                     AcessoPermitido = false,
                     Motivo = "Falha\r\nna validação"
@@ -120,7 +149,8 @@ public sealed class LogAcessoExportTests
 
         var csv = Encoding.UTF8.GetString(file.FileContents, Encoding.UTF8.GetPreamble().Length,
             file.FileContents.Length - Encoding.UTF8.GetPreamble().Length);
-        Assert.StartsWith("\"Id\";\"DataHoraUtc\";\"CartaoUid\"", csv);
+        Assert.StartsWith("\"Id\";\"DataHoraUtc\";\"CartaoUid\";\"UidInformado\";\"Local\"", csv);
+        Assert.Contains("\"Entrada Bloco A\"", csv);
         Assert.Contains("\"'=2+2;\"\"Nome\"\"\"", csv);
         Assert.Contains("\"Falha\r\nna validação\"", csv);
         Assert.Contains("\"Negado\"", csv);
@@ -130,7 +160,7 @@ public sealed class LogAcessoExportTests
             .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: false)
             .Cast<AuthorizeAttribute>()
             .Single();
-        Assert.Equal("AdminOrOperador", authorization.Policy);
+        Assert.Equal("TodosFuncionarios", authorization.Policy);
     }
 
     [Fact]
@@ -195,6 +225,7 @@ public sealed class LogAcessoExportTests
                 DataHora = date,
                 CartaoUid = "uid-nao-cadastrado",
                 UidInformado = "uid-nao-cadastrado",
+                Local = "Entrada Bloco A",
                 AcessoPermitido = false,
                 Motivo = "Cartão não encontrado"
             },
@@ -202,6 +233,7 @@ public sealed class LogAcessoExportTests
             {
                 DataHora = date,
                 CartaoUid = "uid-cartao-admin",
+                Local = "Portaria Principal",
                 AcessoPermitido = true,
                 UsuarioNome = "Admin",
                 UsuarioTipo = "Colaborador",
@@ -214,6 +246,7 @@ public sealed class LogAcessoExportTests
             {
                 "Data e hora (Brasília)",
                 "UID do cartão",
+                "Local",
                 "Usuário",
                 "Tipo de usuário",
                 "Resultado",
@@ -223,11 +256,13 @@ public sealed class LogAcessoExportTests
         Assert.Equal(2, rows.Count);
         Assert.Equal("01/10/2026 00:15:00", rows[0].DateTime);
         Assert.Equal("uid-nao-cadastrado", rows[0].CardUid);
+        Assert.Equal("Entrada Bloco A", rows[0].Local);
         Assert.Equal("Não identificado", rows[0].UserName);
         Assert.Equal("Não identificado", rows[0].UserType);
         Assert.Equal("Negado", rows[0].Result);
         Assert.Equal("01/10/2026 00:15:00", rows[1].DateTime);
         Assert.Equal("uid-cartao-admin", rows[1].CardUid);
+        Assert.Equal("Portaria Principal", rows[1].Local);
         Assert.Equal("Admin", rows[1].UserName);
         Assert.Equal("Colaborador", rows[1].UserType);
         Assert.Equal("Permitido", rows[1].Result);
