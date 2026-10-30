@@ -53,7 +53,7 @@ export default function FuncionarioList() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [reasonDialog, setReasonDialog] = useState<{ open: boolean; funcionario: FuncionarioDto | null; mode: 'delete' | 'activate' | null }>({
+  const [reasonDialog, setReasonDialog] = useState<{ open: boolean; funcionario: FuncionarioDto | null; mode: 'deactivate' | 'delete' | 'activate' | null }>({
     open: false,
     funcionario: null,
     mode: null,
@@ -166,7 +166,7 @@ export default function FuncionarioList() {
     }
   };
 
-  const openReasonDialog = (funcionario: FuncionarioDto, mode: 'delete' | 'activate') => {
+  const openReasonDialog = (funcionario: FuncionarioDto, mode: 'deactivate' | 'delete' | 'activate') => {
     setReason('');
     setReasonDialog({ open: true, funcionario, mode });
   };
@@ -191,12 +191,19 @@ export default function FuncionarioList() {
     setBusyId(reasonDialog.funcionario.id);
     setError('');
     try {
-      if (reasonDialog.mode === 'delete') {
-        await funcionarioService.delete(reasonDialog.funcionario.id, reason.trim());
-      } else {
+      if (reasonDialog.mode === 'activate') {
         await funcionarioService.ativar(reasonDialog.funcionario.id, reason.trim());
+      } else {
+        await funcionarioService.delete(reasonDialog.funcionario.id, reason.trim());
       }
-      showToast('Status do funcionário atualizado.', 'success');
+      showToast(
+        reasonDialog.mode === 'delete'
+          ? 'Funcionário excluído logicamente com sucesso.'
+          : reasonDialog.mode === 'deactivate'
+            ? 'Funcionário desativado com sucesso.'
+            : 'Funcionário reativado com sucesso.',
+        'success',
+      );
       await load();
       closeReasonDialog();
     } catch (failure) {
@@ -297,7 +304,7 @@ export default function FuncionarioList() {
                               size="icon"
                               aria-label={active ? `Desativar ${item.nomeFuncionario}` : `Reativar ${item.nomeFuncionario}`}
                               disabled={saving || busyId !== null}
-                              onClick={() => openReasonDialog(item, active ? 'delete' : 'activate')}
+                              onClick={() => openReasonDialog(item, active ? 'deactivate' : 'activate')}
                             >
                               {active ? <Lock className="size-4 text-red-600" /> : <Unlock className="size-4 text-green-600" />}
                             </Button>
@@ -381,9 +388,17 @@ export default function FuncionarioList() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {reasonDialog.mode === 'activate' ? 'Reativar funcionário' : 'Desativar funcionário'}
+              {reasonDialog.mode === 'activate'
+                ? 'Reativar funcionário'
+                : reasonDialog.mode === 'delete'
+                  ? 'Excluir funcionário'
+                  : 'Desativar funcionário'}
             </DialogTitle>
-            <DialogDescription>Informe um motivo para registrar a alteração de status.</DialogDescription>
+            <DialogDescription>
+              {reasonDialog.mode === 'delete'
+                ? 'A exclusão é lógica: o funcionário será desativado e seus cartões ativos serão bloqueados. Informe o motivo para auditoria.'
+                : 'Informe um motivo para registrar a alteração de status.'}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor="reason">Motivo *</Label>

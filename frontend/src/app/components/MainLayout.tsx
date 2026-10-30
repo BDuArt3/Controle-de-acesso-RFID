@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { Briefcase, Building2, ChevronDown, CreditCard, FileText, LayoutDashboard, LogOut, Menu, Shield, Users } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { authService, errorMessage, type RoleName } from '../services/api';
+import { type RoleName } from '../services/api';
 import { Button } from './ui/button';
 import {
   DropdownMenu,
@@ -53,24 +53,34 @@ export default function MainLayout() {
   const visibleItems = sidebarItems.filter(item => item.roles.includes(currentUser?.role ?? 'Visualizador'));
 
   const handleNavigate = (route: Route, editingUserId?: string) => {
+    const role = currentUser?.role ?? 'Visualizador';
+    if (route === 'funcionarios' && role !== 'Admin') {
+      showToast('Acesso restrito para administradores.', 'error');
+      setNavigation({ route: 'dashboard' });
+      return;
+    }
+    if (route === 'user-form') {
+      if (editingUserId && role !== 'Admin') {
+        showToast('Apenas administradores podem editar usuários.', 'error');
+        setNavigation({ route: 'users' });
+        return;
+      }
+      if (!editingUserId && role !== 'Admin' && role !== 'Operador') {
+        showToast('Apenas administradores e operadores podem cadastrar usuários.', 'error');
+        setNavigation({ route: 'users' });
+        return;
+      }
+    }
     setNavigation({ route, editingUserId });
   };
 
   const onLogout = async () => {
-    const refreshToken = currentUser?.refreshToken || localStorage.getItem('authRefreshToken');
-    try {
-      if (refreshToken) {
-        await authService.logout(refreshToken);
-      }
-    } catch (error) {
-      showToast(errorMessage(error), 'error');
-    } finally {
-      logout();
-      navigate('/login', { replace: true });
-    }
+    await logout();
+    navigate('/login', { replace: true });
   };
 
   const renderContent = () => {
+    const role = currentUser?.role ?? 'Visualizador';
     switch (navigation.route) {
       case 'dashboard':
         return <Dashboard />;
@@ -79,8 +89,17 @@ export default function MainLayout() {
       case 'logs':
         return <AccessLogs />;
       case 'user-form':
+        if (navigation.editingUserId && role !== 'Admin') {
+          return <UserManagement onNavigate={handleNavigate} />;
+        }
+        if (!navigation.editingUserId && role !== 'Admin' && role !== 'Operador') {
+          return <UserManagement onNavigate={handleNavigate} />;
+        }
         return <UserForm editingUserId={navigation.editingUserId} onNavigate={handleNavigate} />;
       case 'funcionarios':
+        if (role !== 'Admin') {
+          return <Dashboard />;
+        }
         return <FuncionarioList />;
       case 'cartoes':
         return <CartaoList />;

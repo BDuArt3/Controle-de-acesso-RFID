@@ -1,12 +1,14 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   authService,
+  errorMessage,
   roleFromLoginType,
   tokenStorage,
   type AuthMeResponse,
   type AuthTokens,
   type RoleName,
 } from '../services/api';
+import { showToast } from '../components/Toast';
 
 export interface AuthUser {
   token: string;
@@ -47,7 +49,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, senha: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
@@ -57,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => readStoredUser());
   const [isLoading, setIsLoading] = useState(true);
   const generation = useRef(0);
+  const logoutPromise = useRef<Promise<void> | null>(null);
 
   const clearSession = useCallback(() => {
     generation.current += 1;
@@ -65,8 +68,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  const logout = useCallback(() => {
-    clearSession();
+  const logout = useCallback((): Promise<void> => {
+    if (logoutPromise.current) {
+      return logoutPromise.current;
+    }
+
+    const refreshToken = tokenStorage.getRefreshToken();
+    const operation = (async () => {
+      try {
+        if (refreshToken) {
+          await authService.logout(refreshToken);
+        }
+      } catch (error) {
+        showToast(
+          `A sessão local foi encerrada, mas não foi possível revogar o token no servidor. ${errorMessage(error)}`,
+          'error',
+        );
+      } finally {
+        if (!refreshToken || tokenStorage.getRefreshToken() === refreshToken) {
+          clearSession();
+        }
+      }
+    })();
+
+    logoutPromise.current = operation.finally(() => {
+      logoutPromise.current = null;
+    });
+    return logoutPromise.current;
   }, [clearSession]);
 
   const refreshUser = useCallback(async () => {
@@ -95,18 +123,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     } catch {
       if (current === generation.current) {
-        clearSession();
+        await logout();
       }
     } finally {
       if (current === generation.current) {
         setIsLoading(false);
       }
     }
-  }, [clearSession]);
+  }, [clearSession, logout]);
 
   useEffect(() => {
     const handleLogout = () => {
-      clearSession();
+      void logout();
     };
 
     window.addEventListener('auth:logout', handleLogout);
@@ -115,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       window.removeEventListener('auth:logout', handleLogout);
     };
-  }, [clearSession, refreshUser]);
+  }, [clearSession, logout, refreshUser]);
 
   useEffect(() => {
     if (!user?.expiration) {
@@ -124,14 +152,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const check = () => {
       if (Date.now() >= Date.parse(user.expiration)) {
-        clearSession();
+        void logout();
       }
     };
 
     check();
     const timer = window.setInterval(check, 1000);
     return () => window.clearInterval(timer);
-  }, [clearSession, user]);
+  }, [logout, user]);
 
   const login = async (email: string, senha: string) => {
     const { data } = await authService.login(email, senha);

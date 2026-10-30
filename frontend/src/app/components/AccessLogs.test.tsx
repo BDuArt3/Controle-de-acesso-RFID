@@ -49,6 +49,31 @@ describe('exportação dos logs de acesso', () => {
     expect(items).toEqual(['CSV', 'PDF']);
   });
 
+  it('exibe e permite buscar logs pelo ponto de acesso', async () => {
+    vi.mocked(logAcessoService.list).mockResolvedValue({
+      data: [{
+        id: 'log-1',
+        dataHora: '2026-10-30T12:00:00Z',
+        local: 'Entrada Bloco A',
+        cartaoUid: 'ABCDEF0123456789',
+        acessoPermitido: true,
+        motivo: 'Acesso autorizado',
+        motivoTipo: 1,
+      }],
+    } as any);
+
+    render(<AccessLogs />);
+
+    expect(await screen.findByText('Local: Entrada Bloco A')).toBeInTheDocument();
+    const search = screen.getByLabelText('Buscar');
+    await userEvent.type(search, 'Bloco A');
+    expect(screen.getByText('1 registro(s) encontrado(s)')).toBeInTheDocument();
+
+    await userEvent.clear(search);
+    await userEvent.type(search, 'Portaria');
+    expect(screen.getByText('0 registro(s) encontrado(s)')).toBeInTheDocument();
+  });
+
   it.each([
     ['CSV', 'csv'],
     ['PDF', 'pdf'],

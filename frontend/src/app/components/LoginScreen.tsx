@@ -7,6 +7,7 @@ import { Label } from './ui/label';
 import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
 import { Eye, EyeOff, Building2 } from 'lucide-react';
+import { showToast } from './Toast';
 
 interface LoginScreenProps {
   onLogin: (username: string) => void;
@@ -35,7 +36,9 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
       await auth.login(username.trim(), senha);
       onLogin(username);
     } catch (error) {
-      setError(errorMessage(error));
+      const message = errorMessage(error);
+      setError(message);
+      showToast(message, 'error');
     } finally {
       setIsLoading(false);
     }

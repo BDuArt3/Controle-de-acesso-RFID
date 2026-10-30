@@ -193,17 +193,23 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         <Badge variant="outline">{userTypeLabel(user.tipo)}</Badge>
                         {user.isFuncionario && (
-                          <Badge
-                            variant="secondary"
-                            title="Funcionário – gerencie na tela de Funcionários"
-                            className="cursor-pointer"
-                            role="link"
-                            tabIndex={0}
-                            onClick={() => onNavigate('funcionarios')}
-                            onKeyDown={(event) => { if (event.key === 'Enter') onNavigate('funcionarios'); }}
-                          >
-                            Funcionário – gerencie na tela de Funcionários
-                          </Badge>
+                          canAdminister ? (
+                            <Badge
+                              variant="secondary"
+                              title="Funcionário – gerencie na tela de Funcionários"
+                              className="cursor-pointer"
+                              role="link"
+                              tabIndex={0}
+                              onClick={() => onNavigate('funcionarios')}
+                              onKeyDown={(event) => { if (event.key === 'Enter') onNavigate('funcionarios'); }}
+                            >
+                              Funcionário – gerencie na tela de Funcionários
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" title="Funcionário">
+                              Funcionário
+                            </Badge>
+                          )
                         )}
                         {user.email && <span className="text-xs text-muted-foreground">{user.email}</span>}
                         <span className="text-xs text-muted-foreground">
@@ -247,7 +253,7 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                             )}
                           </>
                         )}
-                        {user.isFuncionario && (
+                        {user.isFuncionario && canAdminister && (
                           <DropdownMenuItem onClick={() => onNavigate('funcionarios')}>
                             <Briefcase className="mr-2 h-4 w-4" />
                             Gerenciar em Funcionários
