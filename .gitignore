@@ -220,4 +220,8 @@ CodeCoverage/
 appsettings.json
 src\Api\appsettings.Development.json
 appsettings.Development.json
- 
+
+# Telemetria e medições geradas em tempo de execução
+medicoes-tempo-resposta*.json
+medicoes-tempo-resposta*.jsonl
+*.corrompido-*
