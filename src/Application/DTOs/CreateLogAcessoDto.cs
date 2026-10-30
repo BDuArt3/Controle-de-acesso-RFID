@@ -18,6 +18,9 @@ namespace ControleDeAcesso.Application.DTOs
         [JsonIgnore]
         public string? UidInformado { get; set; }
 
+        [StringLength(100, ErrorMessage = "Local deve ter no máximo 100 caracteres")]
+        public string Local { get; set; } = LogAcesso.LocalPadrao;
+
         [Required(ErrorMessage = "Campo AcessoPermitido é obrigatório")]
         public bool AcessoPermitido { get; set; }
 

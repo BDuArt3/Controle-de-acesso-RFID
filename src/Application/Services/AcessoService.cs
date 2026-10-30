@@ -24,9 +24,20 @@ namespace ControleDeAcesso.Application.Services
             _logger = logger;
         }
 
-        public async Task<AccessCheckResponseDto> CheckAccessAsync(string cardUid)
+        public async Task<AccessCheckResponseDto> CheckAccessAsync(
+            string cardUid,
+            string local = LogAcesso.LocalPadrao)
         {
-            _logger.LogInformation("Iniciando verificação de acesso para cartão UID: {CardUid}", cardUid);
+            local = string.IsNullOrWhiteSpace(local) ? LogAcesso.LocalPadrao : local.Trim();
+            if (local.Length > 100)
+            {
+                throw new ArgumentException("Local deve ter no máximo 100 caracteres.", nameof(local));
+            }
+
+            _logger.LogInformation(
+                "Iniciando verificação de acesso para cartão UID: {CardUid}, Local: {Local}",
+                cardUid,
+                local);
             Cartao? cartao = null;
 
             try
@@ -37,7 +48,12 @@ namespace ControleDeAcesso.Application.Services
                     _logger.LogWarning("Tentativa de verificação de acesso com UID do cartão vazio ou nulo");
                     
                     // Registrar tentativa com erro
-                    await RegistrarTentativaAcessoAsync(cardUid, false, TipoMotivoAcesso.UidObrigatorio, erroUidVazio);
+                    await RegistrarTentativaAcessoAsync(
+                        cardUid,
+                        false,
+                        TipoMotivoAcesso.UidObrigatorio,
+                        erroUidVazio,
+                        local: local);
                     
                     return new AccessCheckResponseDto 
                     { 
@@ -56,7 +72,12 @@ namespace ControleDeAcesso.Application.Services
                     _logger.LogWarning("Acesso negado: Cartão não encontrado. UID: {CardUid}", cardUid);
                     
                     // Registrar tentativa de acesso negado
-                    await RegistrarTentativaAcessoAsync(cardUid, false, TipoMotivoAcesso.CartaoNaoEncontrado, motivoCartaoNaoEncontrado);
+                    await RegistrarTentativaAcessoAsync(
+                        cardUid,
+                        false,
+                        TipoMotivoAcesso.CartaoNaoEncontrado,
+                        motivoCartaoNaoEncontrado,
+                        local: local);
                     
                     return new AccessCheckResponseDto 
                     { 
@@ -72,7 +93,13 @@ namespace ControleDeAcesso.Application.Services
                     _logger.LogWarning("Acesso negado: Cartão inativo. UID: {CardUid}", cardUid);
                     
                     // Registrar tentativa de acesso negado
-                    await RegistrarTentativaAcessoAsync(cardUid, false, TipoMotivoAcesso.CartaoDesativado, motivoCartaoInativo, cartao);
+                    await RegistrarTentativaAcessoAsync(
+                        cardUid,
+                        false,
+                        TipoMotivoAcesso.CartaoDesativado,
+                        motivoCartaoInativo,
+                        cartao,
+                        local);
                     
                     return new AccessCheckResponseDto 
                     { 
@@ -88,7 +115,13 @@ namespace ControleDeAcesso.Application.Services
                     _logger.LogWarning("Acesso negado: Usuário não encontrado para o cartão. UID: {CardUid}", cardUid);
                     
                     // Registrar tentativa de acesso negado
-                    await RegistrarTentativaAcessoAsync(cardUid, false, TipoMotivoAcesso.UsuarioNaoEncontrado, motivoUsuarioNaoEncontrado, cartao);
+                    await RegistrarTentativaAcessoAsync(
+                        cardUid,
+                        false,
+                        TipoMotivoAcesso.UsuarioNaoEncontrado,
+                        motivoUsuarioNaoEncontrado,
+                        cartao,
+                        local);
                     
                     return new AccessCheckResponseDto 
                     { 
@@ -122,7 +155,8 @@ namespace ControleDeAcesso.Application.Services
                         false,
                         TipoMotivoAcesso.CartaoExpirado,
                         motivoCartaoExpirado,
-                        cartao);
+                        cartao,
+                        local);
 
                     return new AccessCheckResponseDto
                     {
@@ -138,7 +172,13 @@ namespace ControleDeAcesso.Application.Services
                         cardUid, cartao.Usuario.Id);
                     
                     // Registrar tentativa de acesso negado
-                    await RegistrarTentativaAcessoAsync(cardUid, false, TipoMotivoAcesso.UsuarioDesativado, motivoUsuarioInativo, cartao);
+                    await RegistrarTentativaAcessoAsync(
+                        cardUid,
+                        false,
+                        TipoMotivoAcesso.UsuarioDesativado,
+                        motivoUsuarioInativo,
+                        cartao,
+                        local);
                     
                     return new AccessCheckResponseDto 
                     { 
@@ -153,7 +193,13 @@ namespace ControleDeAcesso.Application.Services
                     cardUid, cartao.Usuario.Nome, cartao.Usuario.Tipo);
                 
                 // Registrar tentativa de acesso permitido
-                await RegistrarTentativaAcessoAsync(cardUid, true, TipoMotivoAcesso.AcessoAutorizado, motivoAcessoPermitido, cartao);
+                await RegistrarTentativaAcessoAsync(
+                    cardUid,
+                    true,
+                    TipoMotivoAcesso.AcessoAutorizado,
+                    motivoAcessoPermitido,
+                    cartao,
+                    local);
                 
                 return new AccessCheckResponseDto 
                 { 
@@ -186,7 +232,13 @@ namespace ControleDeAcesso.Application.Services
                 // Registrar tentativa com erro
                 try
                 {
-                    await RegistrarTentativaAcessoAsync(cardUid, false, TipoMotivoAcesso.ErroInterno, "Erro interno ao verificar o acesso.", cartao);
+                    await RegistrarTentativaAcessoAsync(
+                        cardUid,
+                        false,
+                        TipoMotivoAcesso.ErroInterno,
+                        "Erro interno ao verificar o acesso.",
+                        cartao,
+                        local);
                 }
                 catch (FalhaAuditoriaException logEx)
                 {
@@ -211,7 +263,8 @@ namespace ControleDeAcesso.Application.Services
             bool acessoPermitido,
             TipoMotivoAcesso motivoTipo,
             string motivo,
-            Cartao? cartao = null)
+            Cartao? cartao = null,
+            string local = LogAcesso.LocalPadrao)
         {
             var createLogDto = new CreateLogAcessoDto
             {
@@ -220,6 +273,7 @@ namespace ControleDeAcesso.Application.Services
                 UidInformado = cartao is null && !string.IsNullOrWhiteSpace(cardUid)
                     ? cardUid.Trim()
                     : null,
+                Local = local,
                 AcessoPermitido = acessoPermitido,
                 MotivoTipo = motivoTipo,
                 Motivo = motivo

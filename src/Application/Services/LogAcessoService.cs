@@ -83,6 +83,9 @@ namespace ControleDeAcesso.Application.Services
                     UsuarioId = usuarioId,
                     Usuario = cartaoParaLog?.Usuario,
                     UidInformado = uidInformado,
+                    Local = string.IsNullOrWhiteSpace(createLogAcessoDto.Local)
+                        ? LogAcesso.LocalPadrao
+                        : createLogAcessoDto.Local.Trim(),
                     AcessoPermitido = createLogAcessoDto.AcessoPermitido,
                     Motivo = createLogAcessoDto.Motivo?.Trim() ?? string.Empty,
                     MotivoTipo = createLogAcessoDto.MotivoTipo,
@@ -419,6 +422,7 @@ namespace ControleDeAcesso.Application.Services
             {
                 Id = logAcesso.Id,
                 DataHora = DateTime.SpecifyKind(logAcesso.DataHora, DateTimeKind.Utc),
+                Local = logAcesso.Local,
                 CartaoId = logAcesso.CartaoId,
                 UsuarioId = logAcesso.UsuarioId,
                 UidInformado = logAcesso.UidInformado,

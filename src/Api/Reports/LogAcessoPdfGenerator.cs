@@ -20,6 +20,7 @@ internal static class LogAcessoPdfGenerator
     [
         "Data e hora (Brasília)",
         "UID do cartão",
+        "Local",
         "Usuário",
         "Tipo de usuário",
         "Resultado",
@@ -74,6 +75,7 @@ internal static class LogAcessoPdfGenerator
                         {
                             columns.RelativeColumn(1.25f);
                             columns.RelativeColumn(1.1f);
+                            columns.RelativeColumn(1.1f);
                             columns.RelativeColumn(1.6f);
                             columns.RelativeColumn(1.1f);
                             columns.RelativeColumn(0.9f);
@@ -123,6 +125,7 @@ internal static class LogAcessoPdfGenerator
         return logs.Select(log => new LogAcessoPdfRow(
             ConvertFromUtc(log.DataHora).ToString("dd/MM/yyyy HH:mm:ss", culture),
             GetCardUid(log),
+            GetValueOrFallback(log.Local, "Não informado"),
             GetValueOrFallback(log.UsuarioNome, "Não identificado"),
             GetValueOrFallback(log.UsuarioTipo, "Não identificado"),
             log.AcessoPermitido ? "Permitido" : "Negado",
@@ -193,6 +196,7 @@ internal static class LogAcessoPdfGenerator
 internal sealed record LogAcessoPdfRow(
     string DateTime,
     string CardUid,
+    string Local,
     string UserName,
     string UserType,
     string Result,
@@ -202,6 +206,7 @@ internal sealed record LogAcessoPdfRow(
     [
         DateTime,
         CardUid,
+        Local,
         UserName,
         UserType,
         Result,

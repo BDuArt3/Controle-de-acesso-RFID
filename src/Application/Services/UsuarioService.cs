@@ -196,16 +196,43 @@ namespace ControleDeAcesso.Application.Services
 
                 EnsureNotFuncionario(usuario);
 
+                var dataHoraAlteracao = DateTime.UtcNow;
+                var houveAlteracao = false;
+
                 if (usuario.IsActive)
                 {
                     usuario.IsActive = false;
                     usuario.HistoricosStatus.Add(new HistoricoStatusUsuario
                     {
                         IsActive = false,
-                        DataHora = DateTime.UtcNow,
+                        DataHora = dataHoraAlteracao,
                         Motivo = motivo.Trim(),
                         AlteradoPorFuncionarioId = funcionarioResponsavelId
                     });
+                    houveAlteracao = true;
+                }
+
+                foreach (var cartao in usuario.Cartoes)
+                {
+                    if (cartao.Status != StatusCartao.Ativo ||
+                        !cartao.AlterarStatus(StatusCartao.Bloqueado))
+                    {
+                        continue;
+                    }
+
+                    cartao.HistoricosStatus.Add(new HistoricoStatusCartao
+                    {
+                        CartaoId = cartao.Id,
+                        Status = StatusCartao.Bloqueado,
+                        DataHora = dataHoraAlteracao,
+                        Motivo = motivo.Trim(),
+                        AlteradoPorFuncionarioId = funcionarioResponsavelId
+                    });
+                    houveAlteracao = true;
+                }
+
+                if (houveAlteracao)
+                {
                     await _usuarioRepository.UpdateAsync(usuario);
                 }
 

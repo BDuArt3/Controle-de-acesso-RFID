@@ -18,6 +18,7 @@ namespace ControleDeAcesso.Infrastructure.Data
         public DbSet<HistoricoStatusUsuario> HistoricoStatusUsuario => Set<HistoricoStatusUsuario>();
         public DbSet<HistoricoStatusFuncionario> HistoricoStatusFuncionario => Set<HistoricoStatusFuncionario>();
         public DbSet<SolicitacaoGravacaoCartao> SolicitacoesGravacaoCartao => Set<SolicitacaoGravacaoCartao>();
+        public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -165,6 +166,10 @@ namespace ControleDeAcesso.Infrastructure.Data
             {
                 entity.HasKey(log => log.Id);
                 entity.Property(log => log.DataHora).IsRequired();
+                entity.Property(log => log.Local)
+                    .IsRequired()
+                    .HasMaxLength(100)
+                    .HasDefaultValue(LogAcesso.LocalPadrao);
                 entity.Property(log => log.CartaoId).HasMaxLength(36);
                 entity.Property(log => log.UsuarioId).HasMaxLength(36);
                 entity.Property(log => log.UidInformado).HasMaxLength(50);
@@ -312,6 +317,26 @@ namespace ControleDeAcesso.Infrastructure.Data
                 entity.ToTable(table => table.HasCheckConstraint(
                     "CK_SolicitacoesGravacaoCartao_Status",
                     "[Status] IN (0, 1, 2, 3, 4)"));
+            });
+
+            modelBuilder.Entity<RefreshToken>(entity =>
+            {
+                entity.HasKey(token => token.TokenHash);
+                entity.Property(token => token.TokenHash).IsRequired().HasMaxLength(64);
+                entity.Property(token => token.FuncionarioId).IsRequired().HasMaxLength(36);
+                entity.Property(token => token.CreatedAtUtc).IsRequired();
+                entity.Property(token => token.ExpiresAtUtc).IsRequired();
+                entity.Property(token => token.RevokedAtUtc);
+                entity.Property(token => token.ReplacedByTokenHash).HasMaxLength(64);
+
+                entity.HasIndex(token => token.ExpiresAtUtc)
+                    .HasDatabaseName("IX_RefreshTokens_ExpiresAtUtc");
+
+                entity.HasOne<Funcionario>()
+                    .WithMany()
+                    .HasForeignKey(token => token.FuncionarioId)
+                    .HasConstraintName("FK_RefreshTokens_Funcionarios_FuncionarioId")
+                    .OnDelete(DeleteBehavior.NoAction);
             });
         }
     }

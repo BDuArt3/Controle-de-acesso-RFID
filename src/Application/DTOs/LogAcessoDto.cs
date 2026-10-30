@@ -6,6 +6,7 @@ namespace ControleDeAcesso.Application.DTOs
     {
         public long Id { get; set; }
         public DateTime DataHora { get; set; }
+        public string Local { get; set; } = LogAcesso.LocalPadrao;
         public string? CartaoId { get; set; }
         public string? UsuarioId { get; set; }
         public string? UidInformado { get; set; }
