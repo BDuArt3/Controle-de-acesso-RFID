@@ -1,4 +1,12 @@
 # Controle-de-acesso-RFID
+
+Sistema de controle de acesso RFID com API ASP.NET Core, serviço Worker conectado
+ao Arduino e persistência em SQL Server.
+
+Para entender a arquitetura, as regras de negócio, as tecnologias, os pontos
+importantes do código e se preparar para uma apresentação, consulte o
+[Guia de estudo e apresentação](docs/GUIA_DE_ESTUDO_E_APRESENTACAO.md).
+
 ```mermaid
 
 graph TD
