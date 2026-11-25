@@ -25,9 +25,10 @@ comportamento pode ser demonstrado.
 - Controlar emissão e reemissão de cartões com confirmação do dispositivo.
 - Manter histórico de mudanças para apoiar auditoria e investigação.
 
-O repositório contém backend, Worker, firmware Arduino e testes. Não há um
-projeto de interface web incluído na solution; a API está preparada para ser
-consumida por um frontend externo.
+O repositório contém backend, Worker, firmware Arduino e testes. A interface
+web (React) fica em um repositório separado,
+[Controle-de-acesso-RFID-Frontend](https://github.com/BDuArt3/Controle-de-acesso-RFID-Frontend),
+que consome esta API.
 
 ## 2. Arquitetura e fluxo ponta a ponta
 
@@ -339,12 +340,13 @@ Os nomes abaixo são chaves de configuração, não valores para publicar:
   caracteres e usa `COM4` como porta padrão se nenhuma porta for configurada.
 
 Não copie valores de senha, connection string, chave JWT ou chave do Worker
-para slides, README, issues ou logs. O arquivo
-[appsettings.Development.json](../src/Api/appsettings.Development.json) contém
-valores de configuração sensíveis no repositório. Se forem credenciais reais,
-rotacione-os antes de compartilhar/implantar e mova segredos para User Secrets,
-variáveis de ambiente ou configuração segura do Azure; não inclua os valores
-neste guia.
+para slides, README, issues ou logs. Os arquivos `appsettings.json` e
+`appsettings.*.json` reais ficam fora do git (estão no `.gitignore`); o
+repositório traz apenas modelos com valores fictícios:
+[API](../src/Api/appsettings.Example.json) e
+[Worker](../src/Worker/appsettings.Example.json). Em produção, os segredos
+devem vir de User Secrets, variáveis de ambiente ou da configuração segura do
+Azure.
 
 ### Inicialização e banco
 
@@ -491,7 +493,7 @@ cliente HTTP do Worker também têm testes específicos.
 
 ### “O que o projeto ainda não implementa?”
 
-O repositório não contém frontend. Também não há publicação automática do
+O frontend fica no repositório separado citado na seção 1. Também não há publicação automática do
 Worker/firmware pelo pipeline; o Worker depende de uma máquina conectada ao
 Arduino. O código observado não aplica migrations automaticamente no startup.
 

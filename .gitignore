@@ -225,3 +225,15 @@ appsettings.Development.json
 medicoes-tempo-resposta*.json
 medicoes-tempo-resposta*.jsonl
 *.corrompido-*
+
+# Configurações locais de editor e perfis de publicação (contêm dados da conta Azure)
+.vscode/
+*.pubxml
+**/Properties/PublishProfiles/
+**/Properties/ServiceDependencies/
+**/Properties/serviceDependencies*.json
+
+# Certificados e chaves
+*.pem
+*.key
+*.p12
