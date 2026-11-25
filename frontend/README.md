@@ -22,7 +22,7 @@ React 18, TypeScript, Vite, Tailwind CSS, componentes shadcn/ui (Radix), Axios e
 
 ## Como rodar
 
-Pré-requisitos: Node.js 20+ e a API rodando (veja o [README principal](../README.md)).
+Pré-requisitos: Node.js 22+ e a API rodando (veja o [README principal](../README.md)).
 
 ```powershell
 cd frontend

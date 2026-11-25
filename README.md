@@ -125,7 +125,7 @@ Sinalização: LED verde no pino 7, LED vermelho no pino 6 e relé da catraca no
 - [.NET SDK 10](https://dotnet.microsoft.com/download)
 - SQL Server (Developer, Express ou em Docker)
 - Para o hardware: Arduino IDE, Arduino UNO, leitor MFRC522 e cartões MIFARE
-- Para a interface: Node.js 20+
+- Para a interface: Node.js 22+
 
 ### 1. Configurar a API
 
