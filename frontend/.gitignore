@@ -1,0 +1,19 @@
+# Dependências
+node_modules/
+
+# Build gerado pelo Vite
+dist/
+.verification-build-*/
+
+# Variáveis de ambiente (use .env.example como modelo)
+.env
+.env.*
+!.env.example
+
+# Logs e arquivos de editor
+*.log
+npm-debug.log*
+.vscode/
+.idea/
+.DS_Store
+coverage/
