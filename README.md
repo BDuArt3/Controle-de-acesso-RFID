@@ -200,6 +200,10 @@ Os testes não precisam de SQL Server nem de Arduino: usam SQLite em memória e 
 
 ## Estrutura de pastas
 
+Cada parte tem um README próprio com os detalhes:
+[API](src/Api/README.md) · [Worker](src/Worker/README.md) · [Arduino](src/Arduino/README.md) · [Frontend](frontend/README.md) · [Testes](tests/ControleDeAcesso.Tests/README.md)
+
+
 ```
 Controle-de-acesso-RFID/
 ├── src/
