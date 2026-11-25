@@ -53,7 +53,7 @@ describe('exportação dos logs de acesso', () => {
     vi.mocked(logAcessoService.list).mockResolvedValue({
       data: [{
         id: 'log-1',
-        dataHora: '2026-10-30T12:00:00Z',
+        dataHora: new Date().toISOString(), // a tela abre filtrando os logs de hoje
         local: 'Entrada Bloco A',
         cartaoUid: 'ABCDEF0123456789',
         acessoPermitido: true,

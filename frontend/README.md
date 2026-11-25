@@ -2,8 +2,7 @@
 
 Interface web do sistema de controle de acesso por cartão RFID. Aqui o funcionário faz login, cadastra pessoas e funcionários, emite cartões e acompanha os logs de acesso.
 
-> Este repositório é só a interface. O sistema completo (API ASP.NET Core, Worker .NET, firmware Arduino e banco SQL Server), com a arquitetura e as instruções, está no repositório principal:
-> **[BDuArt3/Controle-de-acesso-RFID](https://github.com/BDuArt3/Controle-de-acesso-RFID)**
+> Esta pasta é só a interface. A arquitetura do sistema completo (Arduino, Worker .NET, API ASP.NET Core e SQL Server) e o passo a passo para rodar tudo estão no [README principal](../README.md).
 
 Trabalho de Conclusão de Curso – Bacharelado em Sistemas de Informação, UNIPAM (2025).
 
@@ -23,9 +22,10 @@ React 18, TypeScript, Vite, Tailwind CSS, componentes shadcn/ui (Radix), Axios e
 
 ## Como rodar
 
-Pré-requisitos: Node.js 20+ e a API do [repositório principal](https://github.com/BDuArt3/Controle-de-acesso-RFID) rodando.
+Pré-requisitos: Node.js 20+ e a API rodando (veja o [README principal](../README.md)).
 
 ```powershell
+cd frontend
 npm install
 copy .env.example .env.api-local
 npm run dev
@@ -45,4 +45,4 @@ Outros comandos:
 
 **Bruno Duarte**: [LinkedIn](https://www.linkedin.com/in/brunoduartes) · [GitHub](https://github.com/BDuArt3)
 
-Licença MIT. Componentes de terceiros listados em [src/app/Attributions.md](src/app/Attributions.md).
+Licença MIT (veja [LICENSE](../LICENSE)). Componentes de terceiros listados em [src/app/Attributions.md](src/app/Attributions.md).

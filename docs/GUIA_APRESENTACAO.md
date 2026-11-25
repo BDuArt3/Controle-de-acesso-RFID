@@ -25,10 +25,8 @@ comportamento pode ser demonstrado.
 - Controlar emissão e reemissão de cartões com confirmação do dispositivo.
 - Manter histórico de mudanças para apoiar auditoria e investigação.
 
-O repositório contém backend, Worker, firmware Arduino e testes. A interface
-web (React) fica em um repositório separado,
-[Controle-de-acesso-RFID-Frontend](https://github.com/BDuArt3/Controle-de-acesso-RFID-Frontend),
-que consome esta API.
+O repositório contém backend, Worker, firmware Arduino, testes e a interface
+web em React, na pasta [`frontend/`](../frontend), que consome esta API.
 
 ## 2. Arquitetura e fluxo ponta a ponta
 
@@ -363,13 +361,15 @@ das tabelas novas.
 
 ### CI/CD
 
-O workflow do GitHub Actions dispara em push para `main` ou manualmente. Ele
-usa .NET 10, roda testes, build e publish da API, e implanta o artefato em um
-Azure Web App via Azure Login/OIDC. Esse pipeline publica **a API**, não o
-Worker nem o firmware Arduino. O Worker deve rodar em uma máquina que tenha
-acesso físico à porta serial do Arduino.
+O workflow de CI do GitHub Actions roda em todo push para `main` e em pull
+requests. Ele compila a solution .NET 10 e roda os testes do backend e, em
+paralelo, instala as dependências do frontend, roda os testes com Vitest e gera
+o build. Durante o TCC, a API também era publicada em um Azure Web App via
+Azure Login/OIDC; essa etapa de deploy não faz parte da versão pública do
+repositório. O Worker e o firmware não são publicados automaticamente: o
+Worker deve rodar em uma máquina com acesso físico à porta serial do Arduino.
 
-Veja [workflow de deploy](../.github/workflows/main_controle-acesso.yml).
+Veja o [workflow de CI](../.github/workflows/ci.yml).
 
 ## 10. Testes existentes
 
@@ -493,7 +493,7 @@ cliente HTTP do Worker também têm testes específicos.
 
 ### “O que o projeto ainda não implementa?”
 
-O frontend fica no repositório separado citado na seção 1. Também não há publicação automática do
+O frontend não tem publicação automática neste repositório. Também não há publicação automática do
 Worker/firmware pelo pipeline; o Worker depende de uma máquina conectada ao
 Arduino. O código observado não aplica migrations automaticamente no startup.
 
@@ -552,4 +552,4 @@ criticidade.
 | Porta serial, chamadas HTTP e feedback | [Worker.cs](../src/Worker/Worker.cs), [WorkerApiClient.cs](../src/Worker/WorkerApiClient.cs) |
 | Protocolo do Arduino e relé | [arduino.ino](../src/Arduino/arduino/arduino.ino) |
 | PDF e CSV | [LogAcessoPdfGenerator.cs](../src/Api/Reports/LogAcessoPdfGenerator.cs), [LogAcessoController.cs](../src/Api/Controllers/LogAcessoController.cs) |
-| Testes e deploy | [tests](../tests/ControleDeAcesso.Tests), [workflow](../.github/workflows/main_controle-acesso.yml) |
+| Testes e CI | [tests](../tests/ControleDeAcesso.Tests), [workflow](../.github/workflows/ci.yml) |

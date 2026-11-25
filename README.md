@@ -7,11 +7,12 @@ Sistema que libera ou bloqueia a passagem de pessoas por cartão RFID. Um Arduin
 ![C#](https://img.shields.io/badge/C%23-ASP.NET%20Core-239120)
 ![SQL Server](https://img.shields.io/badge/SQL%20Server-EF%20Core-CC2927?logo=microsoftsqlserver)
 ![Arduino](https://img.shields.io/badge/Arduino-UNO%20%2B%20MFRC522-00979D?logo=arduino)
-![Testes](https://img.shields.io/badge/testes-79%20passando-2ea44f)
+![React](https://img.shields.io/badge/React-TypeScript-61DAFB?logo=react)
+[![CI](https://github.com/BDuArt3/Controle-de-acesso-RFID/actions/workflows/ci.yml/badge.svg)](https://github.com/BDuArt3/Controle-de-acesso-RFID/actions/workflows/ci.yml)
 
 > **Trabalho de Conclusão de Curso – Bacharelado em Sistemas de Informação, UNIPAM (2025)**
 
-O frontend (React + TypeScript) está em outro repositório: [Controle-de-acesso-RFID-Frontend](https://github.com/BDuArt3/Controle-de-acesso-RFID-Frontend).
+O repositório traz o sistema completo: firmware do Arduino, Worker .NET, API ASP.NET Core e a interface web em React (pasta [`frontend/`](frontend)).
 
 ## Demonstração
 
@@ -33,7 +34,7 @@ O frontend (React + TypeScript) está em outro repositório: [Controle-de-acesso
 - **Três perfis de acesso:** Admin, Operador e Visualizador.
 - **Relatórios** de acesso em CSV e PDF, com filtros de período e resultado.
 - **Medição do tempo de resposta** do cartão até a liberação, gravada pelo Worker.
-- **79 testes automatizados** (xUnit, Moq e SQLite em memória) rodando no GitHub Actions.
+- **116 testes automatizados**: 79 no backend (xUnit, Moq e SQLite em memória) e 37 no frontend (Vitest + Testing Library), rodando no GitHub Actions a cada push.
 
 ## Arquitetura
 
@@ -113,9 +114,9 @@ Sinalização: LED verde no pino 7, LED vermelho no pino 6 e relé da catraca no
 | Segurança | JWT Bearer, refresh token com rotação, BCrypt, autenticação de máquina por chave |
 | Hardware | Arduino UNO, leitor RFID MFRC522 (SPI), `System.IO.Ports` |
 | Relatórios | QuestPDF (PDF) e CSV |
-| Testes | xUnit, Moq, EF Core SQLite |
+| Testes | xUnit, Moq, EF Core SQLite, Vitest, Testing Library |
 | CI | GitHub Actions |
-| Frontend | React, TypeScript, Vite, Tailwind ([repositório separado](https://github.com/BDuArt3/Controle-de-acesso-RFID-Frontend)) |
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, Axios |
 
 ## Como rodar localmente
 
@@ -124,7 +125,7 @@ Sinalização: LED verde no pino 7, LED vermelho no pino 6 e relé da catraca no
 - [.NET SDK 10](https://dotnet.microsoft.com/download)
 - SQL Server (Developer, Express ou em Docker)
 - Para o hardware: Arduino IDE, Arduino UNO, leitor MFRC522 e cartões MIFARE
-- Para a interface: Node.js 20+ (veja o repositório do frontend)
+- Para a interface: Node.js 20+
 
 ### 1. Configurar a API
 
@@ -176,17 +177,26 @@ Preencha `WorkerAuth:ApiKey` com a mesma chave da API e `SerialPortSettings:ComP
 dotnet run --project src/Worker
 ```
 
-### 6. Rodar os testes
+### 6. Subir o frontend
+
+```powershell
+cd frontend
+npm install
+copy .env.example .env.api-local
+npm run dev
+```
+
+O `.env.api-local` aponta para a API local (`http://localhost:5143/api`). A interface abre em `http://localhost:5173`; entre com `admin@tcc.com` e a senha definida em `BootstrapAdmin:Password`. Mais detalhes no [README do frontend](frontend/README.md).
+
+### 7. Rodar os testes
 
 ```powershell
 dotnet test ControleDeAcessoRfid.sln
+cd frontend
+npm test
 ```
 
 Os testes não precisam de SQL Server nem de Arduino: usam SQLite em memória e mocks.
-
-### 7. Frontend
-
-Siga o README do [repositório do frontend](https://github.com/BDuArt3/Controle-de-acesso-RFID-Frontend) e aponte `VITE_API_BASE_URL` para `http://localhost:5143/api`.
 
 ## Estrutura de pastas
 
@@ -199,6 +209,7 @@ Controle-de-acesso-RFID/
 │   ├── Api/              # Controllers, autenticação, SignalR e relatórios PDF
 │   ├── Worker/           # Ponte entre a porta serial e a API
 │   └── Arduino/          # Firmware do Arduino (leitura e gravação RFID)
+├── frontend/             # Interface web (React + TypeScript + Vite)
 ├── tests/
 │   └── ControleDeAcesso.Tests/   # Testes xUnit
 ├── docs/
